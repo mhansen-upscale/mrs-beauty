@@ -1,0 +1,35 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - config
+        - database
+        - routes
+        - tests
+
+    # Entscheidung S10: Level 8, in der CI erzwungen.
+    level: 8
+
+    # Die Testfunktionen von Pest (Pest\Laravel\actingAs, ...) werden zur
+    # Laufzeit per require geladen, nicht ueber PSR-4. PHPStan findet sie
+    # sonst nicht.
+    scanFiles:
+        - vendor/pestphp/pest-plugin-laravel/src/Authentication.php
+        - vendor/pestphp/pest-plugin-laravel/src/Console.php
+        - vendor/pestphp/pest-plugin-laravel/src/Container.php
+        - vendor/pestphp/pest-plugin-laravel/src/Database.php
+        - vendor/pestphp/pest-plugin-laravel/src/ExceptionHandling.php
+        - vendor/pestphp/pest-plugin-laravel/src/Expectations.php
+        - vendor/pestphp/pest-plugin-laravel/src/Http.php
+        - vendor/pestphp/pest-plugin-laravel/src/Session.php
+        - vendor/pestphp/pest-plugin-laravel/src/Time.php
+
+    # Von Paketen veroeffentlichte Migrationen sind fremder Code. Wir haben
+    # ihn nur in das Repository kopiert, nicht geschrieben.
+    excludePaths:
+        analyse:
+            - database/migrations/*_create_pulse_tables.php
+
+    ignoreErrors: []

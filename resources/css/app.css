@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body,
+html {
+    --font-sans:
+        'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+}
+
+/*
+|--------------------------------------------------------------------------
+| Farben
+|--------------------------------------------------------------------------
+|
+| Verbindlich: docs/design/farben.md.
+|
+| Zwei Systeme, nicht eines. Der Admin-Bereich trägt **unsere** Marke, die
+| Buchungsseite die der Praxis. Deshalb steht hier nur der Admin-Bereich;
+| die Buchungsseite überschreibt später --primary und --ring, und nur die.
+|
+| Keine festen Farbwerte im Code — weder als Hex noch als Tailwind-Palette
+| (bg-blue-500). Alles läuft über diese Variablen.
+|
+*/
+
+@layer base {
+    :root {
+        /* Neutral — entspricht Tailwind stone. Der warme Einschlag ist
+           Absicht: ein kühles Grau bekämpft Blush, Creme und Roségold
+           sichtbar, ein warmes trägt sie. */
+        --background: 60 9% 98%; /* stone-50, Canvas */
+        --foreground: 24 10% 10%; /* stone-900 */
+
+        --card: 0 0% 100%;
+        --card-foreground: 24 10% 10%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 24 10% 10%;
+
+        --muted: 60 5% 96%; /* stone-100, gedämpfte Flächen und Zebra */
+        --muted-foreground: 33 5% 32%; /* stone-600 */
+
+        --secondary: 60 5% 96%;
+        --secondary-foreground: 30 6% 25%; /* stone-700 */
+
+        --accent: 173 31% 94%; /* petrol-50 */
+        --accent-foreground: 178 51% 19%; /* petrol-700 */
+
+        --border: 20 6% 90%; /* stone-200 */
+        --input: 24 6% 83%; /* stone-300 */
+
+        /* Petrol — Produktfarbe, nur Admin.
+           600 statt 500: Weiß erreicht darauf 7,57:1 statt 5,48:1. Bei
+           Personal, das acht Stunden auf den Bildschirm sieht, ist das
+           spürbar. */
+        --primary: 178 50% 24%; /* petrol-600 */
+        --primary-foreground: 0 0% 100%;
+        --ring: 178 47% 31%; /* petrol-500 */
+
+        /* Semantik — gesperrt. Nicht themebar, auch nicht auf der
+           Buchungsseite: ein grünes "bestanden" wäre in der HWG-Ampel
+           mehrdeutig, wenn die Praxis eine grüne Markenfarbe hätte.
+           Farbe trägt nie allein Bedeutung — dazu gehören immer Symbol
+           und Text. */
+        --success: 142 72% 29%;
+        --success-foreground: 0 0% 100%;
+        --warning: 26 90% 37%;
+        --warning-foreground: 0 0% 100%;
+        --destructive: 0 74% 42%;
+        --destructive-foreground: 0 0% 100%;
+        --info: 224 76% 48%;
+        --info-foreground: 0 0% 100%;
+
+        /* Kalenderfarben: acht Töne in annähernd gleicher Helligkeit, damit
+           kein Behandler optisch dominiert. Bewusst gedämpft und klar von
+           der Semantik getrennt — ein Behandler in Signalrot liest sich wie
+           ein Fehlerzustand. */
+        --calendar-1: 212 47% 44%;
+        --calendar-2: 178 47% 31%;
+        --calendar-3: 269 26% 49%;
+        --calendar-4: 4 33% 48%;
+        --calendar-5: 100 32% 36%;
+        --calendar-6: 36 54% 39%;
+        --calendar-7: 220 9% 46%;
+        --calendar-8: 324 27% 42%;
+
+        --radius: 0.5rem;
+
+        --sidebar-background: 60 5% 96%;
+        --sidebar-foreground: 33 5% 32%;
+        --sidebar-primary: 178 50% 24%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 173 31% 94%;
+        --sidebar-accent-foreground: 178 51% 19%;
+        --sidebar-border: 20 6% 90%;
+        --sidebar-ring: 178 47% 31%;
+    }
+
+    /*
+     | Kein Dunkelmodus, vorerst.
+     |
+     | Whitelabel und Dunkelmodus verdoppeln die Kontrastprobleme: jede
+     | Mandantenfarbe müsste gegen zwei Untergründe geprüft werden, und was
+     | auf Weiß funktioniert, tut es auf Dunkel oft nicht. Die Tokens sind so
+     | aufgebaut, dass er nachrüstbar bleibt.
+     */
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+}
