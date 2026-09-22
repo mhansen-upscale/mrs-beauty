@@ -170,13 +170,13 @@ const zeilenschluessel = (zeile: T): string => String(wert(zeile, props.schluess
                 die Aktion gehoert an das Ende der Werkzeugzeile, nicht an
                 ihren Anfang.
             -->
-            <div class="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+            <div class="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto [&>*]:w-full sm:[&>*]:w-auto">
                 <slot name="werkzeuge" />
             </div>
         </div>
 
         <div class="rounded-md border bg-card">
-            <Table class="min-w-[36rem]">
+            <Table>
                 <TableHeader>
                     <TableRow class="hover:bg-transparent">
                         <TableHead

@@ -112,7 +112,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                         <ChevronRight />
                     </Button>
 
-                    <span class="px-2 text-sm font-medium">{{ tagesueberschrift }}</span>
+                    <span class="w-full px-2 text-sm font-medium sm:w-auto">{{ tagesueberschrift }}</span>
 
                     <Select
                         v-if="locations.length > 1"
@@ -130,7 +130,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                         </SelectContent>
                     </Select>
 
-                    <div class="flex w-full items-center gap-3 sm:ml-auto sm:w-auto">
+                    <div class="flex w-full flex-wrap items-center gap-3 sm:ml-auto sm:w-auto">
                         <span class="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock class="size-3" />
                             {{ location.timezone }}

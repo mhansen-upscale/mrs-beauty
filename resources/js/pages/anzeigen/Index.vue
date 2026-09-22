@@ -251,7 +251,7 @@ onUnmounted(haltAn);
                     </Button>
                 </div>
 
-                <Button type="button" @click="oeffneNeu">
+                <Button type="button" class="w-full sm:w-auto" @click="oeffneNeu">
                     <Plus />
                     Eigene Anzeige
                 </Button>

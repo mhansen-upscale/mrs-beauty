@@ -92,7 +92,7 @@ const absenden = () =>
 <template>
     <Dialog v-model:open="offen">
         <DialogTrigger as-child>
-            <Button size="sm">
+            <Button class="w-full sm:w-auto">
                 <CalendarPlus />
                 Termin anlegen
             </Button>
