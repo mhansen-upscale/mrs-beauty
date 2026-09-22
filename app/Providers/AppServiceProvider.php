@@ -12,6 +12,7 @@ use App\Anzeigen\KeinBildmodell;
 use App\Anzeigen\KieAi\KieModell;
 use App\Audit\AuditLogger;
 use App\Audit\ImpersonationContext;
+use App\Betrieb\Warteschlangen;
 use App\Datenschutz\ClamAvPruefung;
 use App\Datenschutz\ClamAvVerbindung;
 use App\Datenschutz\KeineVirenpruefung;
@@ -26,8 +27,10 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -105,6 +108,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureModels();
         $this->configureCommands();
         $this->configurePasswords();
+        $this->configureWarteschlangen();
     }
 
     /**
@@ -228,5 +232,24 @@ class AppServiceProvider extends ServiceProvider
         Password::defaults(fn () => $this->app->isProduction()
             ? Password::min(12)->letters()->numbers()->symbols()->uncompromised()
             : Password::min(8));
+    }
+
+    /**
+     * Jeder verarbeitete Auftrag hinterlaesst einen Zeitstempel.
+     *
+     * **Der einzige Beleg dafuer, dass ueberhaupt jemand abholt.** Auf der
+     * verwalteten Warteschlange von Laravel Cloud stehen die Arbeiter in der
+     * Oberflaeche des Anbieters; das Produkt erfaehrt von ihrer Existenz nur
+     * dadurch, dass Auftraege verschwinden. Ohne diesen Vermerk bleibt ein
+     * Arbeiterausfall unsichtbar -- so wie am 22.09.2026.
+     *
+     * Siehe App\Betrieb\Warteschlangen.
+     */
+    private function configureWarteschlangen(): void
+    {
+        Queue::after(function (JobProcessed $ereignis): void {
+            $this->app->make(Warteschlangen::class)
+                ->vermerkeLauf((string) $ereignis->job->getQueue());
+        });
     }
 }

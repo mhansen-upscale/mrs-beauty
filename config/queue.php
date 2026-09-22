@@ -28,6 +28,21 @@ return [
     |
     | Drivers: "sync", "database", "beanstalkd", "sqs", "redis", "null"
     |
+    | --------------------------------------------------------------------------
+    | **In Produktion steht hier nichts, was benutzt wird.**
+    |
+    | Das Produkt laeuft auf `QUEUE_CONNECTION=cloud` -- der verwalteten
+    | Warteschlange von Laravel Cloud. Diese Verbindung ist unten **nicht**
+    | aufgefuehrt; die Plattform haengt sie zur Laufzeit ein. Wer sie hier
+    | sucht und nicht findet, schliesst leicht das Falsche.
+    |
+    | Am 22.09.2026 hat genau das einen Tag gekostet: die Arbeiter liefen auf
+    | einer anderen Verbindung als der Dispatch. Jeder Auftrag wurde
+    | angenommen und blieb liegen -- kein Fehler, keine Meldung. Die Profile
+    | der vier Warteschlangen stehen in config/warteschlangen.php, die
+    | Arbeiterkommandos in docs/betrieb.md.
+    | --------------------------------------------------------------------------
+    |
     */
 
     'connections' => [

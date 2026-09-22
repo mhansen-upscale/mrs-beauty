@@ -29,7 +29,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class Betriebslage
 {
-    public function __construct(private readonly TenantContext $mandant) {}
+    public function __construct(
+        private readonly TenantContext $mandant,
+        private readonly Warteschlangen $warteschlangen,
+    ) {}
 
     /**
      * Die Lage dieses Mandanten.
@@ -102,6 +105,13 @@ final class Betriebslage
         return [
             'fehlgeschlageneAuftraege' => $this->fehlgeschlagene(),
             'juengsterFehlschlag' => $this->juengsterFehlschlag(),
+
+            // **Der Ersatz fuer den Supervisor-Test.** Seit das Produkt auf
+            // der verwalteten Warteschlange von Laravel Cloud laeuft,
+            // stehen die Arbeiter in der Oberflaeche des Anbieters -- kein
+            // Test kann noch pruefen, ob es sie gibt. Bleibt die
+            // Beobachtung: liegt etwas, und holt niemand ab?
+            'stehendeWarteschlangen' => $this->warteschlangen->stehende($jetzt),
             'offeneEreignisse' => $this->mandant->acrossTenants(
                 'Betriebsuebersicht zaehlt liegengebliebene Rohereignisse aller Mandanten',
                 fn (): int => ChannelRawEvent::query()->offen()->count(),
@@ -119,7 +129,8 @@ final class Betriebslage
         $installation = $this->fuerInstallation($jetzt);
 
         return $installation['fehlgeschlageneAuftraege'] > 0
-            || $installation['offeneEreignisse'] > 0;
+            || $installation['offeneEreignisse'] > 0
+            || $installation['stehendeWarteschlangen'] !== [];
     }
 
     private function fehlgeschlagene(): int

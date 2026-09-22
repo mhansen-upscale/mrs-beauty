@@ -31,6 +31,9 @@ final class Betriebspruefung extends Command
                 ['Fehlgeschlagene Auftraege', $zahlen['fehlgeschlageneAuftraege']],
                 ['Juengster Fehlschlag', $zahlen['juengsterFehlschlag'] ?? '—'],
                 ['Liegengebliebene Ereignisse', $zahlen['offeneEreignisse']],
+                ['Stehende Warteschlangen', $zahlen['stehendeWarteschlangen'] === []
+                    ? '—'
+                    : implode(', ', $zahlen['stehendeWarteschlangen'])],
                 ['Mandanten', $zahlen['mandanten']],
             ]);
         }

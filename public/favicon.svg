@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Mrs. Beauty">
+    <!--
+        Das Zeichen: ein M aus zwei weichen Bögen.
+
+        Gebaut für 16 Pixel, nicht für die Präsentation. Alles, was auf einem
+        Browser-Tab verschwindet (Verläufe, Serifen, ein zweiter Farbton),
+        ist weggelassen. Die Farbe ist petrol-600 (#1F5C5A), dieselbe wie
+        die Variable "primary" in resources/css/app.css.
+    -->
+    <rect width="64" height="64" rx="14" fill="#1F5C5A"/>
+    <path
+        d="M17 46 V26.5 C17 19.5 22.5 17 26.5 21.5 L32 34.5 L37.5 21.5 C41.5 17 47 19.5 47 26.5 V46"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="7"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+    />
+</svg>

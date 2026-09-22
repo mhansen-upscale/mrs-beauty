@@ -21,12 +21,12 @@ use Symfony\Component\Finder\Finder;
 |   Zeile nicht -- ein schnellerer Arbeiter ist vor dem Commit da.
 |
 | Dazu eine dritte, die erst beim Schreiben dieses Tests auffiel: **jede
-| benutzte Warteschlange braucht einen Supervisor.** Wer `->onQueue('berichte')`
+| benutzte Warteschlange braucht ein Profil.** Wer `->onQueue('berichte')`
 | schreibt und keinen Arbeiter dafuer hat, bekommt einen Auftrag, der nie
 | laeuft -- und niemand sieht es (Regel 4).
 |
 | **Die Zahl der Versuche steht bewusst nicht hier.** Sie gehoert zum
-| Supervisor (config/horizon.php) und nicht zum Auftrag: `sync` und
+| Arbeiter (config/warteschlangen.php) und nicht zum Auftrag: `sync` und
 | `maintenance` laufen mit einem Versuch, `realtime` und `default` mit drei.
 | Ein Auftrag darf das ueberschreiben, muss aber nicht.
 |
@@ -126,16 +126,24 @@ it('laeuft jeder Auftrag nach dem Commit', function (): void {
     expect($verstoesse)->toBeEmpty('Diese Auftraege laufen nicht nach dem Commit: '.implode(', ', $verstoesse));
 });
 
-it('hat jede benutzte Warteschlange einen Arbeiter', function (): void {
-    // Ein Auftrag auf einer Warteschlange ohne Supervisor laeuft nie -- und
+it('hat jede benutzte Warteschlange ein Profil', function (): void {
+    // Ein Auftrag auf einer Warteschlange ohne Arbeiter laeuft nie -- und
     // niemand sieht es.
-    $supervisoren = array_keys((array) config('horizon.defaults', []));
+    //
+    // **Was dieser Test nicht mehr leisten kann.** Bis zum 22.09.2026 hing
+    // das Profil an einem Horizon-Supervisor, der die Arbeiter auch startete
+    // -- ein Eintrag hier war zugleich die Zusage, dass jemand abholt. Auf
+    // der verwalteten Warteschlange von Laravel Cloud stehen die Arbeiter in
+    // der Oberflaeche des Anbieters. Dieser Test prueft seitdem nur noch, dass
+    // jede benutzte Warteschlange **beschrieben** ist; ob sie **bedient**
+    // wird, kann allein die Laufzeit sagen -- siehe WarteschlangenTest.
+    $profile = array_keys((array) config('warteschlangen.profile', []));
     $genutzte = genutzteWarteschlangen();
 
     expect($genutzte)->not->toBeEmpty();
 
     foreach ($genutzte as $name) {
-        expect($supervisoren)->toContain($name);
+        expect($profile)->toContain($name);
     }
 });
 
@@ -151,3 +159,23 @@ it('erkennt einen Auftrag ohne Warteschlange, wenn es einen gibt', function (): 
         @unlink($pfad);
     }
 });
+
+/*
+|--------------------------------------------------------------------------
+| Was hier stand und warum es weg ist
+|--------------------------------------------------------------------------
+|
+| Zwei Tests hielten fest, dass `horizon.environments` jede Umgebung und darin
+| jede Warteschlange kennt -- ein Supervisor ohne Umgebung ist keiner, und am
+| 22.09.2026 stand Staging genau daran still.
+|
+| Mit dem Wechsel auf die verwaltete Warteschlange von Laravel Cloud gibt es
+| keine `environments` mehr. Die Arbeiter werden in der Oberflaeche des
+| Anbieters eingerichtet, ausserhalb dieses Repositorys. **Damit ist die Zusage
+| nicht mehr statisch pruefbar** -- und das ist ein Verlust, kein Aufraeumen.
+|
+| Der Ersatz kann nur zur Laufzeit greifen und steht in
+| tests/Feature/Betrieb/WarteschlangenTest.php: liegt etwas, und hat seit einer
+| Frist niemand abgeholt, meldet die Betriebslage Stillstand.
+|
+*/
