@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Enums\NotificationKind;
+use App\Kalender\Termineinladung;
 use App\Models\Appointment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -76,7 +77,20 @@ final class Terminnachricht extends Notification
             $nachricht->line($zeile);
         }
 
-        return $nachricht->salutation('Viele Grüße, '.$this->praxisname);
+        $nachricht->salutation('Viele Grüße, '.$this->praxisname);
+
+        // Bestaetigung, Verschiebung und Absage tragen eine Kalenderdatei
+        // (WP-14). Dieselbe UID ueber alle drei -- nur so ersetzt die
+        // Verschiebung den Eintrag und die Absage entfernt ihn.
+        if (Termineinladung::gehoertDazu($this->art)) {
+            $nachricht->attachData(
+                Termineinladung::fuer($this->termin, $this->praxisname, $this->art),
+                'termin.ics',
+                ['mime' => 'text/calendar; charset=UTF-8; method='.Termineinladung::methode($this->art)],
+            );
+        }
+
+        return $nachricht;
     }
 
     private function betreff(string $tag): string

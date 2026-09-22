@@ -6,6 +6,7 @@ import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -24,10 +25,18 @@ interface TreatmentItem extends Record<string, unknown> {
     price_to_cents: number | null;
     avg_revenue_cents: number;
     is_active: boolean;
+    all_practitioners: boolean;
+    practitioners: string[];
+    practitioner_names: string[];
     appointment_types: number;
 }
 
-defineProps<{ treatments: TreatmentItem[] }>();
+interface Behandler {
+    uuid: string;
+    name: string;
+}
+
+defineProps<{ treatments: TreatmentItem[]; practitioners: Behandler[] }>();
 
 const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Behandlungen', href: '/behandlungen' }];
 
@@ -36,6 +45,7 @@ const spalten: Spalte<TreatmentItem>[] = [
     { schluessel: 'category', titel: 'Kategorie' },
     { schluessel: 'price_from_cents', titel: 'Preisspanne', klasse: 'text-right tabular-nums' },
     { schluessel: 'avg_revenue_cents', titel: 'Ø Umsatz', klasse: 'text-right tabular-nums' },
+    { schluessel: 'practitioner_names', titel: 'Wer macht das?', sortierbar: false },
     { schluessel: 'appointment_types', titel: 'Terminarten', klasse: 'text-right tabular-nums' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
@@ -51,6 +61,10 @@ const formular = useForm({
     price_from_cents: '' as number | string,
     price_to_cents: '' as number | string,
     avg_revenue_cents: '' as number | string,
+    // "Alle" ist ein eigener Wert und nicht die leere Liste -- die waere
+    // zweideutig: alle, oder noch nicht gepflegt?
+    all_practitioners: true as boolean,
+    practitioners: [] as string[],
 });
 
 const anlegenOeffnen = () => {
@@ -70,6 +84,8 @@ const bearbeitenOeffnen = (eintrag: TreatmentItem) => {
     formular.price_from_cents = eintrag.price_from_cents ?? '';
     formular.price_to_cents = eintrag.price_to_cents ?? '';
     formular.avg_revenue_cents = eintrag.avg_revenue_cents;
+    formular.all_practitioners = eintrag.all_practitioners;
+    formular.practitioners = [...eintrag.practitioners];
     formularOffen.value = true;
 };
 
@@ -85,6 +101,10 @@ const speichern = () => {
     formular.post(route('treatments.store'), fertig);
 };
 
+const behandlerUmschalten = (uuid: string, gewaehlt: boolean) => {
+    formular.practitioners = gewaehlt ? [...formular.practitioners, uuid] : formular.practitioners.filter((eintrag) => eintrag !== uuid);
+};
+
 const deaktivieren = (eintrag: TreatmentItem) => router.delete(route('treatments.deactivate', { treatment: eintrag.uuid }), { preserveScroll: true });
 
 const aktivieren = (eintrag: TreatmentItem) => router.put(route('treatments.activate', { treatment: eintrag.uuid }), {}, { preserveScroll: true });
@@ -97,19 +117,19 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
         <Head title="Behandlungen" />
 
         <div class="space-y-6 p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <Heading
-                    title="Behandlungen"
-                    description="Der Katalog ist die einzige Quelle für Namen und Preise — der Agent darf nichts sagen, was hier nicht steht."
-                />
-
-                <Button @click="anlegenOeffnen">
-                    <Plus />
-                    Behandlung anlegen
-                </Button>
-            </div>
+            <Heading
+                title="Behandlungen"
+                description="Der Katalog ist die einzige Quelle für Namen und Preise — der Agent darf nichts sagen, was hier nicht steht."
+            />
 
             <DataTable :spalten="spalten" :zeilen="treatments" :suchfelder="['name', 'category']" suchtext="Name oder Kategorie">
+                <template #werkzeuge>
+                    <Button @click="anlegenOeffnen">
+                        <Plus />
+                        Behandlung anlegen
+                    </Button>
+                </template>
+
                 <template #zelle-name="{ zeile }">
                     <span class="font-medium">{{ zeile.name }}</span>
                     <span class="block text-xs text-muted-foreground">{{ zeile.slug }}</span>
@@ -142,6 +162,14 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
                         <CircleSlash />
                         Inaktiv
                     </Badge>
+                </template>
+
+                <template #zelle-practitioner_names="{ zeile }">
+                    <span v-if="zeile.all_practitioners" class="text-muted-foreground">Alle</span>
+                    <span v-else-if="zeile.practitioner_names.length === 0" class="text-warning">Niemand freigegeben</span>
+                    <span v-else class="flex flex-wrap gap-1">
+                        <Badge v-for="name in zeile.practitioner_names" :key="name" variant="secondary">{{ name }}</Badge>
+                    </span>
                 </template>
 
                 <template #aktionen="{ zeile }">
@@ -197,6 +225,37 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
                     <Label for="umsatz">Ø Umsatz (Cent)</Label>
                     <Input id="umsatz" v-model="formular.avg_revenue_cents" type="number" min="1" />
                     <InputError :message="formular.errors.avg_revenue_cents" />
+                </div>
+
+                <!--
+                    Wer die Behandlung beherrscht. Die Terminart erbt das und
+                    kann es verengen — ohne eigene Freigabe gilt, was hier
+                    steht.
+                -->
+                <div class="grid gap-3 sm:col-span-2">
+                    <Label>Wer macht diese Behandlung?</Label>
+
+                    <label class="flex items-center gap-3 text-sm">
+                        <Checkbox
+                            id="alle-behandler"
+                            :checked="formular.all_practitioners"
+                            @update:checked="formular.all_practitioners = $event === true"
+                        />
+                        <span>Alle Behandler — auch später hinzugekommene</span>
+                    </label>
+
+                    <div v-if="!formular.all_practitioners" class="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
+                        <label v-for="person in practitioners" :key="person.uuid" class="flex items-center gap-3 text-sm">
+                            <Checkbox
+                                :checked="formular.practitioners.includes(person.uuid)"
+                                @update:checked="behandlerUmschalten(person.uuid, $event === true)"
+                            />
+                            <span>{{ person.name }}</span>
+                        </label>
+
+                        <p v-if="!practitioners.length" class="text-sm text-muted-foreground sm:col-span-2">Noch kein aktiver Behandler angelegt.</p>
+                    </div>
+                    <InputError :message="formular.errors.all_practitioners" />
                 </div>
             </div>
         </FormularDialog>

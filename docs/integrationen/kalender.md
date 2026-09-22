@@ -42,3 +42,96 @@ Läuft ein Refresh-Token ab oder wird entzogen, wechselt die Verbindung auf `exp
 - **Ganztägige Events** werden von beiden Anbietern unterschiedlich dargestellt, insbesondere bei der Endzeit.
 - **Zeitzonen niemals annehmen.** Für jedes eingehende Event die mitgelieferte Zeitzone auswerten.
 - **Ein Behandler mit beiden Anbietern gleichzeitig** darf keine doppelten Blocker erzeugen.
+
+---
+
+## Umgesetzt — Google (WP-14)
+
+R1 bis R4 sind für Google gebaut und als Tests abgesichert
+(`tests/Feature/Kalender/`). Die Klassen liegen unter `App\Kalender`, die
+anbieterspezifischen unter `App\Kalender\Google` — **ohne** gemeinsames
+Interface, wie oben verlangt.
+
+| Regel | Ort | Nachweis |
+|---|---|---|
+| R1 Eigenmarkierung | `App\Kalender\Eigenmarkierung` | „erzeugt aus einem eigenmarkierten Event keinen Blocker" |
+| R2 Datensparsamkeit | `external_calendar_blocks` ohne Titelspalte, `App\Kalender\Ausgangsereignis` | „übernimmt aus einem Event nur den Zeitraum" (durchsucht jede Tabelle) |
+| R3 Konflikte | `App\Kalender\Blockerabgleich` | „lässt einen Termin unberührt, über dem ein externer Blocker liegt" |
+| R4 Ausfälle | `CalendarConnectionStatus`, `mrs:kalender-abos-erneuern`, `mrs:kalender-abgleichen` | „macht den Ausfall im Produkt sichtbar" |
+
+**Die Marke trägt die Organisation, nicht nur den Schlüssel.** Ein Behandler
+kann für zwei Praxen arbeiten und denselben Kalender verbinden. Das Event der
+einen ist für die andere echte belegte Zeit — wer nur auf
+`extendedProperties.private['mrs_beauty']` prüft und nicht auf den Wert,
+übersieht genau diesen Fall und bucht doppelt.
+
+**Ein Blocker greift nur auf freie Zeilen.** Über einem Termin entsteht keiner
+(R3), über einem gültigen Hold ebenfalls nicht: `appointment_slots` sagt zu,
+dass genau eine der drei Belegungsspalten gefüllt ist. Der Blocker greift,
+sobald der Hold abgelaufen ist — höchstens zehn Minuten später.
+
+**`410` darf nicht wiederholt werden.** `Http::retry()` wiederholt ohne
+`when`-Rückruf jede nicht erfolgreiche Antwort. Der zweite Versuch mit
+demselben, bereits verfallenen Token kann durchgehen — dann bleibt der
+Vollabgleich aus und der Sync steht still, ohne dass etwas fehlschlägt.
+Wiederholt werden Verbindungsfehler und 5xx, sonst nichts.
+
+**Der Rückkehrpfad ist `/oauth/google/callback`**, wie seit WP-02 in
+`.env` als `GOOGLE_REDIRECT_URI` vorgegeben. Er steht in der Google Cloud
+Console; ihn später zu ändern heißt, jede bestehende Verbindung anzufassen.
+
+Offen bleibt Microsoft Graph (WP-15) — und **erst danach** die gemeinsame
+Abstraktion.
+
+---
+
+## Umgesetzt — Microsoft und die Abstraktion (WP-15)
+
+Beide Anbieter stehen. Die Reihenfolge dieses Dokuments wurde eingehalten:
+Microsoft wurde **neben** Google gebaut, und erst danach ist
+`App\Kalender\Kalenderdienst` entstanden.
+
+**Der Schnitt läuft an der Nutzlast, nicht an der Fachlogik.** Ein Anbieter
+liefert `Ereignis`-Objekte und nimmt einen `Appointment` entgegen; wie er
+daraus JSON macht, bleibt bei ihm. R1 bis R4, Blocker, Idempotenz und
+Ausfallbehandlung gibt es genau einmal. Durchgesetzt von
+`tests/Feature/Kalender/AbstraktionTest.php`: keine Datei der Fachlogik darf
+aus einem Anbieter-Namensraum importieren — einzige Ausnahme ist die Fabrik.
+
+Was **nicht** in der Schnittstelle steht, ist die eigentliche Aussage: keine
+Fehlercodes, keine Adressen, keine Rechtenamen, keine Höchstlaufzeiten.
+
+### Die Unterschiedstabelle, nachgetragen
+
+| | Google Calendar | Microsoft Graph |
+|---|---|---|
+| Zeitangabe | RFC 3339 **mit** Versatz | Ortszeit **ohne** Versatz, daneben `timeZone` |
+| Ganztägig | `date` statt `dateTime` | `isAllDay`, Mitternacht in der Kalenderzone |
+| Höchstlaufzeit Abo | 30 Tage | unter drei Tagen, dafür verlängerbar |
+| Erneuerung | neuer Kanal, alten beenden | `PATCH` auf dasselbe Abonnement |
+| Verfallener Zeiger | `410 Gone` | `410` mit `resyncRequired` |
+| Eigenmarkierung | `extendedProperties.private` | Open Extension — **nicht im Delta lesbar** |
+| Zustellung | Kopfzeilen | Rumpf, davor ein Handschlag mit `validationToken` |
+| Aktualisierungsschlüssel | nur beim ersten Mal | bei jeder Erneuerung neu |
+
+### R1 hat zwei Hälften
+
+Die Marke am Event ist die erste. Sie genügt nicht: Graphs Delta-Abfrage
+kennt kein `$expand` und liefert keine Erweiterungen — der Schutz gegen die
+Endlosschleife hätte für Microsoft lautlos gefehlt.
+
+Die zweite Hälfte ist anbieterunabhängig: was wir selbst geschrieben haben,
+steht in `calendar_event_links`. `Rueckabgleich` vergleicht dagegen. Zwei Wege
+zu demselben Schutz — und der teuerste Fehler dieser Integration hängt damit
+nicht an einer einzigen Abfrage.
+
+### Der Erneuerungsvorlauf steht je Anbieter
+
+`mrs.calendar.renew_before_expiry_hours` ist eine Zuordnung, kein Wert:
+24 Stunden für Google, 6 für Microsoft. Ein Vorlauf, der bei 30 Tagen
+Laufzeit großzügig ist, wäre bei 70 Stunden fast ein Drittel davon — erneuert
+würde bei jedem Lauf.
+
+**Gegen die echte Graph-API geprüft ist noch nichts.** Zwei Punkte zuerst
+ansehen: Zonennamen in Windows-Schreibweise und die tatsächliche
+Höchstlaufzeit eines Abonnements.

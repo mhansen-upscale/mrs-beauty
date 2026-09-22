@@ -112,7 +112,7 @@ Das gehört ins Dashboard, nicht nur in die Dokumentation. Ein Kunde, der eine L
 4. Ein Direktaufruf als letzter Touch wird bei Last Non-Direct übersprungen.
 5. Touch außerhalb des Rückblickfensters wird nicht zugeordnet.
 6. Manuell angelegter Termin ohne Quelle ist nicht speicherbar.
-7. **Kein ausgehender Meta-Payload enthält einen Katalognamen** — Test gegen alle aktiven Behandlungen.
+7. **Kein ausgehender Meta-Payload enthält einen Katalognamen** — Test gegen alle aktiven Behandlungen. Geprüft werden Ereignisse, Pixel-Parameter, Zielgruppen sowie Kampagnen-, Anzeigengruppen- und Anzeigennamen; ausgenommen ist allein der Anzeigeninhalt selbst (Entscheidung C9).
 8. `event_id` ist zwischen Pixel und Conversions API identisch.
 9. Lead ohne Besucherzuordnung erscheint in der Auswertung als "Quelle unbekannt", nicht als Direktzugriff.
 10. ROAS-Berechnung stimmt mit einer von Hand nachgerechneten Testkampagne überein.

@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Enums\ChannelType;
 use App\Enums\Role;
 use App\Enums\Weekday;
+use App\Kanaele\Konversationen;
+use App\Kontakte\Kontaktsuche;
 use App\Models\Appointment;
 use App\Models\AppointmentType;
+use App\Models\ChannelIdentity;
+use App\Models\Contact;
+use App\Models\Conversation;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\Practitioner;
@@ -15,7 +21,6 @@ use App\Models\Treatment;
 use App\Models\User;
 use App\Tenancy\KeyRing;
 use App\Tenancy\TenantContext;
-use App\Termine\Kontaktsuche;
 use App\Termine\Terminplaner;
 use App\Verfuegbarkeit\SlotErzeuger;
 use App\Verfuegbarkeit\Verfuegbarkeit;
@@ -160,6 +165,7 @@ class DatabaseSeeder extends Seeder
             // Kontakte und Termine (WP-11)
             app(TenantContext::class)->runAs($praxis, function (): void {
                 $this->termine();
+                $this->posteingang();
             });
 
             // Super-Admin (WP-05, Backoffice folgt in WP-34). Gehoert zu
@@ -247,5 +253,57 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->command->info("Demodaten: {$gebucht} Termine angelegt.");
+    }
+
+    /**
+     * Zwei Gespraeche im Posteingang (WP-21).
+     *
+     * Eines ueber WhatsApp mit offenem Fenster, eines per E-Mail von jemandem,
+     * den das Produkt noch nicht kennt -- ein leerer Posteingang sagt nichts
+     * darueber, ob er funktioniert.
+     */
+    private function posteingang(): void
+    {
+        if (Conversation::query()->exists()) {
+            return;
+        }
+
+        $konversationen = app(Konversationen::class);
+
+        $bekannt = Contact::query()->first();
+
+        $whatsapp = ChannelIdentity::query()->create([
+            'channel' => ChannelType::WhatsApp,
+            'external_id' => '+49 170 1112223',
+            'display_name' => 'Annika Müller',
+            'contact_id' => $bekannt?->getKey(),
+        ]);
+
+        $gespraech = $konversationen->fuer($whatsapp);
+
+        $konversationen->nimmAuf(
+            $gespraech,
+            'wamid.demo-1',
+            'Guten Tag, hätten Sie nächste Woche noch einen Termin zur Beratung frei?',
+            null,
+            CarbonImmutable::now()->subHours(2),
+        );
+
+        $mail = ChannelIdentity::query()->create([
+            'channel' => ChannelType::Email,
+            'external_id' => 'neugierig@example.test',
+            'display_name' => 'Sofia Lange',
+        ]);
+
+        $zweites = $konversationen->fuer($mail);
+
+        $konversationen->nimmAuf(
+            $zweites,
+            'demo-mail-1@example.test',
+            "Guten Tag,\n\nich interessiere mich für eine Beratung. Wie sind Ihre Preise?\n\nViele Grüße\nSofia Lange",
+            null,
+            CarbonImmutable::now()->subMinutes(20),
+            'Anfrage Beratung',
+        );
     }
 }

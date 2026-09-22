@@ -5,8 +5,13 @@ Ergänzt `docs/konventionen.md`, Abschnitt Frontend. Verbindlich.
 > **Umgesetzt.** Die Tokens stehen in `resources/css/app.css`, die
 > Tailwind-Anbindung in `tailwind.config.js`. Die Regel „keine festen
 > Farbwerte im Code" ist als Test hinterlegt:
-> `tests/Feature/Design/FarbenTest.php`. Der dort genannte Test aus WP-07
-> prüft später zusätzlich die abgeleitete Mandantenfarbe.
+> `tests/Feature/Design/FarbenTest.php`.
+>
+> **Die Validierung bei der Eingabe steht seit WP-07** in
+> `App\Whitelabel\Farbpruefung`, die Schwellen in `config/mrs.php` →
+> `whitelabel`. Der Erzeuger `App\Support\Markenstil` bleibt nachsichtig —
+> er steht im Ausliefern, und eine Buchungsseite soll nicht wegen eines
+> Tippfehlers im Farbwert weiß bleiben.
 
 ## Zwei Systeme, nicht eines
 

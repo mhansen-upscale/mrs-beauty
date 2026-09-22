@@ -1,0 +1,121 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Werbung\Meta;
+
+use App\Support\Fehlereinordnung;
+use App\Werbung\Werbefehler;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
+use Throwable;
+
+/**
+ * Die eine Stelle, die dieses Paket bei Meta liest.
+ *
+ * **Lesend, ausschliesslich.** Es gibt hier kein post(), kein delete() und
+ * kein put(); ein Test unter tests/Feature/Werbung haelt das fest. Das ist
+ * nicht nur Abgrenzung zu WP-27: `ads_management` ist die Berechtigung, die
+ * im App Review abgelehnt wird, und wer sie hier braucht, haelt auch die
+ * beiden lesenden auf.
+ */
+final class Graphleser
+{
+    /**
+     * Alle Zeilen einer Sammlung, ueber alle Seiten.
+     *
+     * **Mit harter Obergrenze.** `paging.next` laeuft im Zweifel im Kreis --
+     * Meta liefert dann dieselbe Seite erneut, und ein Abgleich, der nicht
+     * endet, blockiert die Warteschlange fuer alle anderen Mandanten.
+     *
+     * @param  array<string, mixed>  $anfrage
+     * @return list<array<string, mixed>>
+     */
+    public function sammle(string $token, string $pfad, array $anfrage = []): array
+    {
+        $anfrage['limit'] ??= (int) config('mrs.ads.page_size');
+
+        $adresse = $this->basis().'/'.ltrim($pfad, '/');
+        $grenze = max(1, (int) config('mrs.ads.max_pages'));
+        $zeilen = [];
+        $gesehen = [];
+
+        for ($seite = 0; $seite < $grenze; $seite++) {
+            $antwort = $this->hole($token, $adresse, $anfrage);
+
+            $daten = data_get($antwort, 'data', []);
+
+            if (is_array($daten)) {
+                foreach ($daten as $zeile) {
+                    if (is_array($zeile)) {
+                        $zeilen[] = $zeile;
+                    }
+                }
+            }
+
+            $weiter = data_get($antwort, 'paging.next');
+
+            if (! is_string($weiter) || $weiter === '' || isset($gesehen[$weiter])) {
+                return $zeilen;
+            }
+
+            $gesehen[$weiter] = true;
+
+            // Die Folgeadresse traegt Token und Parameter bereits mit sich.
+            $adresse = $weiter;
+            $anfrage = [];
+        }
+
+        return $zeilen;
+    }
+
+    /**
+     * Ein einzelner Knoten.
+     *
+     * @param  array<string, mixed>  $anfrage
+     * @return array<string, mixed>
+     */
+    public function knoten(string $token, string $pfad, array $anfrage = []): array
+    {
+        return $this->hole($token, $this->basis().'/'.ltrim($pfad, '/'), $anfrage);
+    }
+
+    /**
+     * @param  array<string, mixed>  $anfrage
+     * @return array<string, mixed>
+     */
+    private function hole(string $token, string $adresse, array $anfrage): array
+    {
+        $antwort = Http::withToken($token)
+            ->acceptJson()
+            ->timeout(30)
+            ->retry(2, 200, function (Throwable $ausnahme): bool {
+                if ($ausnahme instanceof ConnectionException) {
+                    return true;
+                }
+
+                // 4xx nicht wiederholen: ein ungueltiges Token und eine
+                // fehlende Berechtigung werden durch Warten nicht besser.
+                return $ausnahme instanceof RequestException
+                    && $ausnahme->response->serverError();
+            }, throw: false)
+            ->get($adresse, $anfrage);
+
+        if ($antwort->failed()) {
+            throw new Werbefehler(
+                Fehlereinordnung::ausMetaAntwort($antwort->status(), (array) $antwort->json())
+            );
+        }
+
+        $daten = $antwort->json();
+
+        return is_array($daten) ? $daten : [];
+    }
+
+    private function basis(): string
+    {
+        return rtrim((string) config('mrs.meta.graph_url'), '/')
+            .'/'.(string) config('mrs.meta.api_version');
+    }
+}

@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\Encrypted;
+use App\Contracts\HasPersonalData;
 use App\Enums\AppointmentStatus;
 use App\Enums\BookingChannel;
 use App\Enums\CancellationReason;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\MasksPersonalData;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,12 +38,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $contact_id
  * @property AppointmentStatus $status
  * @property BookingChannel $booked_via
+ * @property string|null $attribution_snapshot
+ * @property string|null $attribution_campaign_id
  * @property bool $is_override
  * @property CarbonImmutable $starts_at
  * @property CarbonImmutable $ends_at
  * @property CarbonImmutable $blocked_from
  * @property CarbonImmutable $blocked_until
  * @property CarbonImmutable|null $consent_accepted_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $cancelled_at
  * @property CancellationReason|null $cancellation_reason
  * @property-read AppointmentType $appointmentType
@@ -48,9 +55,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Location $location
  * @property-read Contact $contact
  */
-class Appointment extends TenantModel
+class Appointment extends TenantModel implements HasPersonalData
 {
     use Auditable;
+    use MasksPersonalData;
 
     protected $guarded = ['id'];
 
@@ -70,6 +78,11 @@ class Appointment extends TenantModel
         return [
             'status' => AppointmentStatus::class,
             'booked_via' => BookingChannel::class,
+
+            // Verschluesselt: der Kampagnenname darin kann eine
+            // Behandlungsbezeichnung tragen (WP-26), und hier steht er
+            // unmittelbar neben einem Kontakt.
+            'attribution_snapshot' => Encrypted::class,
             'cancellation_reason' => CancellationReason::class,
             'is_override' => 'boolean',
             'starts_at' => 'immutable_datetime',
@@ -91,6 +104,18 @@ class Appointment extends TenantModel
     public function auditableValues(): array
     {
         return ['status', 'booked_via', 'is_override', 'cancellation_reason'];
+    }
+
+    /**
+     * Der Snapshot traegt den Kampagnennamen -- und der kann eine
+     * Behandlungsbezeichnung sein (WP-26, C9). Er faellt damit unter die
+     * Maskierung (C4): eine Supportkraft sieht ihn ohne Freigabe nicht.
+     *
+     * @return list<string>
+     */
+    public function personalFields(): array
+    {
+        return ['attribution_snapshot'];
     }
 
     /** Laesst sich dieser Termin noch verschieben oder umbuchen? */

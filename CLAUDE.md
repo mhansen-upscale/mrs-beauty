@@ -35,15 +35,28 @@ wer sich wo behandeln lässt. Das ist nicht reparierbar.
 *Status: **wörtlich belegt** in `docs/integrationen/meta.md`, Abschnitt Datenschutz.*
 
 Behandlungsname, `treatment_id`, Kategorie und Katalogbezeichnung verlassen
-das System niemals in Richtung Meta — nicht über die Conversions API, nicht in
-Kampagnennamen, nicht in Anzeigentexten der Verwaltung, in keinem Feld und
-unter keinem Vorwand. Keine Custom Audiences aus Kontaktlisten: die
-Zugehörigkeit zu einer ästhetischen Praxis ist selbst ein Gesundheitsdatum
-(Entscheidung C8).
+das System niemals in Richtung Meta — nicht über die Conversions API, nicht als
+Pixel-Parameter, nicht als Ereignisname, nicht in Kampagnen-, Anzeigengruppen-
+oder Anzeigennamen, in keinem Feld und unter keinem Vorwand. Keine Custom
+Audiences aus Kontaktlisten: die Zugehörigkeit zu einer ästhetischen Praxis ist
+selbst ein Gesundheitsdatum (Entscheidung C8).
+
+**Die Grenze läuft zwischen Angebot und Person, nicht am Wort**
+(Entscheidung C9). Der Werbetext einer Anzeige darf die beworbene Leistung
+benennen — eine Praxis, die für eine Behandlung wirbt, sagt, wofür sie wirbt.
+Verboten ist jedes Feld, das an einer Person, einem Ereignis, einer Zielgruppe
+oder einer Konversion hängt.
+
+**Kampagnennamen bleiben neutral**, und zwar aus einem Grund im eigenen Haus:
+sie sind Werbe-Metadaten, liegen unverschlüsselt und werden beim Termin als
+`attribution_snapshot` eingefroren (D13). Eine Kampagne „Botox Herbst" setzt
+damit einen Behandlungsnamen in ein offenes Feld neben einen Kontakt.
 
 **Ausführbar abgesichert.** Ein Test unter `tests/Feature/Meta` lädt alle
-aktiven Katalognamen und prüft jeden ausgehenden Payload dagegen. Ein Treffer
-lässt den Test fehlschlagen. Siehe `docs/fachlogik/attribution.md`, Testfall 7.
+aktiven Katalognamen und prüft jeden ausgehenden Payload dagegen — Ereignisse,
+Zielgruppen und Strukturnamen. Ausgenommen ist allein der Anzeigeninhalt
+selbst. Ein Treffer lässt den Test fehlschlagen. Siehe
+`docs/fachlogik/attribution.md`, Testfall 7.
 
 ---
 

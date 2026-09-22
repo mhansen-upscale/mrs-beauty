@@ -4,7 +4,28 @@ import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavGroup, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { CalendarDays, ClipboardList, LayoutGrid, MapPin, ScrollText, Settings, Stethoscope, Syringe, Users } from 'lucide-vue-next';
+import {
+    Building2,
+    CalendarDays,
+    CalendarSync,
+    ClipboardList,
+    Contact,
+    Inbox,
+    ListChecks,
+    Megaphone,
+    Palette,
+    Scale,
+    Sparkles,
+    TrendingUp,
+    MessagesSquare,
+    LayoutGrid,
+    MapPin,
+    ScrollText,
+    ShieldCheck,
+    Stethoscope,
+    Syringe,
+    Users,
+} from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from './AppLogo.vue';
 
@@ -16,6 +37,9 @@ const page = usePage<SharedData>();
  * trotzdem keiner.
  */
 const darf = (ability: string): boolean => page.props.abilities?.includes(ability) ?? false;
+
+/** Der Betreiber gehört zu keiner Praxis — das Kennzeichen hängt am Benutzer. */
+const istBetreiber = computed<boolean>(() => page.props.auth?.superAdmin === true);
 
 /**
  * Stammdaten, Katalog, Team und Protokoll sind Arbeitsbereiche, keine
@@ -29,6 +53,47 @@ const gruppen = computed<NavGroup[]>(() =>
             items: [
                 { title: 'Dashboard', href: '/dashboard', icon: LayoutGrid },
                 ...(darf('appointments.manage') || darf('calendar.own.view') ? [{ title: 'Termine', href: '/termine', icon: CalendarDays }] : []),
+                ...(darf('inbox.view') ? [{ title: 'Posteingang', href: '/posteingang', icon: MessagesSquare }] : []),
+                ...(darf('waitlist.manage') ? [{ title: 'Warteliste', href: '/warteliste', icon: ListChecks }] : []),
+                ...(darf('contacts.manage')
+                    ? [
+                          { title: 'Anfragen', href: '/anfragen', icon: Inbox },
+                          { title: 'Kontakte', href: '/kontakte', icon: Contact },
+                      ]
+                    : []),
+            ],
+        },
+
+        /*
+         * **Werbung ist ein eigener Bereich, kein Anhängsel am Betrieb.**
+         *
+         * Fünf Seiten, die zusammengehören und die andere Leute bedienen als
+         * den Posteingang: Kampagnen und Entwürfe, die Auswertung darüber,
+         * und die beiden Grundlagen — Marke und HWG-Prüfung. Verteilt auf
+         * „Betrieb" und „Praxis" fand sie niemand als das, was sie ist: die
+         * Kette von der Anzeige bis zum Umsatz.
+         *
+         * Reihenfolge nach Häufigkeit: was wöchentlich benutzt wird, steht
+         * oben; die Grundlagen, die man einmal einrichtet, unten.
+         */
+        {
+            title: 'Werbung',
+            items: [
+                ...(darf('campaigns.manage')
+                    ? [
+                          // „Kampagnen", nicht „Werbung": ein Eintrag, der
+                          // heißt wie seine Gruppe, sagt nichts.
+                          { title: 'Kampagnen', href: '/werbung', icon: Megaphone },
+                          { title: 'Anzeigen', href: '/anzeigen', icon: Sparkles },
+                      ]
+                    : []),
+                ...(darf('insights.view') ? [{ title: 'Auswertung', href: '/auswertung', icon: TrendingUp }] : []),
+                ...(darf('brandguide.manage')
+                    ? [
+                          { title: 'Marke', href: '/marke', icon: Palette },
+                          { title: 'HWG-Prüfung', href: '/hwg', icon: Scale },
+                      ]
+                    : []),
             ],
         },
         {
@@ -38,6 +103,10 @@ const gruppen = computed<NavGroup[]>(() =>
                     ? [
                           { title: 'Standorte', href: '/standorte', icon: MapPin },
                           { title: 'Behandler', href: '/behandler', icon: Stethoscope },
+                          // Die Warnung steht im Menü, nicht nur auf der Seite:
+                          // ein unbemerkt stehender Sync bedeutet Termine über
+                          // belegten Zeiten (R4).
+                          { title: 'Kalender', href: '/kalender', icon: CalendarSync, warnung: page.props.calendar_alert },
                       ]
                     : []),
                 ...(darf('catalog.manage')
@@ -48,11 +117,22 @@ const gruppen = computed<NavGroup[]>(() =>
                     : []),
             ],
         },
+        ...(istBetreiber.value
+            ? [
+                  {
+                      // Hiess ebenfalls „Betrieb" -- zwei Gruppen mit
+                      // demselben Titel in einer Seitenleiste.
+                      title: 'Betreiber',
+                      items: [{ title: 'Backoffice', href: '/backoffice', icon: Building2 }],
+                  },
+              ]
+            : []),
         {
             title: 'Organisation',
             items: [
                 ...(darf('team.manage') ? [{ title: 'Team', href: '/team', icon: Users }] : []),
                 ...(darf('audit.view') ? [{ title: 'Protokoll', href: '/protokoll', icon: ScrollText }] : []),
+                ...(darf('organization.manage') ? [{ title: 'Datenschutz', href: '/datenschutz', icon: ShieldCheck }] : []),
             ],
         },
     ].filter((gruppe) => gruppe.items.length > 0),
@@ -78,16 +158,6 @@ const gruppen = computed<NavGroup[]>(() =>
         </SidebarContent>
 
         <SidebarFooter>
-            <SidebarMenu>
-                <SidebarMenuItem>
-                    <SidebarMenuButton as-child tooltip="Einstellungen">
-                        <Link :href="route('profile.edit')">
-                            <Settings />
-                            <span>Einstellungen</span>
-                        </Link>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-            </SidebarMenu>
             <NavUser />
         </SidebarFooter>
     </Sidebar>

@@ -6,7 +6,9 @@ use App\Enums\AppointmentStatus;
 use App\Enums\BookingChannel;
 use App\Enums\HoldPurpose;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Jobs\KonversionMelden;
 use App\Models\Appointment;
+use App\Models\AttributionTouch;
 use App\Models\Contact;
 use App\Models\Organization;
 use App\Models\Practitioner;
@@ -14,11 +16,13 @@ use App\Models\SlotHold;
 use App\Tenancy\TenantContext;
 use App\Verfuegbarkeit\SlotHalter;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Queue;
 
 use function Pest\Laravel\delete;
 use function Pest\Laravel\get;
 use function Pest\Laravel\post;
 use function Pest\Laravel\travelTo;
+use function Pest\Laravel\withCookies;
 
 use Tests\Feature\Termine\Szenario;
 
@@ -482,4 +486,117 @@ it('bietet jede Uhrzeit nur einmal an', function (): void {
         // zwei Angebote, sondern dieselbe Uhrzeit doppelt.
         expect($zeiten)->toBe(array_values(array_unique($zeiten)));
     }
+});
+
+/*
+|--------------------------------------------------------------------------
+| Die Kette, von Ende zu Ende
+|--------------------------------------------------------------------------
+*/
+
+it('traegt die Kampagne vom Klick bis in den Snapshot des Termins', function (): void {
+    // **Testfall 1** aus docs/fachlogik/attribution.md -- der Grund, warum es
+    // dieses Produkt gibt.
+    [, $szenario] = praxisMitBuchungsseite();
+    $daten = reservierungsdaten($szenario);
+
+    app(TenantContext::class)->forget();
+
+    $cookies = [
+        (string) config('mrs.attribution.consent_cookie') => 'ja',
+        (string) config('mrs.attribution.visitor_cookie_name') => 'besucher-kette',
+    ];
+
+    // Klick auf die Anzeige.
+    withCookies($cookies)
+        ->get('/buchen/demo-praxis?fbclid=klick-1&utm_source=facebook&mrs_campaign=camp-1')
+        ->assertOk();
+
+    withCookies($cookies)->post('/buchen/demo-praxis/reservieren', $daten);
+    withCookies($cookies)->post('/buchen/demo-praxis', kontaktdaten());
+
+    alsMandant(Organization::query()->where('slug', 'demo-praxis')->firstOrFail());
+
+    $termin = Appointment::query()->firstOrFail();
+    $stand = json_decode((string) $termin->attribution_snapshot, true);
+
+    expect($stand)->toBeArray()
+        ->and($stand['kampagne'])->toBe('camp-1')
+        ->and($stand['klick'])->toBe('klick-1')
+        ->and($stand['utm_source'])->toBe('facebook')
+        // Und der Touch hängt jetzt am Kontakt.
+        ->and(AttributionTouch::query()->whereNotNull('contact_id')->count())->toBe(1)
+        // Die Kennung liegt offen daneben, damit sich gruppieren laesst
+        // (WP-32b) -- sie ist eine Ziffernfolge ohne Aussage.
+        ->and($termin->attribution_campaign_id)->toBe('camp-1');
+});
+
+it('nutzt fuer Pixel und Serverereignis dieselbe Kennung', function (): void {
+    // **Testfall 8.** Ohne sie zaehlt Meta doppelt: Pixel und Conversions API
+    // melden dasselbe Ereignis. Abgeleitet statt gespeichert -- beide Seiten
+    // kommen unabhaengig voneinander auf denselben Wert.
+    [, $szenario] = praxisMitBuchungsseite();
+    $daten = reservierungsdaten($szenario);
+
+    Queue::fake();
+    app(TenantContext::class)->forget();
+
+    $cookies = [
+        (string) config('mrs.attribution.consent_cookie') => 'ja',
+        (string) config('mrs.attribution.visitor_cookie_name') => 'besucher-kennung',
+    ];
+
+    withCookies($cookies)->get('/buchen/demo-praxis?fbclid=klick-1');
+    withCookies($cookies)->post('/buchen/demo-praxis/reservieren', $daten);
+    withCookies($cookies)->post('/buchen/demo-praxis', kontaktdaten());
+
+    alsMandant(Organization::query()->where('slug', 'demo-praxis')->firstOrFail());
+
+    $termin = Appointment::query()->firstOrFail();
+    $erwartet = 'lead-'.$termin->uuid;
+
+    ohneMandant();
+
+    // Die Seite gibt sie ans Pixel ...
+    withCookies($cookies)
+        ->withSession(['buchung' => (string) $termin->uuid])
+        ->get(route('buchung.bestaetigt', ['praxis' => 'demo-praxis']))
+        ->assertInertia(fn ($seite) => $seite->where('leadEventId', $erwartet));
+
+    // ... und der Auftrag traegt dieselbe.
+    Queue::assertPushed(
+        KonversionMelden::class,
+        fn (KonversionMelden $auftrag): bool => $auftrag->uniqueId() === $erwartet,
+    );
+});
+
+it('meldet ohne Einwilligung kein Ereignis an Meta', function (): void {
+    [, $szenario] = praxisMitBuchungsseite();
+    $daten = reservierungsdaten($szenario);
+
+    Queue::fake();
+    app(TenantContext::class)->forget();
+
+    post('/buchen/demo-praxis/reservieren', $daten);
+    post('/buchen/demo-praxis', kontaktdaten());
+
+    Queue::assertNotPushed(KonversionMelden::class);
+});
+
+it('schreibt ohne Einwilligung auch beim Buchen nichts', function (): void {
+    [, $szenario] = praxisMitBuchungsseite();
+    $daten = reservierungsdaten($szenario);
+
+    app(TenantContext::class)->forget();
+
+    get('/buchen/demo-praxis?fbclid=klick-1');
+    post('/buchen/demo-praxis/reservieren', $daten);
+    post('/buchen/demo-praxis', kontaktdaten());
+
+    alsMandant(Organization::query()->where('slug', 'demo-praxis')->firstOrFail());
+
+    expect(AttributionTouch::query()->count())->toBe(0)
+        // Gebucht wird trotzdem: die Seite bleibt vollstaendig benutzbar.
+        ->and(Appointment::query()->count())->toBe(1)
+        ->and(Appointment::query()->first()?->attribution_snapshot)->toBeNull();
 });

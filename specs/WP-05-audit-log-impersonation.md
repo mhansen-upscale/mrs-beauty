@@ -133,6 +133,15 @@ Protokolleintrag zu erzeugen — eine Lücke in dem, was WP-03 zugesichert hat.
 Im Anwendungscode jetzt untersagt, durchgesetzt durch einen Test. In Tests
 bleibt es erlaubt, dort wäre die Protokollierung nur Rauschen.
 
+**Nachtrag aus WP-34: der Protokollierer schwieg bei Organisationen.** Der
+Eintrag übernimmt den Mandanten vom Gegenstand — über einen Attributzugriff,
+und `Model::shouldBeStrict` wirft, wenn das Modell das Feld nicht hat.
+`Organization` hat keine `organization_id`, sie **ist** der Mandant. Die
+Ausnahme landete im `catch`, und der Eintrag entstand nie: jede Handlung des
+Betreibers an einer Praxis wäre spurlos geblieben. Behoben über
+`getAttributes()`, mit Gegenprobe in
+`tests/Feature/Backoffice/BackofficeTest.php`.
+
 **Zwei ausführbare Regeln kamen dazu** (`DeckungTest.php`): kein
 `withoutGlobalScope` in `app/`, und jedes Modell mit einem `Encrypted`-Cast
 muss seine personenbezogenen Felder benennen — verschlüsselt heißt

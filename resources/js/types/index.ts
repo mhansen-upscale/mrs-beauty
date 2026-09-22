@@ -4,6 +4,9 @@ import type { LucideIcon } from 'lucide-vue-next';
 export interface Auth {
     user: User;
     role: string | null;
+
+    /** Der Betreiber gehört zu keiner Praxis — das Kennzeichen hängt am Benutzer (WP-34). */
+    superAdmin: boolean;
 }
 
 export interface OrganizationSummary {
@@ -30,6 +33,8 @@ export interface NavItem {
     href: string;
     icon?: LucideIcon;
     isActive?: boolean;
+    /** R4: ein stiller Ausfall wird in der Navigation sichtbar, nicht nur im Log. */
+    warnung?: boolean;
 }
 
 export interface NavGroup {
@@ -61,6 +66,16 @@ export interface SharedData extends PageProps {
 
     // Solange eine Impersonation läuft, ist sie in jeder Antwort erkennbar.
     impersonation: ImpersonationState | null;
+
+    // Eine unterbrochene Kalenderverbindung bedeutet Termine über belegten
+    // Zeiten. Sie steht deshalb in jeder Antwort, nicht nur auf ihrer Seite.
+    calendar_alert: boolean;
+
+    flash: {
+        erfolg: string | null;
+        fehler: string | null;
+    };
+
     ziggy: {
         location: string;
         url: string;

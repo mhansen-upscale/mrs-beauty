@@ -9,10 +9,10 @@ Gilt für WP-00, WP-19 bis WP-22, WP-26 bis WP-28, WP-31, WP-32.
 | `ads_read` | Kampagnen und Kennzahlen lesen |
 | `ads_management` | Kampagnen anlegen und ändern |
 | `business_management` | Zugriff auf Werbekonten über Business-Manager-Partnerschaft |
-| `pages_messaging` | Messenger empfangen und senden |
-| `pages_manage_metadata` | Webhook-Abonnements für Seiten |
-| `instagram_basic` | Instagram-Geschäftskonto lesen |
-| `instagram_manage_messages` | Instagram-Direktnachrichten |
+| ~~`pages_messaging`~~ | Messenger — **zurückgestellt (P11)** |
+| ~~`pages_manage_metadata`~~ | Webhook-Abonnements für Seiten — **zurückgestellt (P11)** |
+| ~~`instagram_basic`~~ | Instagram-Geschäftskonto — **zurückgestellt (P11)** |
+| ~~`instagram_manage_messages`~~ | Instagram-Direktnachrichten — **zurückgestellt (P11)** |
 | `whatsapp_business_messaging` | WhatsApp senden und empfangen |
 | `whatsapp_business_management` | Templates, Rufnummern, Konten verwalten |
 
@@ -51,6 +51,8 @@ Meta behandelt kosmetische Verfahren als eingeschränkte Kategorie. Zu erwarten 
 
 **Die Oberfläche muss diese Anforderungen erzwingen, nicht erst die API-Ablehnung anzeigen.** Ein Kunde, der eine Kampagne baut und beim Speichern eine Meta-Fehlermeldung bekommt, hält das Produkt für kaputt.
 
+Umgesetzt in WP-27, im Server und nicht in der Seite (`config/mrs.php` → `ads`): Mindestalter 18 ohne Ausnahme, Mindestbudget je Währung, eine abschließende Liste erlaubter Ziele — und **kein Feld für Interessen**. „Botox" als Interesse auszuwählen wäre eine Behandlungsbezeichnung Richtung Meta (Regel 2), in einem Feld, an das niemand denkt. Zielgruppe ist Umkreis, Alter, Geschlecht; Custom Audiences sind ohnehin aus (C8).
+
 Unabhängig davon gilt deutsches Recht strenger: Der BGH hat Vorher-Nachher-Bilder mit Urteil vom 31.07.2025 (I ZR 170/24) auch für minimalinvasive Eingriffe verboten. Die HWG-Prüfung aus WP-30 läuft **vor** jeder Übermittlung an Meta.
 
 ## Webhooks
@@ -72,15 +74,27 @@ Rohereignisse werden 14 Tage aufbewahrt, damit fehlgeschlagene Verarbeitungen er
 
 Folge: WhatsApp darf im Abo nicht unbegrenzt sein. Die Kategorie wird je Nachricht **aus der API-Antwort** übernommen, nie geschätzt.
 
+**Und zwar aus der Statusrückmeldung, nicht aus der Sendeantwort** (gefunden in WP-20a). Die Antwort auf den Versand trägt `messages[0].id` und sonst nichts; `pricing.category` kommt Minuten später als eigenes Webhook-Ereignis. Eine frisch gesendete Nachricht hat deshalb **keine** Kategorie — nicht `none`. `none` wäre die Schätzung mit der Aussage „kostenlos", und die fällt nie auf.
+
 **Service-Fenster.** 24 Stunden ab der letzten eingehenden Nachricht. Danach ist nur ein genehmigtes Template möglich. `conversations.service_window_expires_at` bildet das ab, die Inbox zeigt sichtbar an, wenn ein kostenpflichtiges Template nötig wird, inklusive Kosten.
 
-**Templates.** Genehmigung durch Meta, je Sprache getrennt. Die Einordnung als `utility` statt `marketing` senkt die Kosten deutlich und hängt allein von der Formulierung ab. Das ist ein Versuch-und-Irrtum-Vorgang bei der Einreichung, entsprechend Zeit einplanen.
+**Templates.** Genehmigung durch Meta, je Sprache getrennt — derselbe Name kann auf Deutsch stehen und auf Englisch abgelehnt sein. Gelesen werden sie unter der **WABA-Kennung**, gesendet wird unter der **Rufnummern-ID**: zwei Kennungen, eine Verbindung. Die Einordnung als `utility` statt `marketing` senkt die Kosten deutlich und hängt allein von der Formulierung ab. Das ist ein Versuch-und-Irrtum-Vorgang bei der Einreichung, entsprechend Zeit einplanen.
 
-**Opt-in** ist nachweisbar erforderlich. `consents` mit `channel_identity_id`, `text_snapshot` und Zeitpunkt.
+**Opt-in** ist nachweisbar erforderlich. `consents` mit `channel_identity_id`, `text_snapshot` und Zeitpunkt. Es gilt für das **Template außerhalb** des Fensters: wer uns schreibt, hat sich damit gemeldet, und die Antwort im Fenster braucht keinen weiteren Nachweis.
 
 **Qualitätsbewertung.** Meta bewertet Rufnummern nach Nutzerreaktionen. Zu viele Blockierungen senken das Versandlimit. Die Frequenzbremse bei Wartelistenangeboten schützt auch davor.
 
-## Instagram und Messenger
+## Instagram und Messenger — zurückgestellt
+
+**Nicht Teil des Produkts** (Entscheidung P11, 16.09.2026). Die
+Berechtigungen `pages_messaging`, `pages_manage_metadata`, `instagram_basic`
+und `instagram_manage_messages` gehören damit **nicht** in die App Review —
+jede eingereichte Berechtigung verlangt eine eigene funktionierende Demo und
+kann einzeln abgelehnt werden.
+
+Was unten steht, gilt weiterhin für den Tag, an dem die beiden nachgezogen
+werden. Bis dahin ist es Hintergrund, kein Auftrag.
+
 
 - **Scoped IDs:** Nutzerkennungen sind je Seite unterschiedlich. Dieselbe Person kann mehrere Identitäten haben. `channel_identities` bildet das ab, Zusammenführung nur bei sicherem Signal.
 - **24-Stunden-Fenster** wie bei WhatsApp, mit abweichenden Ausnahmen.
@@ -89,6 +103,35 @@ Folge: WhatsApp darf im Abo nicht unbegrenzt sein. Die Kategorie wird je Nachric
 
 ## Datenschutz
 
-**Keine Gesundheitsdaten an Meta.** Regel 2 aus `CLAUDE.md`, ausführbar abgesichert durch den Test aus `docs/fachlogik/attribution.md`. Gilt für Conversions API, Kampagnennamen, Anzeigentexte in der Verwaltung und jede andere Übermittlung.
+**Keine Gesundheitsdaten an Meta.** Regel 2 aus `CLAUDE.md`, ausführbar abgesichert durch den Test aus `docs/fachlogik/attribution.md`. Gilt für die Conversions API, für Pixel-Parameter, für Ereignisnamen und für Kampagnen-, Anzeigengruppen- und Anzeigennamen.
+
+**Der Anzeigeninhalt ist ausgenommen** (Entscheidung C9). Eine Praxis, die für eine Behandlung wirbt, benennt sie in Überschrift und Text — das ist eine Aussage über ein Angebot, nicht über eine Patientin. Die Grenze läuft zwischen Angebot und Person, nicht am Wort.
+
+**Kampagnennamen bleiben trotzdem neutral**, und der Grund liegt im eigenen Haus: sie sind Werbe-Metadaten, liegen unverschlüsselt und frieren beim Termin als `attribution_snapshot` ein (D13). „Botox Herbst" als Kampagnenname setzt einen Behandlungsnamen in ein offenes Feld unmittelbar neben einen Kontakt. Die Kampagnenbenennung erzeugt deshalb **das Produkt** aus Zeitraum, Ziel und Standort, nicht die freie Eingabe des Kunden (WP-27).
 
 Keine Custom Audiences aus Kontaktlisten (Entscheidung C8).
+
+## Das Pixel auf der Buchungsseite
+
+**Das Produkt baut es ein, nicht der Kunde.** Die Praxis hinterlegt unter
+*Einstellungen → Tracking* ausschließlich die Pixel-ID — eine Ziffernfolge,
+geprüft gegen `^[0-9]{6,20}$`. Ein Feld für einen ganzen Skriptschnipsel wäre
+die Hintertür, die Regel 2 gerade schließt: darin ließe sich `content_name`
+mit dem Behandlungsnamen senden, und niemand würde es bemerken.
+
+Gesendet wird genau zweierlei, jeweils **ohne einen einzigen Parameter**:
+
+| Ereignis   | Wann                                  |
+| ---------- | ------------------------------------- |
+| `PageView` | Aufruf der Buchungsseite              |
+| `Lead`     | Bestätigungsseite nach der Buchung    |
+
+`autoConfig` ist **aus**, gesetzt **vor** `init`. Mit ihm entscheidet Meta
+selbst, was mitgeht: Seitentitel, Beschriftungen angeklickter Schaltflächen,
+Formularfelder. Auf dieser Seite stehen Behandlungsnamen — genau die Daten,
+die Regel 2 verbietet.
+
+Abgesichert durch `tests/Feature/Meta/PixelTest.php`: der Test liest den
+Quelltext des Buchungslayouts, lässt nur `PageView` und `Lead` ohne zweites
+Argument zu, prüft die Reihenfolge von `autoConfig` und `init` und hält jeden
+aktiven Katalognamen gegen den Pixelabschnitt.

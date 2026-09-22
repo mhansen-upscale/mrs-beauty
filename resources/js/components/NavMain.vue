@@ -2,6 +2,7 @@
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavGroup, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
+import { TriangleAlert } from 'lucide-vue-next';
 
 defineProps<{
     gruppen: NavGroup[];
@@ -22,6 +23,8 @@ const aktiv = (href: string): boolean => page.url === href || page.url.startsWit
                     <Link :href="item.href">
                         <component :is="item.icon" />
                         <span>{{ item.title }}</span>
+                        <!-- R4: ein stiller Ausfall wird hier laut. -->
+                        <TriangleAlert v-if="item.warnung" class="ml-auto size-4 text-warning" aria-label="Es gibt ein Problem" />
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>

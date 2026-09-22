@@ -17,9 +17,11 @@ withDefaults(
         beschreibung?: string;
         laeuft?: boolean;
         absendeText?: string;
+        /** Sperrt den Absendeknopf, solange die Eingabe unvollstaendig ist. */
+        absendenAus?: boolean;
         breit?: boolean;
     }>(),
-    { beschreibung: '', laeuft: false, absendeText: 'Speichern', breit: false },
+    { beschreibung: '', laeuft: false, absendeText: 'Speichern', absendenAus: false, breit: false },
 );
 
 const offen = defineModel<boolean>('offen', { required: true });
@@ -40,7 +42,7 @@ const emit = defineEmits<{ (e: 'absenden'): void }>();
 
                 <DialogFooter class="gap-2">
                     <Button type="button" variant="ghost" @click="offen = false">Abbrechen</Button>
-                    <Button type="submit" :disabled="laeuft">
+                    <Button type="submit" :disabled="laeuft || absendenAus">
                         <Loader2 v-if="laeuft" class="animate-spin" />
                         {{ absendeText }}
                     </Button>

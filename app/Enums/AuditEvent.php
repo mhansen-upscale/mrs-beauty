@@ -36,6 +36,15 @@ enum AuditEvent: string
     case ImpersonationExpired = 'impersonation.expired';
 
     // Schluessel (WP-03)
+    /* Backoffice des Betreibers (WP-34) -- jede Handlung ueber die
+       Mandantengrenze hinweg steht im Protokoll (Regel 1). */
+
+    case TenantSuspended = 'tenant.suspended';
+
+    case TenantUnsuspended = 'tenant.unsuspended';
+
+    case TenantCredited = 'tenant.credited';
+
     case EncryptionKeyIssued = 'encryption_key.issued';
     case EncryptionKeyRevoked = 'encryption_key.revoked';
 
@@ -56,6 +65,9 @@ enum AuditEvent: string
             self::ImpersonationApproved => 'Vollzugriff freigegeben',
             self::ImpersonationEnded => 'Impersonation beendet',
             self::ImpersonationExpired => 'Impersonation abgelaufen',
+            self::TenantSuspended => 'Mandant gesperrt',
+            self::TenantUnsuspended => 'Mandant entsperrt',
+            self::TenantCredited => 'Kontingent gutgeschrieben',
             self::EncryptionKeyIssued => 'Schlüsselsatz angelegt',
             self::EncryptionKeyRevoked => 'Schlüssel widerrufen',
         };

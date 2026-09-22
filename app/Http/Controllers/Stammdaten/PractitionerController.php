@@ -17,7 +17,9 @@ use App\Models\User;
 use App\Models\WorkingHour;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -47,6 +49,8 @@ final class PractitionerController extends Controller
                     'last_name' => $behandler->last_name,
                     'name' => $behandler->name(),
                     'is_active' => $behandler->is_active,
+                    'avatar_url' => $behandler->avatarUrl(),
+                    'initials' => $behandler->initialen(),
                     'user' => $behandler->user?->uuid,
                     'locations' => $behandler->locations->map(fn (Location $s): string => (string) $s->uuid)->values(),
                     'working_hours' => $behandler->workingHours->map(fn (WorkingHour $zeit): array => [
@@ -140,6 +144,63 @@ final class PractitionerController extends Controller
         Gate::authorize(Ability::ManageMasterData->value);
 
         $practitioner->is_active = true;
+        $practitioner->save();
+
+        return back();
+    }
+
+    /**
+     * Ein Bild fuer die Buchungsseite.
+     *
+     * **Auf einer oeffentlichen Platte, unverschluesselt** -- dieselbe
+     * Entscheidung wie beim Namen: die Praxis veroeffentlicht es selbst. Ein
+     * Bild, das bei jedem Aufruf entschluesselt werden muesste, waere auf
+     * einer oeffentlichen Seite auch nicht zu bezahlen.
+     *
+     * Das alte wird entfernt, nicht liegengelassen: sonst sammelt sich auf
+     * dem Speicher jedes je hochgeladene Portraet.
+     */
+    public function storeAvatar(Request $request, Practitioner $practitioner): RedirectResponse
+    {
+        Gate::authorize(Ability::ManageMasterData->value);
+
+        $request->validate([
+            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=200,min_height=200'],
+        ]);
+
+        $datei = $request->file('avatar');
+
+        if (! $datei instanceof UploadedFile) {
+            return back();
+        }
+
+        $alt = $practitioner->avatar_path;
+
+        $pfad = $datei->store('behandler', 'public');
+
+        if (! is_string($pfad)) {
+            return back()->withErrors(['avatar' => 'Das Bild konnte nicht gespeichert werden.']);
+        }
+
+        $practitioner->avatar_path = $pfad;
+        $practitioner->save();
+
+        if (is_string($alt) && $alt !== '') {
+            Storage::disk('public')->delete($alt);
+        }
+
+        return back();
+    }
+
+    public function destroyAvatar(Practitioner $practitioner): RedirectResponse
+    {
+        Gate::authorize(Ability::ManageMasterData->value);
+
+        if (is_string($practitioner->avatar_path) && $practitioner->avatar_path !== '') {
+            Storage::disk('public')->delete($practitioner->avatar_path);
+        }
+
+        $practitioner->avatar_path = null;
         $practitioner->save();
 
         return back();

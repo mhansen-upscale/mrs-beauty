@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $postal_code
  * @property string|null $city
  * @property string $country
+ * @property string|null $meta_city_key
  * @property string|null $phone
  * @property string|null $email
  * @property bool $is_active

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\ComplianceRuleset;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\EncryptionKey;
 use App\Models\Organization;
@@ -32,12 +33,18 @@ const MODELL_AUSNAHMEN = [
     Organization::class => 'ist selbst der Mandant',
     User::class => 'Anmeldung findet vor der Mandantenaufloesung statt',
     EncryptionKey::class => 'wird gebraucht, um Mandantendaten ueberhaupt zu lesen',
+
+    // Entscheidung C1: das HWG-Regelwerk ist global und versioniert. Eine
+    // mandantenbezogene Kopie hiesse, dass ein Kunde mit veraltetem
+    // Regelwerk weiterarbeitet.
+    ComplianceRuleset::class => 'Rechtsstand ist fuer alle Mandanten derselbe',
 ];
 
 /** @var array<string, string> */
 const TABELLEN_AUSNAHMEN = [
     'users' => 'siehe App\Models\User',
     'encryption_keys' => 'siehe App\Models\EncryptionKey',
+    'compliance_rulesets' => 'siehe App\Models\ComplianceRuleset',
 ];
 
 /**

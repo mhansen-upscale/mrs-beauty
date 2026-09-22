@@ -18,4 +18,13 @@ interface UsesBlindIndexes
      * @return array<string, string>
      */
     public function blindIndexes(): array;
+
+    /**
+     * Der Wert, ueber den der Index gebildet wird -- oder null fuer "kein
+     * Index". Die Vorgabe steht in HasBlindIndexes.
+     */
+    public function blindIndexValue(string $feld, mixed $wert): ?string;
+
+    /** Der Index zu diesem Datensatz, ohne ihn anzufassen. */
+    public function blindIndexHash(string $feld): ?string;
 }

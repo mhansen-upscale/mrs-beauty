@@ -40,6 +40,14 @@ final class TerminnachrichtVersenden implements ShouldQueue
         private readonly string $organisation,
     ) {
         $this->onQueue('default');
+
+        // **Erst nach dem Commit.** Der Auftrag entsteht innerhalb der
+        // Transaktion des Terminplaners, und die Queue-Verbindung steht
+        // projektweit auf after_commit = false: ein Arbeiter, der schneller
+        // ist als der Commit, faende die Zeile nicht und die Mail bliebe
+        // lautlos aus. Nachgetragen in WP-14, wo dieselbe Frage fuer die
+        // Kalenderauftraege anstand.
+        $this->afterCommit();
     }
 
     public function handle(): void

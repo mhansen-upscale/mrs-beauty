@@ -85,9 +85,36 @@ nur Symbol — mit Tooltip und `aria-label`, denn ein Symbol allein ist keine
 Beschriftung.
 
 **Arbeitsbereiche gehören in die Hauptnavigation, nicht hinter ein Zahnrad.**
-Unter Einstellungen steht nur, was die eigene Person betrifft: Profil und
-Passwort. Standorte, Behandler, Behandlungen, Terminarten, Team und Protokoll
-sind Arbeit.
+Standorte, Behandler, Behandlungen, Terminarten, Team und Protokoll sind
+Arbeit und stehen dort.
+
+Unter Einstellungen steht, was die eigene Person betrifft — Profil und
+Passwort —, und **technische Einrichtung der Praxis**, die man einmal macht
+und dann vergisst: die Pixel-ID und das Postfach. Die Grenze ist nicht
+„eigene Person gegen Praxis", sondern **Arbeit gegen Einrichtung**: was
+jemand täglich anfasst, gehört in die Hauptnavigation.
+
+Deshalb steht **Einstellungen nicht in der Seitenleiste**: sie hängt am
+Benutzermenü, wo jeder sie sucht, der sein Profil meint. In der Leiste stünde
+sie als gleichrangiger Punkt neben der Arbeit und zöge Klicks auf sich, die
+ihr nicht gelten.
+
+**Der aktive Menüpunkt hebt sich ab.** Grau auf Grau ist kein Zustand,
+sondern ein Verdacht. Er trägt die Markenfarbe, eine kräftigere Schrift und
+einen Balken an der linken Kante — dreifach, damit es auch bei schwachem
+Kontrast, in Graustufen und für farbenblinde Augen erkennbar bleibt.
+
+**Was der Agent nicht sagen darf, entsteht gar nicht erst.** Kein Entwurf,
+den jemand wegwerfen müsste: was im Eingabefeld steht, wird irgendwann
+abgeschickt. Die harte Weiche läuft deshalb **vor** der Textgenerierung, die
+Nachprüfung **vor** der Anzeige (`docs/fachlogik/agent.md`, Schritte 4 und 7).
+
+**Fremder Inhalt wird als Text gesetzt, nie als Auszeichnung.** Kein
+`v-html`, kein `innerHTML` — auch nicht für etwas, das der Server selbst
+erzeugt hat. Die Ausnahme wäre sonst der Präzedenzfall, auf den sich die
+nächste beruft. Ein SVG gehört in ein `<img>` mit Datenadresse; dort kann es
+nichts ausführen. Durchgesetzt durch `tests/Feature/Design/RegelFuenfTest.php`
+(Regel 5).
 
 **Eine Checkbox wird über `checked` gebunden, nicht über `model-value`.**
 radix-vue v1 heißt so. Ein `:model-value` fällt als gewöhnliches Attribut
@@ -99,6 +126,14 @@ durch: das Häkchen erscheint, lässt sich anklicken — und der gebundene Wert
 Vue verwirft ein `@click` am Aufrufort dann stillschweigend. Wer eine
 Komponente um einen Provider wickelt, deklariert das Ereignis ausdrücklich —
 siehe `AktionsButton`.
+
+- **Seitenaktionen stehen in der Werkzeugzeile der Tabelle**
+  (`<DataTable #werkzeuge>`), nicht neben der Überschrift. `Heading` ist
+  **mehrwurzelig** — Überschrift *und* Trennlinie —, und in einer Flex-Zeile
+  wird die Trennlinie zum zweiten Flex-Element und schiebt alles Weitere in
+  die nächste Zeile. Vue sagt dazu nichts; man sieht es nur. Dieselbe Falle
+  wie beim `AktionsButton`, dessen Wurzel ein `TooltipProvider` ist.
+  Durchgesetzt von `tests/Feature/Design/BauteileTest.php`.
 
 ## Benennung
 
@@ -173,6 +208,36 @@ aussieht, verliert die Verbindung zur Spezifikation.
   Kanal heißt `TenantContext::acrossTenants()`, verlangt eine Begründung und
   protokolliert sich selbst. Durchgesetzt durch
   `tests/Feature/Audit/DeckungTest.php`.
+- **Ein Löschlauf hat einen Vorschaumodus, und er ist die Vorgabe.** Ein Lauf,
+  der beim ersten scharfen Durchgang zu viel löscht, ist nicht rückholbar.
+  Vorschau und Ernstfall laufen durch dieselbe Abfrage — eine Vorschau, die
+  anders zählt, ist keine.
+- **Löschen heißt Datei und Datensatz.** Anhänge liegen außerhalb der
+  Datenbank; nur die Zeile zu entfernen lässt das Foto liegen, während der
+  Datensatz weg ist.
+- **Eine Einwilligung hängt an der Kanalidentität, nicht an der Person**
+  (D8) — und nach einer Zusammenführung gilt je Kanal der jüngste Eintrag,
+  **nicht die Vereinigung** (D9). Deshalb gibt es keinen Weg, der zu einem
+  Kontakt ein einzelnes Ja liefert.
+- **Kennzahlen haben genau eine Definition**, und sie steht in
+  `docs/fachlogik/attribution.md`. Abweichende Auslegung in Berichten ist der
+  schnellste Weg, Vertrauen in die Zahlen zu verlieren — wer eine Zahl
+  anzeigt, zeigt die dort definierte.
+- **Eine Herkunft, die man nicht kennt, wird nicht geraten.** „Vom Empfang"
+  ist kein Kanal, sondern die Abwesenheit einer Angabe. Eine erfundene Quelle
+  ist schlechter als keine, weil sie in der Auswertung wie eine echte aussieht.
+- **Ein neuer blinder Index braucht einen Nachtrag.** Die Migration legt nur
+  die Spalte an; gefüllt wird sie vom `saving`-Haken, und der läuft für eine
+  bestehende Zeile nie. Ohne `mrs:blindindex-nachtragen` ist der gesamte
+  Altbestand über dieses Feld unauffindbar — ohne Fehler, ohne Meldung.
+- **Was verglichen werden soll, wird vorher normalisiert.** Eine
+  Telefonnummer geht nach E.164, bevor daraus ein Index wird; sonst sind
+  „+49 170 1234567" und „01701234567" zwei Personen. Was sich nicht
+  normalisieren lässt, wird gespeichert und **nicht** indiziert — und die
+  Suche findet dann nichts statt irgendetwas.
+- **Eine Suche über verschlüsselte Felder gehört auf den Server.** `DataTable`
+  filtert die geladenen Zeilen per Teilstring und täuscht damit eine Suche
+  vor, die es nicht gibt (Entscheidung P8).
 - **Ins Protokoll gehören Feldnamen, keine Werte** (Entscheidung C5). Wer einen
   Wert aufnehmen will, erklärt das Feld über `auditableValues()` — und zwar nur
   für Felder ohne Personenbezug.
@@ -181,6 +246,19 @@ aussieht, verliert die Verbindung zur Spezifikation.
   Maskierung greift.
 - **Maskierung sitzt am Attributzugriff, nicht an der Serialisierung.** Ein
   Controller, der sein Array von Hand baut, soll sie nicht umgehen können.
+- **Der Mandant steht vor der Routenbindung.** Laravel sortiert die Middleware
+  einer Route nach einer Prioritätsliste, in der `SubstituteBindings` steht;
+  eigene Middleware, die nicht in der Liste steht, landet dadurch **dahinter**
+  — gleich in welcher Reihenfolge sie in `bootstrap/app.php` notiert ist. Ein
+  Route-Model-Binding auf ein Mandantenmodell lief damit ohne Mandanten.
+  `EnsureUserIsActive`, `ResolveTenant` und `ApplyImpersonation` hängen
+  deshalb über `prependToPriorityList()` ausdrücklich vor
+  `SubstituteBindings`. Durchgesetzt durch
+  `tests/Feature/Tenancy/RoutenbindungTest.php`.
+- **Ein Test, der den Mandanten über HTTP prüft, vergisst ihn vorher.**
+  `alsMandant()` setzt das Singleton für den ganzen Testlauf — eine Anfrage
+  findet ihn dann schon vor und beweist nichts über die Middleware. Wer den
+  echten Weg prüfen will, ruft `ohneMandant()`, bevor die Anfrage losgeht.
 
 ## Zeit
 
@@ -215,10 +293,56 @@ Klassen. Was je Mandant abweichen darf, liegt zusätzlich in
   die bekannten Ausnahmen melden.
 - **Testnamen auf Deutsch**, im Indikativ: „it laesst die letzte Inhaberin
   ihre Rolle nicht abgeben".
+- **Erst quittieren, dann verarbeiten.** Wer eine Zustellung vor der Antwort
+  verarbeitet, bekommt Wiederholungen — und muss sie dann trotzdem
+  deduplizieren. Zweimal dieselbe Arbeit.
+- **Ein Register für austauschbare Umsetzungen ist ein Singleton.** Sonst
+  bekommt jede Aufrufstelle ein eigenes, leeres — und die Registrierung
+  verpufft lautlos.
+- **Eine Attrappe antwortet nur für ihren eigenen Host.** `Http::fake()`
+  nimmt die erste Attrappe, die etwas liefert — eine mit Auffangzweig
+  verschluckt damit die Anfragen aller anderen, und ein Test mit zwei
+  Fremdsystemen läuft grün, ohne das zweite je zu berühren. Wer nicht
+  zuständig ist, gibt `null` zurück.
 - **Nebenläufigkeit gehört nach `tests/Parallel`**, ohne `RefreshDatabase`.
   Eine umschließende Testtransaktion macht eine zweite Datenbanksitzung blind;
   ein Sperrtest prüft dann nur gegen sich selbst. Diese Tests räumen selbst
   auf.
+
+## Fremdsysteme
+
+- **Schreibende Aufrufe laufen über eine Queue** (Regel 4, Entscheidung A13).
+  Die Oberfläche bleibt bedienbar, wenn ein Fremdsystem ausfällt.
+- **Job-Nutzlasten tragen kanonische UUIDs, keine Rohbytes.** `BINARY(16)`
+  bricht `json_encode()` mit „Malformed UTF-8 characters", und die Meldung
+  zeigt auf die Queue statt auf die Ursache.
+- **Aufträge, die in einer Transaktion entstehen, laufen `afterCommit()`.**
+  Die Queue-Verbindungen stehen projektweit auf `after_commit = false`; ein
+  Arbeiter, der schneller ist als der Commit, findet den Datensatz nicht und
+  tut lautlos nichts. Betrifft jeden Auftrag, den `Terminplaner` einstellt.
+- **Wiederholt wird nur, was ein Ausfall ist.** `Http::retry()` wiederholt
+  ohne `when`-Rückruf jede nicht erfolgreiche Antwort — auch eine, die eine
+  fachliche Aussage trägt. Google meldet ein verfallenes Delta-Token mit
+  `410`; ein zweiter Versuch verschluckt die Aussage, und der Sync steht
+  danach still, ohne dass etwas fehlschlägt. Wiederholt werden
+  Verbindungsfehler und 5xx, sonst nichts.
+- **Eigene Markierungen tragen die Organisation, nicht nur das Produkt.** Ein
+  Behandler kann für zwei Praxen arbeiten und denselben Kalender verbinden;
+  das Event der einen ist für die andere echte belegte Zeit.
+- **Zwei Anbieter erst umsetzen, dann abstrahieren**
+  (`docs/integrationen/kalender.md`). Ein gemeinsames Interface vor der
+  zweiten Umsetzung passt auf keine von beiden. Der Schnitt läuft danach **an
+  der Nutzlast**, nicht an der Fachlogik — und was nicht in der Schnittstelle
+  steht (Fehlercodes, Adressen, Laufzeiten), ist die eigentliche Aussage.
+- **`data_get()` liest den Punkt als Pfad.** Bei Schlüsseln, die selbst einen
+  enthalten — `@odata.deltaLink`, `@odata.nextLink` — sucht es ein Feld
+  `deltaLink` unter `@odata`, findet nichts und wirft nichts. Dort direkt auf
+  das Array zugreifen. Der Fehler erzeugt keinen Ausfall, sondern einen Sync,
+  der stillschweigend bei jedem Lauf von vorn anfängt.
+- **Ein Schutz, der an einer einzigen Abfrage hängt, ist keiner.** Die
+  Eigenmarkierung ausgehender Kalendereinträge (R1) wird bei einem Anbieter
+  gar nicht zurückgeliefert; der Abgleich gegen die selbst geschriebenen
+  Kennungen ist deshalb die zweite Hälfte derselben Regel.
 
 ## Statik und Format
 
@@ -234,4 +358,6 @@ und ESLint für das Frontend, `vue-tsc` für die Typen.
 - Das Dashboard zeigt noch die Platzhalter des Starter-Kits. Was dort steht,
   entscheidet sich mit WP-32.
 - Ein Bauteil für Hinweise und Bestätigungen (Toast) fehlt. Bisher meldet die
-  Oberfläche Fehler nur am Formularfeld.
+  Oberfläche Fehler nur am Formularfeld. Die Kalenderseite (WP-14) zeigt
+  `flash.erfolg` und `flash.fehler` als Band über der Tabelle — beides steht
+  seitdem in jeder Inertia-Antwort und wartet auf ein gemeinsames Bauteil.

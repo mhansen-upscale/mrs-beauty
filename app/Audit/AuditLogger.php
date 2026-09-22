@@ -59,8 +59,15 @@ final class AuditLogger
                 $eintrag->organization_id = null;
             } elseif ($organizationId !== null) {
                 $eintrag->organization_id = $organizationId;
-            } elseif ($gegenstand !== null && is_string($gegenstand->getAttribute('organization_id'))) {
-                $eintrag->organization_id = $gegenstand->getAttribute('organization_id');
+            } elseif ($gegenstand !== null && is_string($gegenstand->getAttributes()['organization_id'] ?? null)) {
+                // **Ueber getAttributes(), nicht ueber getAttribute().**
+                // Model::shouldBeStrict wirft beim Zugriff auf ein Feld, das
+                // ein Modell nicht hat -- und Organization hat keine
+                // organization_id, sie **ist** der Mandant. Die Ausnahme
+                // landete im catch unten, und der Protokolleintrag entstand
+                // nie: ein Protokoll, das stillschweigend nichts schreibt,
+                // ist keines (gefunden in WP-34).
+                $eintrag->organization_id = $gegenstand->getAttributes()['organization_id'];
             } else {
                 $eintrag->organization_id = app(TenantContext::class)->id();
             }

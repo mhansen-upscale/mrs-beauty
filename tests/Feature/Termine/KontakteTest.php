@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Kontakte\Kontaktsuche;
 use App\Models\Contact;
-use App\Termine\Kontaktsuche;
 use Illuminate\Support\Facades\DB;
 
 /*

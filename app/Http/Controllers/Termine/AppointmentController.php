@@ -8,11 +8,13 @@ use App\Enums\Ability;
 use App\Enums\AppointmentStatus;
 use App\Enums\BookingChannel;
 use App\Enums\CancellationReason;
+use App\Enums\LeadSource;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Termine\AbsageRequest;
 use App\Http\Requests\Termine\StatusRequest;
 use App\Http\Requests\Termine\TerminRequest;
 use App\Http\Requests\Termine\VerschiebenRequest;
+use App\Kontakte\Kontaktsuche;
 use App\Models\Appointment;
 use App\Models\AppointmentNotification;
 use App\Models\AppointmentType;
@@ -20,7 +22,6 @@ use App\Models\Contact;
 use App\Models\Location;
 use App\Models\Practitioner;
 use App\Support\Uuid;
-use App\Termine\Kontaktsuche;
 use App\Termine\NichtBuchbar;
 use App\Termine\Statusautomat;
 use App\Termine\TerminNichtAenderbar;
@@ -169,6 +170,14 @@ final class AppointmentController extends Controller
                 ])
                 ->values(),
 
+            // Pflichtfeld beim Anlegen (attribution.md, Testfall 6).
+            'sources' => collect(LeadSource::cases())
+                ->map(fn (LeadSource $quelle): array => [
+                    'value' => $quelle->value,
+                    'label' => $quelle->label(),
+                ])
+                ->values(),
+
             'reasons' => collect(CancellationReason::cases())
                 ->map(fn (CancellationReason $grund): array => [
                     'value' => $grund->value,
@@ -196,6 +205,7 @@ final class AppointmentController extends Controller
             BookingChannel::Internal,
             AppointmentStatus::Confirmed,
             (bool) ($daten['uebersteuern'] ?? false),
+            quelle: LeadSource::from((string) $daten['quelle']),
         ));
 
         return back();

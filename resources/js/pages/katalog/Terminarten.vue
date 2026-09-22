@@ -137,20 +137,20 @@ const bereit = (eintrag: TypeItem): boolean => eintrag.practitioners.length > 0 
         <Head title="Terminarten" />
 
         <div class="space-y-6 p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <Heading title="Terminarten" description="Was gebucht wird. Rüstzeit belegt den Kalender, angezeigt wird nur die Dauer." />
-
-                <Button :disabled="!practitioners.length || !locations.length" @click="anlegenOeffnen">
-                    <Plus />
-                    Terminart anlegen
-                </Button>
-            </div>
+            <Heading title="Terminarten" description="Was gebucht wird. Rüstzeit belegt den Kalender, angezeigt wird nur die Dauer." />
 
             <p v-if="!practitioners.length || !locations.length" class="rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
                 Ohne Behandler und Standort lässt sich keine Terminart freigeben.
             </p>
 
             <DataTable :spalten="spalten" :zeilen="types" :suchfelder="['name', 'treatment_name']" suchtext="Terminart oder Behandlung">
+                <template #werkzeuge>
+                    <Button :disabled="!practitioners.length || !locations.length" @click="anlegenOeffnen">
+                        <Plus />
+                        Terminart anlegen
+                    </Button>
+                </template>
+
                 <template #zelle-name="{ zeile }">
                     <span class="flex items-center gap-2">
                         <span class="size-2.5 shrink-0 rounded-full" :style="{ backgroundColor: zeile.color }" aria-hidden="true" />

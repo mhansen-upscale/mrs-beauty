@@ -6,7 +6,10 @@ namespace App\Http\Middleware;
 
 use App\Audit\ImpersonationContext;
 use App\Enums\Ability;
+use App\Enums\CalendarConnectionStatus;
+use App\Models\CalendarConnection;
 use App\Models\ImpersonationSession;
+use App\Models\Organization;
 use App\Models\User;
 use App\Tenancy\TenantContext;
 use Illuminate\Http\Request;
@@ -50,6 +53,24 @@ class HandleInertiaRequests extends Middleware
         ];
     }
 
+    /**
+     * Gibt es eine unterbrochene Kalenderverbindung?
+     *
+     * Eine indizierte Existenzabfrage je Anfrage -- und nur fuer angemeldete
+     * Personen mit Mandantenbezug. Die oeffentliche Buchungsseite stellt sie
+     * nicht.
+     */
+    private function kalenderstoerung(mixed $benutzer, ?Organization $organisation): bool
+    {
+        if (! $benutzer instanceof User || ! $organisation instanceof Organization) {
+            return false;
+        }
+
+        return CalendarConnection::query()
+            ->where('status', CalendarConnectionStatus::Expired->value)
+            ->exists();
+    }
+
     public function version(Request $request): ?string
     {
         return parent::version($request);
@@ -73,6 +94,10 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $benutzer,
                 'role' => $benutzer instanceof User ? $benutzer->role?->value : null,
+
+                // Das Kennzeichen des Betreibers (WP-34). Es haengt nicht an
+                // einer Rolle -- der Betreiber gehoert zu keiner Praxis.
+                'superAdmin' => $benutzer instanceof User && $benutzer->isSuperAdmin(),
             ],
 
             // Die Oberflaeche blendet danach aus, was jemand nicht darf. Das
@@ -94,6 +119,22 @@ class HandleInertiaRequests extends Middleware
             // Solange eine Impersonation laeuft, ist sie in **jeder** Antwort
             // erkennbar (WP-05, Abnahmekriterium 18).
             'impersonation' => $this->impersonation(),
+
+            // R4 aus docs/integrationen/kalender.md: ein Ausfall erzeugt einen
+            // Hinweis **im Produkt**, nicht nur im Log. Eine unterbrochene
+            // Verbindung heisst, dass Termine ueber belegten Zeiten gebucht
+            // werden -- das gehoert nicht auf eine Unterseite.
+            'calendar_alert' => $this->kalenderstoerung($benutzer, $organisation),
+
+            // **Drei Arten, weil sie drei verschiedene Dinge sagen.**
+            // `hinweise` kam mit WP-07 dazu: etwas hat geklappt, aber nicht
+            // ganz so, wie es eingegeben wurde -- eine Markenfarbe, die
+            // abgedunkelt werden musste, ist weder Erfolg noch Fehler.
+            'flash' => [
+                'erfolg' => $request->hasSession() ? $request->session()->get('erfolg') : null,
+                'fehler' => $request->hasSession() ? $request->session()->get('fehler') : null,
+                'hinweise' => $request->hasSession() ? $request->session()->get('hinweise', []) : [],
+            ],
         ];
     }
 }

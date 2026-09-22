@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Requests\Termine;
 
 use App\Enums\Ability;
+use App\Enums\LeadSource;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Eine neue Buchung aus der internen Terminverwaltung.
@@ -40,6 +42,14 @@ final class TerminRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
 
+            // **Pflichtfeld** (docs/fachlogik/attribution.md, Testfall 6).
+            //
+            // Ein Teil der Anzeigen-Leads ruft an oder kommt vorbei. Ohne
+            // dieses Feld fehlen diese Buchungen in der Auswertung, und der
+            // ROAS sieht schlechter aus, als er ist -- die Praxis dreht dann
+            // eine Kampagne ab, die funktioniert.
+            'quelle' => ['required', Rule::enum(LeadSource::class)],
+
             'uebersteuern' => ['boolean'],
         ];
     }
@@ -50,6 +60,7 @@ final class TerminRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'quelle.required' => 'Bitte angeben, wie dieser Termin zustande kam — sonst fehlt er in der Auswertung.',
             'first_name.required_without' => 'Ohne bestehenden Kontakt braucht es einen Vornamen.',
             'last_name.required_without' => 'Ohne bestehenden Kontakt braucht es einen Nachnamen.',
         ];

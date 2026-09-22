@@ -1,0 +1,523 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Enums\ConnectionStatus;
+use App\Enums\SyncState;
+use App\Jobs\KampagneUebertragen;
+use App\Models\AdCampaign;
+use App\Models\AdSet;
+use App\Models\Location;
+use App\Models\Treatment;
+use App\Tenancy\TenantContext;
+use App\Werbung\Verwaltung\Kampagnenname;
+use App\Werbung\Verwaltung\Kampagnenplan;
+use App\Werbung\Verwaltung\Kampagnenverwaltung;
+use App\Werbung\Werbefehler;
+use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+
+use function Pest\Laravel\actingAs;
+use function Pest\Laravel\travelTo;
+
+use Tests\Feature\Werbung\Werbeaufbau;
+
+/*
+|--------------------------------------------------------------------------
+| WP-27 -- Kampagnenverwaltung
+|--------------------------------------------------------------------------
+|
+| Die Abnahmekriterien aus specs/WP-27-kampagnenverwaltung.md.
+|
+*/
+
+beforeEach(function (): void {
+    travelTo(CarbonImmutable::parse('2026-09-17 09:00:00', 'UTC'));
+    config()->set('mrs.meta.graph_url', 'https://graph.test');
+    config()->set('mrs.meta.api_version', 'v21.0');
+});
+
+function werbestandort(): Location
+{
+    return Location::factory()->create(['name' => 'Hauptstandort', 'city' => 'Hamburg', 'is_active' => true]);
+}
+
+/**
+ * @param  array<string, mixed>  $abweichend
+ * @return array<string, mixed>
+ */
+function kampagnenformular(Location $standort, array $abweichend = []): array
+{
+    return array_merge([
+        'ziel' => 'OUTCOME_LEADS',
+        'tagesbudget' => 2500,
+        'beginn' => '2026-10-01',
+        'ende' => '2026-10-31',
+        'standort' => (string) $standort->uuid,
+        'umkreis' => 15,
+        'altervon' => 30,
+        'alterbis' => 55,
+        'geschlecht' => 'weiblich',
+    ], $abweichend);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pruefungen vor der Uebermittlung
+|--------------------------------------------------------------------------
+*/
+
+it('laesst kein Mindestalter unter 18 zu', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['altervon' => 16]))
+        ->assertSessionHasErrors('altervon');
+
+    expect(AdCampaign::query()->count())->toBe(0);
+});
+
+it('laesst kein Budget unter der Untergrenze zu', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['tagesbudget' => 50]))
+        ->assertSessionHasErrors('tagesbudget');
+});
+
+it('kennt kein Feld fuer Interessen', function (): void {
+    // "Botox" als Interesse waere eine Behandlungsbezeichnung Richtung Meta
+    // (Regel 2) -- in einem Feld, an das niemand denkt.
+    $regeln = Kampagnenplan::regeln(null);
+
+    expect(array_keys($regeln))->not->toContain('interessen')
+        ->and(array_keys($regeln))->not->toContain('interests')
+        ->and(array_keys($regeln))->toBe([
+            'ziel', 'tagesbudget', 'beginn', 'ende', 'standort', 'umkreis', 'altervon', 'alterbis', 'geschlecht',
+        ]);
+});
+
+it('laesst kein Ziel ausserhalb der Liste zu', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_SALES']))
+        ->assertSessionHasErrors('ziel');
+});
+
+it('laesst eine Laufzeit nicht rueckwaerts laufen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, [
+            'beginn' => '2026-10-01',
+            'ende' => '2026-09-01',
+        ]))
+        ->assertSessionHasErrors('ende');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Name
+|--------------------------------------------------------------------------
+*/
+
+it('erzeugt den Kampagnennamen, statt ihn entgegenzunehmen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, [
+            'name' => 'Botox Herbst — mein Name',
+        ]))
+        ->assertRedirect();
+
+    $name = (string) AdCampaign::query()->first()?->name;
+
+    expect($name)->toContain('Anfragen sammeln')
+        ->and($name)->toContain('Oktober 2026')
+        ->and($name)->toContain('Hamburg')
+        ->and($name)->not->toContain('mein Name');
+});
+
+it('setzt keine Katalogbezeichnung in den Namen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Treatment::factory()->create(['name' => 'Botox', 'is_active' => true]);
+    Treatment::factory()->create(['name' => 'Hyaluron', 'is_active' => true]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort))
+        ->assertRedirect();
+
+    $name = (string) AdCampaign::query()->first()?->name;
+
+    foreach (Treatment::aktiveNamen() as $behandlung) {
+        expect($name)->not->toContain($behandlung);
+    }
+});
+
+it('traegt ein wiederauffindbares Merkmal im Namen', function (): void {
+    $merkmal = Kampagnenname::merkmal();
+
+    $name = Kampagnenname::fuer('OUTCOME_LEADS', CarbonImmutable::parse('2026-10-01'), null, $merkmal);
+
+    expect(Kampagnenname::merkmalAus($name))->toBe($merkmal)
+        ->and(Kampagnenname::merkmalAus('Irgendein fremder Name'))->toBeNull();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Uebertragung
+|--------------------------------------------------------------------------
+*/
+
+it('legt lokal an und stellt einen Auftrag ein, ohne Meta zu rufen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    Http::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort))
+        ->assertRedirect();
+
+    $kampagne = AdCampaign::query()->first();
+
+    expect($kampagne?->sync_state)->toBe(SyncState::Pending)
+        ->and($kampagne?->managed_by_us)->toBeTrue()
+        // Pausiert angelegt: eine Kampagne, die im Moment des Anlegens Geld
+        // ausgibt, laesst keinen Blick darauf zu, bevor sie es tut.
+        ->and($kampagne?->status)->toBe('PAUSED')
+        ->and(AdSet::query()->first()?->age_min)->toBe(30);
+
+    Queue::assertPushed(KampagneUebertragen::class);
+
+    // Entscheidung B2: kein Fremdsystemaufruf im Anfragezyklus.
+    Http::assertNothingSent();
+});
+
+it('traegt Metas Kennung ein und meldet uebertragen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    // Der Anlegeaufruf geht auf denselben Pfad wie das Nachsehen -- die
+    // Sequenz unterscheidet sie ueber die Reihenfolge. **Ein** Http::fake:
+    // ein zweites auf dasselbe Muster ersetzt das erste nicht.
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'camp-1']),
+        'graph.test/*/search*' => Http::response(Werbeaufbau::seite([['key' => '2696', 'name' => 'Hamburg']])),
+        'graph.test/*/adsets*' => Http::response(['id' => 'adset-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    expect(AdCampaign::query()->first()?->external_id)->toBe('camp-1')
+        ->and(AdCampaign::query()->first()?->sync_state)->toBe(SyncState::Synced)
+        ->and(AdSet::query()->first()?->external_id)->toBe('adset-1');
+});
+
+it('legt bei einem zweiten Lauf keine zweite Kampagne an', function (): void {
+    // **Der teuerste Fehler dieses Pakets.** Metas Marketing-API kennt keinen
+    // Idempotenzschluessel; ein Auftrag, dessen Antwort verlorenging, legte
+    // sonst eine zweite Kampagne mit zweitem Budget an.
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+    $name = (string) $kampagne->name;
+
+    // Der erste Versuch war bei Meta erfolgreich -- nur die Antwort kam nie
+    // an. Das Nachsehen findet die Kampagne ueber das Merkmal im Namen.
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::response(Werbeaufbau::seite([
+            ['id' => 'camp-schon-da', 'name' => $name],
+        ])),
+        'graph.test/*/search*' => Http::response(Werbeaufbau::seite([['key' => '2696']])),
+        'graph.test/*/adsets*' => Http::response(['id' => 'adset-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    expect(AdCampaign::query()->count())->toBe(1)
+        ->and(AdCampaign::query()->first()?->external_id)->toBe('camp-schon-da');
+
+    // Und kein POST auf /campaigns: gefunden statt angelegt.
+    Http::assertNotSent(fn ($anfrage): bool => $anfrage->method() === 'POST' && str_contains($anfrage->url(), '/campaigns'));
+});
+
+it('wiederholt ein Rate-Limit beim Uebertragen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake(['graph.test/*' => Http::response(Werbeaufbau::fehler(17), 429)]);
+
+    expect(fn () => (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class)))
+        ->toThrow(Werbefehler::class);
+});
+
+it('wiederholt ein totes Token nicht und setzt das Werbekonto auf expired', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake(['graph.test/*' => Http::response(Werbeaufbau::fehler(190), 401)]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    // **Die Kampagne bleibt wartend, nicht fehlgeschlagen.** Ein
+    // Verbindungsfehler ist nicht ihre Schuld: gewollt ist die Aenderung
+    // weiterhin, und sobald der Zugang steht, geht sie hinaus. Der Hinweis
+    // haengt am Werbekonto, wo er hingehoert.
+    expect($aufbau->konto->fresh()?->status)->toBe(ConnectionStatus::Expired)
+        ->and(AdCampaign::query()->first()?->sync_state)->toBe(SyncState::Pending)
+        ->and(AdCampaign::query()->first()?->sync_error)->toBeNull();
+});
+
+it('zieht beim erneuten Verbinden liegengebliebene Aenderungen nach', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    // Die Auswahl, wie sie nach dem Rueckweg von Meta in der Sitzung liegt.
+    session()->put('werbung.auswahl', [
+        'token' => Crypt::encryptString('neues-token'),
+        'laeuftAb' => null,
+        'konten' => [['kennung' => Werbeaufbau::KONTO, 'name' => 'Praxis', 'waehrung' => 'EUR', 'nutzbar' => true]],
+    ]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.auswaehlen'), ['kennung' => Werbeaufbau::KONTO])
+        ->assertRedirect();
+
+    // Eine Aenderung, die an einem abgelaufenen Zugang haengen blieb, wartet
+    // -- nicht darauf, dass jemand sie erneut eintippt.
+    Queue::assertPushed(KampagneUebertragen::class);
+});
+
+it('zeigt eine fachliche Ablehnung im Klartext', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(Werbeaufbau::fehler(100, 1885183, 'Ad account is not allowed to run ads for this category.'), 400),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    $frisch = AdCampaign::query()->first();
+
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        // Ein Code hilft der Praxis nicht. Sie kann nur beheben, was sie
+        // lesen kann.
+        ->and($frisch?->sync_error)->toBe('Ad account is not allowed to run ads for this category.');
+});
+
+it('nennt einen Ort, den Meta nicht kennt, beim Namen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'camp-1']),
+        // Meta findet den Ort nicht.
+        'graph.test/*/search*' => Http::response(Werbeaufbau::seite([])),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    // Lieber ein klarer Fehler als eine Kampagne, die deutschlandweit
+    // ausliefert.
+    expect(AdCampaign::query()->first()?->sync_error)
+        ->toContain('Meta kennt den Ort dieses Standorts nicht');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Aendern
+|--------------------------------------------------------------------------
+*/
+
+it('pausiert lokal sofort und uebertraegt danach', function (): void {
+    $aufbau = new Werbeaufbau;
+
+    $kampagne = AdCampaign::query()->create([
+        'ad_account_id' => $aufbau->konto->getKey(),
+        'external_id' => 'camp-1',
+        'name' => 'Anfragen sammeln · Oktober 2026',
+        'status' => 'ACTIVE',
+        'effective_status' => 'ACTIVE',
+        'daily_budget' => 2500,
+    ]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->patch(route('werbung.kampagne.aendern', ['kampagne' => $kampagne->uuid]), ['zustand' => 'PAUSED'])
+        ->assertRedirect();
+
+    $frisch = $kampagne->fresh();
+
+    expect($frisch?->status)->toBe('PAUSED')
+        ->and($frisch?->sync_state)->toBe(SyncState::Pending);
+
+    Queue::assertPushed(KampagneUebertragen::class);
+});
+
+it('aendert das Budget einer fremden Kampagne, aber nicht ihren Namen', function (): void {
+    $aufbau = new Werbeaufbau;
+
+    $kampagne = AdCampaign::query()->create([
+        'ad_account_id' => $aufbau->konto->getKey(),
+        'external_id' => 'camp-fremd',
+        'name' => 'Botox Herbst',
+        'status' => 'ACTIVE',
+        'effective_status' => 'ACTIVE',
+        'daily_budget' => 2500,
+        'managed_by_us' => false,
+    ]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->patch(route('werbung.kampagne.aendern', ['kampagne' => $kampagne->uuid]), [
+            'tagesbudget' => 4000,
+            'name' => 'Neuer Name',
+        ])
+        ->assertRedirect();
+
+    $frisch = $kampagne->fresh();
+
+    expect($frisch?->daily_budget)->toBe(4000)
+        // Fremde Namen aendern wir nicht -- das Feld existiert nicht.
+        ->and($frisch?->name)->toBe('Botox Herbst');
+});
+
+it('schickt beim Aendern nur Zustand und Budget', function (): void {
+    $aufbau = new Werbeaufbau;
+
+    $kampagne = AdCampaign::query()->create([
+        'ad_account_id' => $aufbau->konto->getKey(),
+        'external_id' => 'camp-1',
+        'name' => 'Botox Herbst',
+        'status' => 'PAUSED',
+        'effective_status' => 'PAUSED',
+        'daily_budget' => 4000,
+    ]);
+
+    Http::fake(['graph.test/*' => Http::response(['success' => true])]);
+
+    app(Kampagnenverwaltung::class)->uebertrageAenderung($kampagne, $aufbau->konto);
+
+    Http::assertSent(function ($anfrage): bool {
+        $daten = $anfrage->data();
+
+        return $anfrage->method() === 'POST'
+            && str_contains($anfrage->url(), '/camp-1')
+            && ($daten['status'] ?? null) === 'PAUSED'
+            && ($daten['daily_budget'] ?? null) === '4000'
+            // Der Name geht nie mit hinaus.
+            && ! array_key_exists('name', $daten);
+    });
+
+    expect($kampagne->fresh()?->sync_state)->toBe(SyncState::Synced);
+});
+
+it('laesst zwei Mandanten einander nichts aendern', function (): void {
+    $eine = new Werbeaufbau(organisation('Praxis A'));
+
+    $kampagne = AdCampaign::query()->create([
+        'ad_account_id' => $eine->konto->getKey(),
+        'external_id' => 'camp-a',
+        'name' => 'Kampagne A',
+        'status' => 'ACTIVE',
+        'effective_status' => 'ACTIVE',
+    ]);
+
+    $andere = alsMandant(organisation('Praxis B'));
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($andere))
+        ->patch(route('werbung.kampagne.aendern', ['kampagne' => $kampagne->uuid]), ['zustand' => 'PAUSED'])
+        ->assertNotFound();
+});

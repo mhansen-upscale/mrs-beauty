@@ -144,16 +144,16 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 </Button>
             </div>
 
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <Heading title="Team" description="Wer im Produkt arbeitet und was er dort darf." />
-
-                <Button @click="einladungOeffnen">
-                    <UserPlus />
-                    Person einladen
-                </Button>
-            </div>
+            <Heading title="Team" description="Wer im Produkt arbeitet und was er dort darf." />
 
             <DataTable :spalten="mitgliedSpalten" :zeilen="members" :suchfelder="['name', 'email']" suchtext="Name oder E-Mail">
+                <template #werkzeuge>
+                    <Button @click="einladungOeffnen">
+                        <UserPlus />
+                        Person einladen
+                    </Button>
+                </template>
+
                 <template #zelle-name="{ zeile }">
                     <span class="font-medium">{{ zeile.name }}</span>
                     <span v-if="zeile.self" class="text-xs text-muted-foreground"> · Sie</span>

@@ -22,6 +22,7 @@ const props = defineProps<{
     appointments: Termin[];
     statuses?: Auswahl[];
     reasons?: Auswahl[];
+    sources?: Auswahl[];
     proposals?: Vorschlag[];
     contacts?: Kontakt[];
 }>();
@@ -119,6 +120,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                             :timezone="location.timezone"
                             :proposals="proposals"
                             :contacts="contacts"
+                            :quellen="sources ?? []"
                         />
                     </span>
                 </div>

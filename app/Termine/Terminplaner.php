@@ -8,12 +8,16 @@ use App\Benachrichtigung\Terminbenachrichtigungen;
 use App\Enums\AppointmentStatus;
 use App\Enums\BookingChannel;
 use App\Enums\CancellationReason;
+use App\Enums\LeadSource;
+use App\Kalender\Terminkalender;
+use App\Leads\Leadverwaltung;
 use App\Models\Appointment;
 use App\Models\Contact;
 use App\Models\SlotHold;
 use App\Verfuegbarkeit\SlotHalter;
 use App\Verfuegbarkeit\Slotvorschlag;
 use App\Verfuegbarkeit\Verfuegbarkeit;
+use App\Warteliste\Lueckenmelder;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -46,6 +50,9 @@ final class Terminplaner
         private readonly Statusautomat $statusautomat,
         private readonly SlotHalter $halter,
         private readonly Terminbenachrichtigungen $nachrichten,
+        private readonly Terminkalender $kalender,
+        private readonly Leadverwaltung $leads,
+        private readonly Lueckenmelder $luecken,
     ) {}
 
     /**
@@ -63,6 +70,16 @@ final class Terminplaner
         AppointmentStatus $status = AppointmentStatus::Confirmed,
         bool $uebersteuern = false,
         ?CarbonImmutable $jetzt = null,
+
+        /**
+         * Woher dieser Termin kam.
+         *
+         * Ohne Angabe die Vorgabe des Kanals. **Beim internen Anlegen ist sie
+         * Pflicht** (docs/fachlogik/attribution.md, Testfall 6): ein Teil der
+         * Anzeigen-Leads ruft an, und ohne dieses Feld fehlen diese
+         * Buchungen in der Auswertung.
+         */
+        ?LeadSource $quelle = null,
     ): Appointment {
         $jetzt ??= CarbonImmutable::now();
 
@@ -72,7 +89,7 @@ final class Terminplaner
             $this->pruefeAngebot($vorschlag, $jetzt);
         }
 
-        return DB::transaction(function () use ($vorschlag, $kontakt, $kanal, $status, $uebersteuern): Appointment {
+        return DB::transaction(function () use ($vorschlag, $kontakt, $kanal, $status, $uebersteuern, $quelle): Appointment {
             $termin = new Appointment;
             $termin->contact_id = $kontakt->getKey();
             $termin->appointment_type_id = $vorschlag->art->getKey();
@@ -93,6 +110,8 @@ final class Terminplaner
             // waere ein Termin, an den niemand erinnert wird -- und das faellt
             // erst auf, wenn jemand nicht erscheint.
             $this->nachrichten->beiBuchung($termin, $status === AppointmentStatus::Confirmed);
+            $this->kalender->beiBuchung($termin);
+            $this->leads->beiTermin($this->fuerLead($termin), $quelle ?? $kanal->alsLeadquelle());
 
             return $termin;
         });
@@ -128,6 +147,8 @@ final class Terminplaner
             $termin->save();
 
             $this->nachrichten->beiBuchung($termin, $status === AppointmentStatus::Confirmed);
+            $this->kalender->beiBuchung($termin);
+            $this->leads->beiTermin($this->fuerLead($termin), $kanal->alsLeadquelle());
 
             return $termin;
         });
@@ -167,7 +188,19 @@ final class Terminplaner
             $this->pruefeAngebot($ziel, $jetzt);
         }
 
-        return DB::transaction(function () use ($termin, $ziel, $uebersteuern): Appointment {
+        // Die alte Strecke, bevor sie ueberschrieben wird: sie wird frei und
+        // gehoert der Warteliste (WP-25).
+        $alt = new Slotvorschlag(
+            art: $termin->appointmentType,
+            behandler: $termin->practitioner,
+            standort: $termin->location,
+            blockedFrom: $termin->blocked_from,
+            blockedUntil: $termin->blocked_until,
+            startsAt: $termin->starts_at,
+            endsAt: $termin->ends_at,
+        );
+
+        return DB::transaction(function () use ($termin, $ziel, $alt, $uebersteuern): Appointment {
             // Erst die Zeilen. Schlaegt die Belegung fehl, bleibt der Termin
             // unveraendert -- er ist zu diesem Zeitpunkt noch nicht angefasst.
             $this->belegung->verlege($termin, $ziel, $uebersteuern);
@@ -187,6 +220,8 @@ final class Terminplaner
             $termin->save();
 
             $this->nachrichten->beiVerschiebung($termin);
+            $this->kalender->beiVerschiebung($termin);
+            $this->luecken->beiVerschiebung($termin, $alt);
 
             return $termin;
         });
@@ -216,6 +251,13 @@ final class Terminplaner
             $termin->save();
 
             $this->nachrichten->beiAbsage($termin);
+            $this->kalender->beiAbsage($termin);
+            $this->leads->beiAbsage($this->fuerLead($termin), $jetzt);
+
+            // **Die Luecke geht an die Warteliste** (WP-25). Der Auftrag
+            // laeuft nach dem Commit: ein Angebot auf eine Absage, die noch
+            // zurueckgerollt werden koennte, waere eines zu viel.
+            $this->luecken->beiAbsage($termin);
 
             return $termin;
         });
@@ -247,7 +289,21 @@ final class Terminplaner
             $this->nachrichten->beiBestaetigung($termin);
         }
 
+        // Der Lead folgt dem Termin: erschienen heisst gewonnen (WP-17).
+        $this->leads->beiStatus($this->fuerLead($termin), $neu, $jetzt);
+
         return $termin;
+    }
+
+    /**
+     * Der Termin mit den Beziehungen, die die Leadverwaltung braucht.
+     *
+     * Strenge Modelle lassen kein Nachladen zu -- und innerhalb der
+     * Transaktion ist frisch Gespeichertes noch ohne Beziehungen.
+     */
+    private function fuerLead(Appointment $termin): Appointment
+    {
+        return $termin->loadMissing(['contact', 'appointmentType.treatment']);
     }
 
     /**

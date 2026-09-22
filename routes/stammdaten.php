@@ -38,6 +38,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('behandler/{practitioner}', [PractitionerController::class, 'update'])->name('practitioners.update');
         Route::delete('behandler/{practitioner}', [PractitionerController::class, 'deactivate'])->name('practitioners.deactivate');
         Route::put('behandler/{practitioner}/aktivieren', [PractitionerController::class, 'activate'])->name('practitioners.activate');
+        Route::post('behandler/{practitioner}/bild', [PractitionerController::class, 'storeAvatar'])->name('practitioners.avatar.store');
+        Route::delete('behandler/{practitioner}/bild', [PractitionerController::class, 'destroyAvatar'])->name('practitioners.avatar.destroy');
+
         Route::post('behandler/{practitioner}/arbeitszeiten', [PractitionerController::class, 'storeWorkingHour'])->name('workinghours.store');
         Route::delete('behandler/{practitioner}/arbeitszeiten/{workingHour}', [PractitionerController::class, 'destroyWorkingHour'])->name('workinghours.destroy');
         Route::post('behandler/{practitioner}/abwesenheiten', [PractitionerController::class, 'storeAbsence'])->name('absences.store');

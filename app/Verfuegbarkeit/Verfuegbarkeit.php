@@ -156,7 +156,9 @@ final class Verfuegbarkeit
      */
     private function paare(AppointmentType $art, ?Practitioner $nurBehandler, ?Location $nurStandort): array
     {
-        $behandler = $art->practitioners()->where('practitioners.is_active', true)->get();
+        // Dieselbe Quelle wie die Pruefung in wirdAngebotenVon(): ohne eigene
+        // Freigabe erbt die Terminart die der Behandlung.
+        $behandler = $art->freigegebeneBehandler();
         $standorte = $art->locations()->where('locations.is_active', true)->get();
 
         if ($nurBehandler instanceof Practitioner) {

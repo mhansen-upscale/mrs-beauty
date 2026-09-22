@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Eine Behandlerin oder ein Behandler.
@@ -28,6 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $last_name
  * @property bool $is_active
  * @property string|null $user_id
+ * @property string|null $avatar_path
  */
 class Practitioner extends TenantModel
 {
@@ -36,7 +38,7 @@ class Practitioner extends TenantModel
     /** @use HasFactory<PractitionerFactory> */
     use HasFactory;
 
-    protected $fillable = ['title', 'first_name', 'last_name', 'user_id', 'is_active'];
+    protected $fillable = ['title', 'first_name', 'last_name', 'user_id', 'is_active', 'avatar_path'];
 
     /** @var list<string> */
     protected $hidden = ['user_id'];
@@ -62,6 +64,27 @@ class Practitioner extends TenantModel
     public function name(): string
     {
         return trim(($this->title ?? '').' '.$this->first_name.' '.$this->last_name);
+    }
+
+    /**
+     * Die Adresse des Bildes -- oder null.
+     *
+     * **Oeffentlich erreichbar, unverschluesselt**, und das ist dieselbe
+     * Entscheidung wie beim Namen: die Praxis veroeffentlicht es selbst auf
+     * der Buchungsseite. Was oeffentlich ist, muss nicht gegen den eigenen
+     * Betreiber geschuetzt werden.
+     */
+    public function avatarUrl(): ?string
+    {
+        return is_string($this->avatar_path) && $this->avatar_path !== ''
+            ? Storage::disk('public')->url($this->avatar_path)
+            : null;
+    }
+
+    /** Die Initialen -- der Rueckfall, wenn es kein Bild gibt. */
+    public function initialen(): string
+    {
+        return mb_strtoupper(mb_substr($this->first_name, 0, 1).mb_substr($this->last_name, 0, 1));
     }
 
     /**

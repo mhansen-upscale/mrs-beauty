@@ -4,14 +4,22 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Buchung;
 
+use App\Attribution\Beruehrungen;
+use App\Attribution\Besucherkennung;
+use App\Attribution\Zuordnung;
 use App\Buchung\OeffentlicheVerfuegbarkeit;
+use App\Datenschutz\Anhangspeicher;
 use App\Enums\BookingChannel;
 use App\Enums\HoldPurpose;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Buchung\BuchungRequest;
 use App\Http\Requests\Buchung\ReservierungRequest;
+use App\Jobs\KonversionMelden;
+use App\Kontakte\Kontaktsuche;
 use App\Models\Appointment;
 use App\Models\AppointmentType;
+use App\Models\Attachment;
+use App\Models\Branding;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\Practitioner;
@@ -19,7 +27,6 @@ use App\Models\SlotHold;
 use App\Support\Markenstil;
 use App\Support\Uuid;
 use App\Tenancy\TenantContext;
-use App\Termine\Kontaktsuche;
 use App\Termine\Terminplaner;
 use App\Verfuegbarkeit\SlotHalter;
 use App\Verfuegbarkeit\SlotNichtVerfuegbar;
@@ -30,6 +37,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
@@ -53,11 +61,34 @@ final class PublicBookingController extends Controller
         private readonly SlotHalter $halter,
         private readonly Terminplaner $planer,
         private readonly Kontaktsuche $kontakte,
+        private readonly Besucherkennung $besucher,
+        private readonly Beruehrungen $beruehrungen,
+        private readonly Zuordnung $zuordnung,
     ) {}
+
+    /**
+     * Die Entscheidung ueber die Messung.
+     *
+     * **Ohne Einwilligung kein Cookie und kein Pixel** (Paragraf 25 TTDSG).
+     * Eine Ablehnung wird ebenso festgehalten wie eine Zustimmung -- sonst
+     * wird bei jedem Aufruf erneut gefragt, und das ist keine Entscheidung,
+     * sondern Zermuerbung.
+     */
+    public function einwilligen(Request $request): RedirectResponse
+    {
+        $this->besucher->entscheide($request->boolean('ja'));
+
+        return back();
+    }
 
     public function show(Request $request): Response
     {
         $praxis = $this->praxis();
+
+        // Der Touch entsteht hier und nur, wenn jemand eingewilligt hat.
+        // Erst nach der Mandantenaufloesung: ein Touch ohne Mandanten waere
+        // nicht zuzuordnen.
+        $this->beruehrungen->erfasse($request);
 
         $standorte = Location::query()
             ->where('is_active', true)
@@ -67,12 +98,14 @@ final class PublicBookingController extends Controller
         $arten = AppointmentType::query()
             ->aktiv()
             ->where('is_public', true)
-            ->with(['practitioners', 'locations'])
+            ->with(['practitioners', 'locations', 'treatment'])
             ->orderBy('name')
             ->get()
             // Eine Terminart ohne Behandler oder ohne Standort wird nirgends
-            // angeboten -- sie gehoert auch nicht in die Auswahl.
-            ->filter(fn (AppointmentType $art): bool => $art->practitioners->isNotEmpty() && $art->locations->isNotEmpty());
+            // angeboten -- sie gehoert auch nicht in die Auswahl. Wer sie
+            // anbietet, sagt die Terminart oder, wenn sie nichts sagt, die
+            // Behandlung.
+            ->filter(fn (AppointmentType $art): bool => $art->freigegebeneBehandler()->isNotEmpty() && $art->locations->isNotEmpty());
 
         return Inertia::render('buchung/Index', [
             'practice' => [
@@ -85,6 +118,8 @@ final class PublicBookingController extends Controller
             // ist nicht ueberschreibbar (docs/design/farben.md).
             'brandStyle' => Markenstil::fuer($this->markenfarbe($praxis)),
 
+            ...$this->rahmen($praxis),
+
             'appointmentTypes' => $arten
                 ->map(fn (AppointmentType $art): array => [
                     'uuid' => $art->uuid,
@@ -93,6 +128,18 @@ final class PublicBookingController extends Controller
                     // **Kein Preis, keine Beschreibung.** Beides steht im
                     // Katalog und wartet auf die HWG-Pruefung (WP-30).
                     'locations' => $art->locations->map(fn (Location $ort): string => (string) $ort->uuid)->values(),
+
+                    // Wer sie macht. Ein Name und ein Gesicht nehmen einer
+                    // Buchung mehr Unsicherheit als jeder Beschreibungstext
+                    // -- und beides veroeffentlicht die Praxis ohnehin.
+                    'practitioners' => $art->freigegebeneBehandler()
+                        ->map(fn (Practitioner $behandler): array => [
+                            'uuid' => $behandler->uuid,
+                            'name' => $behandler->name(),
+                            'avatar_url' => $behandler->avatarUrl(),
+                            'initials' => $behandler->initialen(),
+                        ])
+                        ->values(),
                 ])
                 ->values(),
 
@@ -108,6 +155,20 @@ final class PublicBookingController extends Controller
                 ->values(),
 
             'hold' => $this->reservierungFuerDieAnzeige(),
+
+            // **Nur die ID, nichts sonst** (Regel 2). Was damit gesendet wird,
+            // entscheidet das Layout: PageView und Lead, ohne Behandlung,
+            // ohne Kontaktdaten. Ein Feld fuer einen ganzen Skriptschnipsel
+            // waere die Hintertuer, die dieses Produkt gerade schliesst.
+            // **Erst nach der Einwilligung.** Bis WP-32a feuerte das Pixel
+            // hier ungefragt -- eine Praxis, die fuer Werbung wirbt, darf
+            // nicht diejenige sein, die deswegen abgemahnt wird.
+            'pixelId' => $this->besucher->eingewilligt($request)
+                ? data_get($praxis->settings, 'tracking.meta_pixel_id')
+                : null,
+
+            // Null heisst: noch nicht gefragt. Dann erscheint die Abfrage.
+            'messung' => $request->cookie((string) config('mrs.attribution.consent_cookie')),
 
             // Erst auf Anforderung berechnet -- ein Teilnachladevorgang von
             // Inertia, keine eigene API-Route (Entscheidung S2).
@@ -133,6 +194,18 @@ final class PublicBookingController extends Controller
         $request->session()->put(self::SITZUNG, $hold->uuid);
 
         return back();
+    }
+
+    /**
+     * Die Ereigniskennung eines Termins.
+     *
+     * Abgeleitet statt gespeichert: Pixel und Server kommen unabhaengig
+     * voneinander auf denselben Wert, ohne dass jemand ihn durchreichen muss
+     * (attribution.md, Testfall 8).
+     */
+    public static function ereignisId(Appointment $termin): string
+    {
+        return 'lead-'.$termin->uuid;
     }
 
     /** Gibt die Reservierung wieder frei -- "andere Zeit wählen". */
@@ -184,6 +257,42 @@ final class PublicBookingController extends Controller
             ]);
         }
 
+        // **Rueckwirkend verknuepfen.** Vorher gab es eine Zufalls-ID,
+        // hinterher einen Menschen -- die Kette entsteht erst mit dem Lead.
+        $besucher = $this->besucher->kennung($request);
+
+        if ($besucher !== null) {
+            $this->beruehrungen->verknuepfe($besucher, $kontakt);
+
+            // **Einfrieren, nicht verweisen** (Entscheidung D13): Kampagnen
+            // werden umbenannt, und eine Auswertung, die dem folgt, ist nach
+            // einem halben Jahr wertlos.
+            $stand = $this->zuordnung->standFuer($kontakt, CarbonImmutable::now());
+
+            if ($stand !== null) {
+                $termin->attribution_snapshot = (string) json_encode($stand);
+
+                // Offen daneben: die Kennung traegt keine Aussage, und ohne
+                // sie liesse sich nicht gruppieren (WP-32b).
+                $termin->attribution_campaign_id = is_string($stand['kampagne'] ?? null)
+                    ? $stand['kampagne']
+                    : null;
+
+                $termin->save();
+            }
+        }
+
+        // **Dieselbe Kennung wie im Pixel.** Aus der Termin-UUID abgeleitet
+        // statt gespeichert: beide Seiten kommen ohne zweite Quelle darauf.
+        if ($besucher !== null) {
+            KonversionMelden::dispatch(
+                (string) $this->praxis()->uuid,
+                (string) $termin->uuid,
+                self::ereignisId($termin),
+                $besucher,
+            );
+        }
+
         $request->session()->forget(self::SITZUNG);
 
         return to_route('buchung.bestaetigt', ['praxis' => $this->praxis()->slug])
@@ -205,6 +314,24 @@ final class PublicBookingController extends Controller
         return Inertia::render('buchung/Bestaetigt', [
             'practice' => ['name' => $this->praxis()->name, 'slug' => $this->praxis()->slug],
             'brandStyle' => Markenstil::fuer($this->markenfarbe($this->praxis())),
+
+            ...$this->rahmen($this->praxis()),
+
+            'pixelId' => $this->besucher->eingewilligt($request)
+                ? data_get($this->praxis()->settings, 'tracking.meta_pixel_id')
+                : null,
+
+            'messung' => $request->cookie((string) config('mrs.attribution.consent_cookie')),
+
+            // Dieselbe Kennung wie im Serverereignis -- sonst zaehlt Meta
+            // doppelt (attribution.md, Testfall 8). Ohne Einwilligung steht
+            // hier nichts, weil auch kein Pixel laedt.
+            'leadEventId' => $this->besucher->eingewilligt($request) ? self::ereignisId($termin) : null,
+
+            // Genau hier faellt der Lead an -- und nur hier. Das Ereignis
+            // traegt **keine** Angaben: die Behandlung waere ein
+            // Gesundheitsdatum (Regel 2).
+            'trackLead' => true,
             'appointment' => [
                 'type_name' => $termin->appointmentType->name,
                 'practitioner_name' => $termin->practitioner->name(),
@@ -357,16 +484,82 @@ final class PublicBookingController extends Controller
     }
 
     /**
-     * Die Markenfarbe aus den Mandanteneinstellungen.
+     * Das Erscheinungsbild dieser Praxis (WP-07).
      *
-     * WP-07 loest das ueber eine eigene Tabelle `brandings` samt Pruefung bei
-     * der Eingabe. Bis dahin genuegt ein Wert in organizations.settings --
-     * die Seite muss rendern koennen.
+     * Eine Zeile je Mandant. Der Wert lag bis dahin in
+     * organizations.settings -- zwei Orte fuer dieselbe Farbe waeren zwei
+     * Farben, sobald jemand einen davon aendert.
      */
+    private function erscheinungsbild(): ?Branding
+    {
+        return Branding::query()->first();
+    }
+
     private function markenfarbe(Organization $praxis): ?string
     {
-        $wert = data_get($praxis->settings, 'branding.primary_color');
+        return $this->erscheinungsbild()?->primary_color;
+    }
 
-        return is_string($wert) ? $wert : null;
+    /**
+     * Logo und Rechtslinks fuer den Rahmen der Buchungsseite.
+     *
+     * **Die Buchungsseite ist eine oeffentliche Website** und damit
+     * impressumspflichtig. Beides sind Seiten der Praxis, unter ihrer Domain
+     * -- wir zeigen sie nur.
+     *
+     * @return array<string, string|null>
+     */
+    private function rahmen(Organization $praxis): array
+    {
+        $bild = $this->erscheinungsbild();
+
+        return [
+            // Nur wenn die Virenpruefung es freigegeben hat (WP-33).
+            'logoUrl' => $bild?->logo() instanceof Attachment
+                ? route('buchung.logo', ['praxis' => $praxis->slug])
+                : null,
+
+            'imprintUrl' => $bild?->imprint_url,
+            'privacyUrl' => $bild?->privacy_url,
+        ];
+    }
+
+    /**
+     * Liefert das Logo aus.
+     *
+     * Eine eigene Route, weil Anhaenge verschluesselt liegen: es gibt keinen
+     * oeffentlichen Pfad zur Datei, nur diesen Weg -- und er gibt nur heraus,
+     * was geprueft ist.
+     */
+    public function logo(Anhangspeicher $speicher): StreamedResponse
+    {
+        $anhang = $this->erscheinungsbild()?->logo();
+
+        abort_unless($anhang instanceof Attachment, 404);
+
+        // **Nur die erlaubten Bildarten verlassen das Haus.** Steht an der
+        // Datei etwas anderes, geht sie gar nicht hinaus: der Ausgang
+        // entscheidet, nicht die Eingabe von damals.
+        $erlaubt = (array) config('mrs.whitelabel.logo_mimes');
+
+        abort_unless(in_array($anhang->mime, $erlaubt, true), 404);
+
+        $inhalt = $speicher->rohinhalt($anhang);
+
+        return response()->stream(
+            function () use ($inhalt): void {
+                echo $inhalt;
+            },
+            200,
+            [
+                'Content-Type' => $anhang->mime,
+
+                // Ohne das raet der Browser den Typ selbst -- und raet bei
+                // einer praeparierten Datei falsch.
+                'X-Content-Type-Options' => 'nosniff',
+                'Content-Length' => (string) strlen($inhalt),
+                'Cache-Control' => 'public, max-age=3600',
+            ],
+        );
     }
 }

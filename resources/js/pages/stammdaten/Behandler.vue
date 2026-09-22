@@ -4,6 +4,7 @@ import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { CalendarOff, CheckCircle2, CircleSlash, Clock, Pencil, Plus, Power, PowerOff, Trash2 } from 'lucide-vue-next';
+import { CalendarOff, CheckCircle2, CircleSlash, Clock, ImagePlus, Pencil, Plus, Power, PowerOff, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface WorkingHour {
@@ -41,6 +42,8 @@ interface PractitionerItem extends Record<string, unknown> {
     first_name: string;
     last_name: string;
     is_active: boolean;
+    avatar_url: string | null;
+    initials: string;
     locations: string[];
     working_hours: WorkingHour[];
     absences: Absence[];
@@ -183,6 +186,65 @@ const abwesenheitLoeschen = (eintrag: Absence) => {
     router.delete(route('absences.destroy', { practitioner: abwesenheitenVon.value.uuid, absence: eintrag.uuid }), { preserveScroll: true });
 };
 
+/* Portraet ---------------------------------------------------------------- */
+
+const bildVon = ref<PractitionerItem | null>(null);
+const dateifeld = ref<HTMLInputElement | null>(null);
+const vorschau = ref<string | null>(null);
+
+const bild = useForm({
+    avatar: null as File | null,
+});
+
+const bildOeffnen = (behandler: PractitionerItem) => {
+    bild.reset();
+    bild.clearErrors();
+    vorschau.value = null;
+    bildVon.value = behandler;
+};
+
+const bildGewaehlt = (ereignis: Event) => {
+    const datei = (ereignis.target as HTMLInputElement).files?.[0] ?? null;
+
+    bild.avatar = datei;
+    // Die Vorschau zeigt, was gleich hochgeladen wird -- ohne Rueckfrage beim
+    // Server und ohne dass ein falsch gewaehltes Bild erst nach dem Speichern
+    // auffaellt.
+    vorschau.value = datei ? URL.createObjectURL(datei) : null;
+};
+
+const bildHochladen = () => {
+    if (!bildVon.value || !bild.avatar) {
+        return;
+    }
+
+    bild.post(route('practitioners.avatar.store', { practitioner: bildVon.value.uuid }), {
+        preserveScroll: true,
+        forceFormData: true,
+        onSuccess: () => {
+            bild.reset();
+            vorschau.value = null;
+
+            if (dateifeld.value) {
+                dateifeld.value.value = '';
+            }
+        },
+    });
+};
+
+const bildEntfernen = () => {
+    if (!bildVon.value) {
+        return;
+    }
+
+    router.delete(route('practitioners.avatar.destroy', { practitioner: bildVon.value.uuid }), {
+        preserveScroll: true,
+        onSuccess: () => {
+            vorschau.value = null;
+        },
+    });
+};
+
 /* Ableitungen ------------------------------------------------------------- */
 
 /** Nach einem Inertia-Besuch zeigt die alte Referenz auf veraltete Daten. */
@@ -191,6 +253,7 @@ const frisch = (behandler: PractitionerItem | null): PractitionerItem | null =>
 
 const zeiten = computed<WorkingHour[]>(() => frisch(zeitenVon.value)?.working_hours ?? []);
 const abwesenheiten = computed<Absence[]>(() => frisch(abwesenheitenVon.value)?.absences ?? []);
+const portraet = computed<PractitionerItem | null>(() => frisch(bildVon.value));
 
 const deaktivieren = (behandler: PractitionerItem) =>
     router.delete(route('practitioners.deactivate', { practitioner: behandler.uuid }), { preserveScroll: true });
@@ -208,22 +271,28 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
         <Head title="Behandler" />
 
         <div class="space-y-6 p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <Heading title="Behandler" description="Nicht jeder Behandler hat ein Benutzerkonto — die Verbindung ist optional." />
-
-                <Button :disabled="!locations.length" @click="anlegenOeffnen">
-                    <Plus />
-                    Behandler anlegen
-                </Button>
-            </div>
+            <Heading title="Behandler" description="Nicht jeder Behandler hat ein Benutzerkonto — die Verbindung ist optional." />
 
             <p v-if="!locations.length" class="rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
                 Zuerst einen Standort anlegen. Ohne Standort gibt es keine Arbeitszeit.
             </p>
 
             <DataTable :spalten="spalten" :zeilen="practitioners" :suchfelder="['name']" suchtext="Name">
+                <template #werkzeuge>
+                    <Button :disabled="!locations.length" @click="anlegenOeffnen">
+                        <Plus />
+                        Behandler anlegen
+                    </Button>
+                </template>
+
                 <template #zelle-name="{ zeile }">
-                    <span class="font-medium">{{ zeile.name }}</span>
+                    <span class="flex items-center gap-3">
+                        <Avatar class="size-9">
+                            <AvatarImage v-if="zeile.avatar_url" :src="zeile.avatar_url" :alt="zeile.name" />
+                            <AvatarFallback class="text-xs">{{ zeile.initials }}</AvatarFallback>
+                        </Avatar>
+                        <span class="font-medium">{{ zeile.name }}</span>
+                    </span>
                 </template>
 
                 <template #zelle-locations="{ zeile }">
@@ -254,6 +323,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
 
                 <template #aktionen="{ zeile }">
                     <AktionsButton :icon="Pencil" beschriftung="Bearbeiten" @click="bearbeitenOeffnen(zeile)" />
+                    <AktionsButton :icon="ImagePlus" beschriftung="Bild" @click="bildOeffnen(zeile)" />
                     <AktionsButton :icon="Clock" beschriftung="Arbeitszeiten" @click="zeitenOeffnen(zeile)" />
                     <AktionsButton :icon="CalendarOff" beschriftung="Abwesenheiten" @click="abwesenheitenOeffnen(zeile)" />
                     <AktionsButton v-if="zeile.is_active" :icon="PowerOff" beschriftung="Deaktivieren" @click="deaktivieren(zeile)" />
@@ -403,5 +473,43 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 </div>
             </div>
         </FormularDialog>
+        <FormularDialog
+            :offen="bildVon !== null"
+            :titel="`Bild · ${bildVon?.name ?? ''}`"
+            beschreibung="Das Portrait erscheint auf der öffentlichen Buchungsseite. Quadratisch wirkt es am besten, mindestens 200 × 200 Pixel."
+            :laeuft="bild.processing"
+            absende-text="Hochladen"
+            :absenden-aus="bild.avatar === null"
+            @update:offen="(wert: boolean) => !wert && (bildVon = null)"
+            @absenden="bildHochladen"
+        >
+            <div class="flex items-center gap-4">
+                <Avatar class="size-20">
+                    <AvatarImage v-if="vorschau ?? portraet?.avatar_url" :src="(vorschau ?? portraet?.avatar_url) as string" :alt="portraet?.name" />
+                    <AvatarFallback class="text-lg">{{ portraet?.initials }}</AvatarFallback>
+                </Avatar>
+
+                <div class="grid flex-1 gap-2">
+                    <Label for="portraet">Neues Bild</Label>
+                    <input
+                        id="portraet"
+                        ref="dateifeld"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-sm file:font-medium file:text-secondary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        @change="bildGewaehlt"
+                    />
+                    <InputError :message="bild.errors.avatar" />
+                </div>
+            </div>
+
+            <div v-if="portraet?.avatar_url">
+                <Button type="button" variant="ghost" size="sm" class="text-destructive" @click="bildEntfernen">
+                    <Trash2 />
+                    Bild entfernen
+                </Button>
+            </div>
+        </FormularDialog>
+
     </AppLayout>
 </template>

@@ -28,6 +28,7 @@ use Illuminate\Support\Str;
 class Invitation extends TenantModel implements HasPersonalData
 {
     use Auditable;
+
     /** @use HasFactory<InvitationFactory> */
     use HasFactory;
 

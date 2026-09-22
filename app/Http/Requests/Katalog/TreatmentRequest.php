@@ -43,6 +43,12 @@ final class TreatmentRequest extends FormRequest
 
             // Entscheidung D14. Null waere kein Wert, sondern ein fehlender.
             'avg_revenue_cents' => ['required', 'integer', 'min:1'],
+
+            // Wer diese Behandlung beherrscht. "Alle" ist ein eigener Wert
+            // und nicht die leere Liste -- die waere zweideutig.
+            'all_practitioners' => ['required', 'boolean'],
+            'practitioners' => ['array'],
+            'practitioners.*' => ['uuid'],
         ];
     }
 

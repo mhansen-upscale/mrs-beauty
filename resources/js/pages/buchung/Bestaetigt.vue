@@ -7,6 +7,13 @@ import { CalendarCheck2, MapPin } from 'lucide-vue-next';
 defineProps<{
     practice: { name: string; slug: string };
     brandStyle: Record<string, string>;
+    pixelId: string | null;
+    messung: string | null;
+    logoUrl: string | null;
+    imprintUrl: string | null;
+    privacyUrl: string | null;
+    leadEventId: string | null;
+    trackLead: boolean;
     appointment: {
         type_name: string;
         practitioner_name: string;
@@ -22,7 +29,18 @@ defineProps<{
 </script>
 
 <template>
-    <BuchungLayout :practice="practice" :brand-style="brandStyle" title="Termin angefragt">
+    <BuchungLayout
+        :practice="practice"
+        :brand-style="brandStyle"
+        :pixel-id="pixelId"
+        :messung="messung"
+        :logo-url="logoUrl"
+        :imprint-url="imprintUrl"
+        :privacy-url="privacyUrl"
+        :track-lead="trackLead"
+        :lead-event-id="leadEventId"
+        title="Termin angefragt"
+    >
         <div class="space-y-6 rounded-md border bg-card p-6">
             <div class="flex items-start gap-3">
                 <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">

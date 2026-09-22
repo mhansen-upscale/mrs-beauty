@@ -8,6 +8,7 @@ use App\Models\Concerns\Auditable;
 use Carbon\CarbonInterface;
 use Database\Factories\AppointmentTypeFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -111,7 +112,7 @@ class AppointmentType extends TenantModel
         }
 
         // V7 -- Behandlerfreigabe
-        if (! $this->practitioners()->whereKey($behandler->getKey())->exists()) {
+        if (! $this->freigegebeneBehandler()->contains(fn (Practitioner $kandidat): bool => $kandidat->getKey() === $behandler->getKey())) {
             return false;
         }
 
@@ -155,6 +156,31 @@ class AppointmentType extends TenantModel
     public function treatment(): BelongsTo
     {
         return $this->belongsTo(Treatment::class);
+    }
+
+    /**
+     * Die Behandler, die diese Terminart anbieten -- aufgeloest.
+     *
+     * **Die Behandlung ist die Quelle, die Terminart kann verengen.** Wer
+     * Botox beherrscht, steht am Katalog; eine Terminart "Erstberatung
+     * Botox" kann daraus eine Teilmenge waehlen, muss aber nicht. Ohne eigene
+     * Freigabe erbt sie die der Behandlung.
+     *
+     * Vorher hiess eine leere Freigabe "niemand". Fuer eine kleine Praxis war
+     * das die falsche Vorgabe: sie musste jede Terminart einzeln freigeben,
+     * sonst war nichts buchbar.
+     *
+     * @return Collection<int, Practitioner>
+     */
+    public function freigegebeneBehandler(): Collection
+    {
+        $eigene = $this->practitioners()->where('practitioners.is_active', true)->get();
+
+        if ($eigene->isNotEmpty()) {
+            return $eigene;
+        }
+
+        return $this->treatment?->behandler() ?? new Collection;
     }
 
     /**

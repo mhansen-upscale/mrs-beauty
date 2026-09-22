@@ -154,16 +154,16 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
         <Head title="Standorte" />
 
         <div class="space-y-6 p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <Heading title="Standorte" description="Eine Praxisgruppe ist ein Mandant mit mehreren Standorten — jeder mit eigener Zeitzone." />
-
-                <Button @click="anlegenOeffnen">
-                    <Plus />
-                    Standort anlegen
-                </Button>
-            </div>
+            <Heading title="Standorte" description="Eine Praxisgruppe ist ein Mandant mit mehreren Standorten — jeder mit eigener Zeitzone." />
 
             <DataTable :spalten="spalten" :zeilen="locations" :suchfelder="['name', 'city', 'timezone']" suchtext="Name oder Ort">
+                <template #werkzeuge>
+                    <Button @click="anlegenOeffnen">
+                        <Plus />
+                        Standort anlegen
+                    </Button>
+                </template>
+
                 <template #zelle-name="{ zeile }">
                     <span class="font-medium">{{ zeile.name }}</span>
                     <span class="block text-xs text-muted-foreground">{{ zeile.slug }}</span>

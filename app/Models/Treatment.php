@@ -7,7 +7,9 @@ namespace App\Models;
 use App\Models\Concerns\Auditable;
 use Database\Factories\TreatmentFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -29,6 +31,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $price_to_cents
  * @property int $avg_revenue_cents
  * @property bool $is_active
+ * @property bool $all_practitioners
  */
 class Treatment extends TenantModel
 {
@@ -46,6 +49,7 @@ class Treatment extends TenantModel
         'price_to_cents',
         'avg_revenue_cents',
         'is_active',
+        'all_practitioners',
     ];
 
     /**
@@ -58,6 +62,7 @@ class Treatment extends TenantModel
             'price_to_cents' => 'integer',
             'avg_revenue_cents' => 'integer',
             'is_active' => 'boolean',
+            'all_practitioners' => 'boolean',
         ];
     }
 
@@ -101,6 +106,38 @@ class Treatment extends TenantModel
     public function scopeAktiv(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Wer diese Behandlung beherrscht.
+     *
+     * Leer **und** `all_practitioners` false heisst: niemand. Leer und
+     * `all_practitioners` true heisst: alle aktiven. Ein leerer Pivot allein
+     * waere zweideutig -- "alle" oder "noch nicht gepflegt"?
+     *
+     * @return BelongsToMany<Practitioner, $this, TreatmentPractitioner>
+     */
+    public function practitioners(): BelongsToMany
+    {
+        return $this->belongsToMany(Practitioner::class, 'treatment_practitioner')
+            ->using(TreatmentPractitioner::class)
+            ->withTimestamps();
+    }
+
+    /**
+     * Die Behandler, die diese Behandlung machen -- aufgeloest.
+     *
+     * @return Collection<int, Practitioner>
+     */
+    public function behandler(): Collection
+    {
+        if ($this->all_practitioners) {
+            /** @var Collection<int, Practitioner> */
+            return Practitioner::query()->where('is_active', true)->orderBy('last_name')->get();
+        }
+
+        /** @var Collection<int, Practitioner> */
+        return $this->practitioners()->where('practitioners.is_active', true)->orderBy('last_name')->get();
     }
 
     /**

@@ -50,7 +50,24 @@
 
         <!-- Kein Zugriff auf echte Drittsysteme aus Tests heraus. -->
         <env name="META_API_VERSION" value="v21.0"/>
+        <env name="GOOGLE_CLIENT_ID" value="test-client"/>
+        <env name="GOOGLE_CLIENT_SECRET" value="test-secret"/>
+        <env name="GOOGLE_REDIRECT_URI" value="http://localhost/oauth/google/callback"/>
         <env name="ANTHROPIC_API_KEY" value="test-key-not-used"/>
+
+        <!--
+            Gefunden am 22.09.2026, auf die harte Tour: KIE_API_KEY fehlte
+            hier, also kam der echte aus der .env. Ein Test, der die
+            Warteschlange nicht faelscht, rief damit das Bildmodell wirklich
+            auf. Fuenf Minuten Wartezeit und zwei Euro, fuer nichts. Die
+            Leer und nicht "test-key": ein gesetzter Schluessel bindet das
+            Bildmodell an, und dann laeuft jeder Aufruf in Zeitablauf und
+            Wiederholung statt sofort in "kein Bildmodell angebunden". Wer
+            eines braucht, bindet im Test selbst eines. Die Adresse zeigt
+            zusaetzlich ins Leere.
+        -->
+        <env name="KIE_API_KEY" value=""/>
+        <env name="KIE_URL" value="https://kie.invalid/api/v1/jobs"/>
         <env name="AGENT_KILL_SWITCH" value="false"/>
     </php>
 </phpunit>

@@ -89,3 +89,85 @@ it('erkennt die falsche API, wenn es sie gibt', function (): void {
     // Die Gegenprobe: das Muster selbst muss greifen.
     expect(preg_match('/<Checkbox\b[^>]*model-value[^>]*>/s', '<Checkbox :model-value="x" />'))->toBe(1);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Heading ist mehrwurzelig
+|--------------------------------------------------------------------------
+|
+| Das Bauteil liefert Ueberschrift **und** Trennlinie. In einer Flex-Zeile
+| wird die Trennlinie damit zum zweiten Flex-Element -- sie ist voll breit und
+| schiebt alles Weitere in die naechste Zeile. Genau so landeten die
+| "anlegen"-Knoepfe eine Zeile zu tief und linksbuendig, auf jeder Seite mit
+| Stammdaten.
+|
+| Dieselbe Falle wie beim AktionsButton in WP-11: ein mehrwurzeliges Bauteil
+| verhaelt sich in einem Layout nicht wie ein einzelnes Element, und Vue sagt
+| dazu nichts. Seitenaktionen gehoeren deshalb in die Werkzeugzeile von
+| DataTable (`#werkzeuge`).
+|
+*/
+
+/**
+ * Dateien, die <Heading> in einen Flex- oder Grid-Container setzen.
+ *
+ * @return list<string>
+ */
+function headingInLayoutzeile(): array
+{
+    $verstoesse = [];
+
+    foreach (vueDateien() as $pfad) {
+        if (basename($pfad) === 'Heading.vue') {
+            continue;
+        }
+
+        $inhalt = (string) file_get_contents($pfad);
+
+        // Das oeffnende <div ...> unmittelbar vor einem <Heading>, ueber
+        // Zeilen hinweg -- dazwischen darf nur Leerraum stehen.
+        if (preg_match_all('/<div\b([^>]*)>\s*<Heading\b/s', $inhalt, $treffer) === 0) {
+            continue;
+        }
+
+        foreach ($treffer[1] as $attribute) {
+            if (preg_match('/\bclass="[^"]*\b(flex|grid)\b/', $attribute) === 1) {
+                $verstoesse[] = str_replace(base_path().'/', '', $pfad);
+            }
+        }
+    }
+
+    return array_values(array_unique($verstoesse));
+}
+
+it('setzt Heading in keine Flex- oder Grid-Zeile', function (): void {
+    $verstoesse = headingInLayoutzeile();
+
+    expect($verstoesse)->toBeEmpty(
+        "Heading ist mehrwurzelig -- die Trennlinie bricht die Zeile um.\n"
+        ."Seitenaktionen gehoeren in <DataTable #werkzeuge>:\n".implode("\n", $verstoesse)
+    );
+});
+
+it('erkennt Heading in einer Flex-Zeile, wenn es sie gibt', function (): void {
+    // Die Gegenprobe: das Muster selbst muss greifen.
+    $beispiel = '<div class="flex flex-wrap items-start justify-between gap-3">'."\n".'    <Heading title="X" />';
+
+    expect(preg_match('/<div\b([^>]*)>\s*<Heading\b/s', $beispiel, $treffer))->toBe(1);
+
+    $attribute = $treffer[1] ?? '';
+
+    expect($attribute)->not->toBe('')
+        ->and(preg_match('/\bclass="[^"]*\b(flex|grid)\b/', $attribute))->toBe(1);
+});
+
+it('findet ueberhaupt Seiten mit Heading', function (): void {
+    // Ohne diese Zusicherung koennte die Pruefung oben leer durchlaufen.
+    $mitHeading = array_filter(
+        vueDateien(),
+        fn (string $pfad): bool => basename($pfad) !== 'Heading.vue'
+            && str_contains((string) file_get_contents($pfad), '<Heading')
+    );
+
+    expect(count($mitHeading))->toBeGreaterThanOrEqual(5);
+});

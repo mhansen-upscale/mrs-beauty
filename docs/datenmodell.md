@@ -173,8 +173,8 @@ Mikroeinheiten (`cost_micros`), wie von der API geliefert.
 | `users` | Benutzer | — |
 | Rollen, Einladungen | WP-04 | — |
 | Audit-Log | WP-05, jeder lesende und schreibende Zugriff quer zum Mandanten | — |
-| Abo, Abrechnung | WP-06 | — |
-| Whitelabel | WP-07 | — |
+| `subscriptions` | WP-06 | Abgleich mit Stripe: Zustand, Periode, aufgestockte Mengen. **Keine Nutzungstabelle** — der Verbrauch wird aus `messages`, `agent_runs` und `waitlist_offers` gerechnet (B7) |
+| `brandings` | WP-07 | eine Zeile je Mandant: Markenfarbe, Impressum- und Datenschutz-Adresse; das Logo hängt als Anhang daran. Gilt **nur** für die Buchungsseite |
 
 `organizations.settings` ist der Ort für alles, was je Mandant abweichen darf.
 Der jeweilige Standardwert steht in `config/mrs.php`, nicht im Code.
@@ -186,8 +186,9 @@ Der jeweilige Standardwert steht in `config/mrs.php`, nicht im Code.
 | Tabelle | Belegte Felder | Fundstelle |
 |---|---|---|
 | `locations` | Zeitzone ▲ | WP-08, Warteliste K3 |
-| `practitioners` | — | WP-08, Warteliste K4 |
-| `treatments` | `avg_revenue_cents`, Name, Preis | Attribution, Agent Schritt 7 |
+| `practitioners` | `avatar_path` | WP-08, Warteliste K4 |
+| `treatments` | `avg_revenue_cents`, Name, Preis, `all_practitioners` | Attribution, Agent Schritt 7 |
+| `treatment_practitioner` | wer beherrscht welche Behandlung | Buchungsseite |
 | `appointment_types` | Dauer, Rüstzeiten ▲, `lead_time` ▲ | WP-09, Warteliste K2 |
 
 `treatments.avg_revenue_cents` ist ausdrücklich eine **Schätzung**, kein
@@ -197,15 +198,35 @@ Der Katalog ist die einzige Quelle für Behandlungsnamen und Preise. Der Agent
 löst `treatment_id` **nur gegen den Katalog** auf und übernimmt nie Freitext
 (`docs/fachlogik/agent.md`, Schritt 3).
 
+**Wer eine Behandlung macht, steht an der Behandlung.** „Wer macht Botox?"
+ist eine Frage an den Katalog, nicht an einen Terminzuschnitt. Die Terminart
+darf **verengen** — Erstgespräch nur bei der Ärztin —, ohne eigene Freigabe
+erbt sie die der Behandlung. Aufgelöst in
+`AppointmentType::freigegebeneBehandler()`, an einer Stelle und nur dort.
+
+Ein leerer Pivot wäre zweideutig: „alle" oder „noch nicht gepflegt"? Deshalb
+trägt die Behandlung `all_practitioners`. Leer und `false` heißt niemand —
+und eine Terminart ohne Behandler wird auf der Buchungsseite gar nicht erst
+angeboten, denn buchbar wäre sie ohnehin nicht.
+
+`practitioners.avatar_path` liegt **unverschlüsselt auf einer öffentlichen
+Platte** — dieselbe Abwägung wie beim Namen: die Praxis veröffentlicht das
+Portrait selbst auf ihrer Buchungsseite. Regel 3 schützt die Daten der
+Patienten, nicht das, was die Praxis von sich aus zeigt.
+
 ---
 
 ## 3 · Termine und Verfügbarkeit
 
 | Tabelle | Belegte Felder |
 |---|---|
-| `appointment_slots` | belegt durch `appointment_id` **oder** `slot_hold_id`, zusätzlich `external_block_id` ▲ |
+| `appointment_slots` | belegt durch `appointment_id` **oder** `slot_hold_id` **oder** `external_block_id` — genau eine der drei |
 | `slot_holds` | `expires_at`, wird zu `appointment_id` |
 | `appointments` | Status `pending`, `confirmed`, `attended`, `no_show`; `attribution_snapshot` (JSON); `reminder_response` (u. a. `no_response`) |
+| `appointment_notifications` | Art und Kanal, `scheduled_for`, `sent_at`, `failed_at`; eindeutig über (`appointment_id`, `kind`) — WP-13 |
+| `calendar_connections` | je Behandler und Anbieter eine; Token verschlüsselt, `sync_token`, Watch-Kanal, `status` — WP-14 |
+| `external_calendar_blocks` | **ohne Titelspalte** (R2): nur `starts_at`, `ends_at`, `is_all_day` und die externe Kennung — WP-14 |
+| `calendar_event_links` | die Spur eines Termins im externen Kalender; zugleich der Idempotenzschlüssel (A13) — WP-14 |
 
 Die Statusliste ist durch die Kennzahlendefinitionen in
 `docs/fachlogik/attribution.md` festgelegt und nicht frei erweiterbar: „gebucht"
@@ -217,24 +238,69 @@ verändert — auch nicht, wenn die Kampagne bei Meta umbenannt wird.
 
 Beim Anlegen durch das Team ist die Quelle **Pflichtfeld**.
 
+**Genau eine der drei Belegungsspalten** von `appointment_slots` ist gefüllt.
+Die Trennung ist keine Buchhaltung, sondern die Konfliktregel R3 aus
+`docs/integrationen/kalender.md`: der externe Kalender gewinnt bei Blockern,
+das System gewinnt bei Terminen. Ein Blocker greift deshalb nur auf freie
+Zeilen — über einem Termin entsteht keiner, über einem gültigen Hold auch
+nicht.
+
+`external_calendar_blocks` hat **keine** Spalte für den Originaltitel, und das
+ist die Umsetzung von R2, nicht ein vergessenes Feld: was es nicht gibt, kann
+niemand später „nur zur Anzeige" befüllen.
+
 ---
 
 ## 4 · Kontakte und Kommunikation
 
 | Tabelle | Belegte Felder |
 |---|---|
-| `contacts` | — |
-| `channel_identities` | bildet scoped IDs ab; dieselbe Person kann mehrere haben |
-| `conversations` | `agent_mode` (`off`, `suggest`, `auto`), `agent_paused_until`, `service_window_expires_at` |
-| `messages` | externe Nachrichten-ID für Deduplizierung |
+| `contacts` | vier verschlüsselte Felder; blinde Indizes auf E-Mail, Nachname und Telefonnummer (**E.164**, WP-16) |
+| `channel_identities` | bildet scoped IDs ab; dieselbe Person kann mehrere haben. Kennung verschlüsselt mit blindem Index; `contact_id` **nullable**; eindeutig über (Organisation, Kanal, Kennung) — WP-16 |
+| `contact_merges` | verschlüsselter Snapshot mit Ablaufdatum, umkehrbar (D7) — WP-16 |
+| `channel_connections` | Systembenutzer-Token je Mandant, verschlüsselt; Zustand nach der Fehlertabelle — WP-19. `sender_id`: die Kennung, unter der gesendet wird — WP-20a. `smtp_*` (Benutzername und Passwort verschlüsselt) und `verified_at`: das eigene Postfach einer Praxis — WP-20b |
+| `channel_raw_events` | verschlüsselt, 14 Tage, wiedereinspielbar — kein Protokoll, ein Wiedervorlagestapel — WP-19. Hieß bis WP-20b `meta_raw_events`; der erste Kanal ohne Meta hat den Namen gerade gerückt |
+| `conversations` | `agent_mode` (`off`, `suggest`, `auto`), `agent_paused_until`, `service_window_expires_at`, `anonymized_at` — WP-19. `last_read_at`: der Gelesen-Stand **der Praxis**, nicht einer Person — WP-21 |
+| `messages` | externe Nachrichten-ID für Deduplizierung (Unique-Index); Inhalt verschlüsselt; `cost_category` **aus der API-Antwort**, nie geschätzt — WP-19. `template_id` und `template_variables` (verschlüsselt) — WP-20a. `subject` (verschlüsselt): nur E-Mail hat einen — WP-20b |
+| `whatsapp_templates` | bei Meta genehmigt, hier nur gelesen; eindeutig über (Organisation, Name, **Sprache**) — WP-20a |
+| `agent_runs` | ein Durchlauf je Nachricht: Absicht, Konfidenz, Aktion, Eskalationsgrund, Token, Kosten; Entitäten und Vorschlag verschlüsselt — WP-22 |
+| `agent_budgets` | Kontingent je Mandant und Monat; der Verbrauch steht **nicht** hier, sondern wird aus `agent_runs` summiert — WP-23 |
+| `agent_dialogs` | ein Buchungsvorgang je Konversation (G9); Zustand, Versuchszähler, Hold; Name und angebotene Zeiten verschlüsselt — WP-24 |
 | `consents` | `channel_identity_id`, `text_snapshot`, Zeitpunkt |
-| `leads` | Status u. a. `won`; `first_response_seconds` |
-| Notizen, Anhänge, Aufbewahrung | WP-18 |
+| `leads` | Status `new`/`contacted`/`scheduled`/`won`/`lost`; Herkunft; `first_response_seconds`; `last_activity_at` trägt D4. **Ohne Freitext** (D2) — WP-17 |
+| `notes` | polymorph auf Kontakt, Termin, Anfrage; Inhalt verschlüsselt — WP-18 |
+| `tags`, `taggables` | Ordnungskategorien der Praxis, **unverschlüsselt**, weil zähl- und sortierbar — WP-18 |
+| `attachments` | Datei verschlüsselt außerhalb der Datenbank; `CHECK`: Chat-Anhang ohne `expires_at` ist nicht speicherbar (C6) — WP-18 |
+| `consents` | an der Kanalidentität (D8); Wortlaut der Erklärung als Snapshot, nicht nur die Version — WP-18 |
+| `retention_policies` | Fristen je Mandant, Liste der Gegenstände fest (C7) — WP-18 |
+| `data_subject_requests` | überlebt den Kontakt; hält Zahlen, keine Daten — WP-18 |
 | Rohereignisse | 14 Tage Aufbewahrung, Wiedereinspielung |
 
 **Zusammenführung von `channel_identities` nur bei sicherem Signal.** Meta
 vergibt Nutzerkennungen je Seite unterschiedlich; eine Zusammenführung auf
 Verdacht führt zwei Personen zusammen.
+
+**Der Bezug einer Identität auf einen Kontakt ist nullable, mit Absicht.** Die
+erste Nachricht kommt an, bevor jemand weiß, wer da schreibt; ein erzwungener
+Bezug erzeugte an dieser Stelle Karteileichen oder falsche Kontakte.
+
+**Ein neuer blinder Index macht den Altbestand unauffindbar**, bis
+`mrs:blindindex-nachtragen` gelaufen ist. Die Migration legt nur die Spalte
+an.
+
+**Polymorphe Bezüge tragen keinen zusammengesetzten Fremdschlüssel.** Notizen,
+Schlagworte und Anhänge hängen an Kontakt, Termin oder Anfrage; die Zusage aus
+Entscheidung A2 lässt sich dabei nicht stellen. Der globale Scope greift, die
+Datenbank sichert es nicht zusätzlich ab — das ist der Preis für Polymorphie.
+
+**Ein Lead ist nicht der Kontakt** (D3). Dieselbe Person fragt im März nach
+Botox und im Oktober nach Hyaluron — zwei Vorgänge mit zwei Quellen und zwei
+Ergebnissen. Wer sie am Kontakt festmacht, kann hinterher nicht mehr sagen,
+welche Anzeige die Buchung gebracht hat.
+
+**Gewonnen heißt erschienen, nicht gebucht.** Die Kennzahl „Abschlüsse" zählt
+`leads.status = won`, und ein Termin, den niemand wahrnimmt, darf kein
+Abschluss sein — sonst misst der ROAS Absichten statt Umsatz.
 
 **Deduplizierung über die externe Nachrichten-ID ist keine Optimierung.** Meta
 liefert Webhooks doppelt, im Normalbetrieb. Ohne Deduplizierung antwortet der
@@ -260,24 +326,84 @@ lässt sich einem Arzt nicht erklären, warum sein Agent etwas geantwortet hat.
 |---|---|
 | `waitlist_entries` | `status` (`active`, `offered`, `booked`, `expired`), `expires_at`, `appointment_type_id`, `all_locations`, `practitioner_id`, `earliest_date`, `latest_date`, `weekday_mask`, `time_windows`, `min_notice_hours`, `priority`, `created_at`, `offers_sent_count`, `last_offered_at` |
 | `waitlist_entry_location` | Pivot, wenn `all_locations = 0` |
-| `waitlist_offers` | `status` (`pending`, `declined`, `expired`, `superseded`, angenommen), `expires_at`, `cost_micros` |
+| `waitlist_offers` | `status` (`pending`, `accepted`, `declined`, `expired`, `superseded`), `expires_at`, `cost_micros`, `trigger`; K9 über die generierte Spalte `offer_guard` — WP-25 |
 
 `min_notice_hours` ist das Feld, an dem die Warteliste steht und fällt (K8).
-`cost_micros` stammt aus der API-Antwort, nie aus einer Schätzung.
+`cost_micros` stammt aus der API-Antwort, nie aus einer Schätzung — und
+bleibt bis WP-06 leer: WhatsApp meldet die **Kategorie**, nicht den Betrag.
+
+**Der Wächter für K9 hängt an `entry_key`, nicht am Fremdschlüssel** (WP-25).
+MySQL verbietet `ON DELETE CASCADE` auf einer Spalte, von der eine STORED
+generierte Spalte abhängt — und kaskadieren muss er, damit eine
+Löschanfrage nach DSGVO nicht an einem Angebot scheitert.
 
 ---
 
 ## 7 · Werbung
 
-| Tabelle | Belegte Felder |
+| Tabelle | Besonderheit |
 |---|---|
-| Werbekonten | Systembenutzer-Token je Mandant, verschlüsselt, mit Ablaufüberwachung |
-| Kampagnen, Anzeigengruppen, Anzeigen | `campaign_external_id`, `adset_external_id`, `ad_external_id` |
-| Insights | Aggregation, WP-28 |
-| Verbindungen | Status u. a. `expired`, `degraded` |
+| `ad_accounts` | eines je Mandant; Systembenutzer-Token verschlüsselt, mit Ablaufüberwachung; Währung und Zeitzone des Kontos |
+| `ad_campaigns`, `ad_sets`, `ads` | `external_id` je Ebene, **Name feldverschlüsselt**, Budgets als Ganzzahl in kleinster Einheit, `vanished_at` statt Löschung |
+| dazu ab WP-27 | `sync_state`, `sync_error`, `client_token`, `managed_by_us`; an `ad_sets` die Zielgruppe: Standort, Umkreis, Alter, Geschlecht |
+| `ad_insights` | Tageszeilen je Ebene: Ausgaben, Impressionen, Klicks, Link-Klicks, von Meta gemeldete Ergebnisse |
+| Zustand | `ConnectionStatus`: `active`, `expired`, `degraded`, `suspended` — derselbe wie bei Kanal- und Kalenderverbindungen |
+
+**Namen liegen verschlüsselt** (WP-26). Eine importierte Kampagne kann „Botox
+Herbst" heißen; die Praxis hat sie so benannt, bevor sie uns kannte. Ab WP-32
+friert dieser Name als `attribution_snapshot` am Termin ein (D13) — dann
+stünde ein Behandlungsname in einem offenen Feld neben einem Kontakt. Der
+Preis: sortiert und gesucht wird in PHP, nicht in SQL (wie P8).
+
+**Was bei Meta verschwindet, wird markiert, nicht gelöscht.** Eine gelöschte
+Kampagne bleibt in Auswertung und Attribution sichtbar; wer sie entfernt,
+reißt die Verbindung zwischen einem Termin und der Anzeige, die ihn gebracht
+hat.
+
+**Kennzahlen sind Grundwerte, keine Quoten** (WP-28). CTR, CPC und CPM
+liefert Meta mit — sie mitzuschreiben hieße zwei Zahlen für dieselbe Aussage
+zu führen, und die weichen ab, sobald Meta rundet oder einen Tag nachträglich
+korrigiert. Gerechnet wird in `App\Werbung\Kennzahlen`, an einer Stelle.
+
+**Reichweite fehlt mit Absicht.** Sie zählt verschiedene Menschen und lässt
+sich nicht über Tage addieren; eine nicht summierbare Zahl neben summierbaren
+wird irgendwann summiert.
+
+**Ein `stat_date`, kein Zeitstempel.** Insights-Tage laufen in der Zeitzone
+des Werbekontos. Nach zwölf Monaten fallen die Ebenen unterhalb der Kampagne
+weg (P9), durchgesetzt über die Aufbewahrung aus WP-18.
+
+**Was die Praxis will und was bei Meta steht, sind zwei Dinge** (WP-27). Bis
+WP-26 war die Tabelle ein Spiegel. Ab jetzt kann eine Zeile eine Änderung
+tragen, die noch unterwegs ist — oder eine, die Meta abgelehnt hat. Wer das
+nicht unterscheidet, zeigt eine Budgeterhöhung an, die nie ankam.
+
+**`client_token` ersetzt den Idempotenzschlüssel**, den Metas Marketing-API
+nicht hat. Er steht im Namen, den das Produkt erzeugt; ein Auftrag, dessen
+Antwort verlorenging, findet seine Kampagne daran wieder, statt eine zweite
+mit zweitem Budget anzulegen.
+
+**Die Zielgruppe ist Umkreis, Alter, Geschlecht — und nichts sonst.**
+Interessen fehlen mit Absicht: „Botox" als Interesse wäre eine
+Behandlungsbezeichnung Richtung Meta, in einem Feld, an das niemand denkt.
+
+**Die Zielgruppendefinition wird nicht übernommen.** Sie enthält Interessen,
+die im Umfeld einer ästhetischen Praxis gesundheitsnah sind, und keines der
+Pakete braucht sie (Regel 3).
 
 Das Werbekonto **gehört dem Kunden**. Zugriff über eine Partnerschaft im
 Business Manager, nicht über eine Übertragung.
+
+**Erzeugte Anzeigenbilder liegen bei uns** (Entscheidung C10). Generiert wird
+bei kie.ai, danach heruntergeladen, in den eigenen Bucket geschrieben und beim
+Anbieter gelöscht — dieselbe Ablagemechanik wie bei den Chat-Anhängen
+(`App\Datenschutz\Anhangspeicher`, Platte aus der Konfiguration). Gespeichert
+werden Datei, Erzeugungszeitpunkt, verwendetes Modell und der Auftragstext,
+damit ein Bild Jahre später noch belegbar ist: für die HWG-Prüfung, für eine
+Beanstandung, für den Kunden.
+
+Anders als Chat-Anhänge haben sie **kein Pflicht-Ablaufdatum** (C6): sie
+enthalten keine Patientendaten, und ein Beleg, der verfällt, ist keiner.
 
 ---
 
@@ -285,12 +411,28 @@ Business Manager, nicht über eine Übertragung.
 
 | Tabelle | Belegte Felder |
 |---|---|
-| `attribution_touches` | `visitor_id`, `click_id` (`fbclid`), `utm_source/medium/campaign/content/term`, `campaign_external_id`, `adset_external_id`, `ad_external_id`, `landing_url`, `referrer`, `occurred_at`, rückwirkend `contact_id` und `lead_id` |
+| `attribution_touches` | `visitor_id`, `click_id` (`fbclid`), `utm_source/medium/campaign/content/term`, `campaign_external_id`, `adset_external_id`, `ad_external_id`, **`landing_path`** (ohne Abfrageteil), **`referrer_host`** (ohne Seite), `occurred_at`, rückwirkend `contact_id` und `lead_id` |
+| `appointments.attribution_snapshot` | verschlüsselt: der Stand zum Zeitpunkt der Buchung, als Kopie (D13) |
+| `appointments.attribution_campaign_id` | **Klartext**, indiziert: der Schlüssel zum Gruppieren (WP-32b) |
 
 **Das Modell wird nicht im Schema festgeschrieben.** Alle Touches werden
 gespeichert, First/Last/Last-Non-Direct/Linear zur Abfragezeit berechnet.
 
-`visitor_id` ist eine Zufalls-ID ohne Personenbezug, Cookie-Laufzeit 180 Tage.
+`visitor_id` ist eine Zufalls-ID ohne Personenbezug, Cookie-Laufzeit 180 Tage
+— **gesetzt erst nach der Einwilligung** (§ 25 TTDSG, WP-32a). Ohne sie gibt
+es weder Cookie noch Touch, und das Meta-Pixel lädt ebenfalls nicht.
+
+**Der Schlüssel darf offen liegen, die Aussage nicht** (WP-32b). Der Snapshot
+ist verschlüsselt und damit nicht gruppierbar; die Kampagnenkennung steht im
+Klartext daneben. Sie ist eine Ziffernfolge ohne Aussage — wer sie zu einem
+Namen auflösen will, braucht `ad_campaigns`, und dort liegt der Name
+verschlüsselt.
+
+**Pfad statt Adresse, Host statt Verweis** (WP-32a). Der Abfrageteil einer
+Adresse trägt, was jemand angehängt hat — im Zweifel eine Behandlung. Sobald
+der Touch rückwirkend mit `contact_id` verknüpft ist, stünde sie
+unverschlüsselt neben einem Kontakt (Regel 3). Eine Abweichung von
+`docs/fachlogik/attribution.md`, die dort bestätigt gehört.
 
 Nach zwölf Monaten entfällt die Aufschlüsselung nach Anzeigengruppe und
 Einzelanzeige (Entscheidung P9); die Kampagnenebene bleibt.
@@ -303,7 +445,13 @@ Einzelanzeige (Entscheidung P9); die Kampagnenebene bleibt.
 |---|---|
 | `compliance_rulesets` | **global und versioniert, nicht mandantenbezogen**, mit Gültigkeitsdatum und Changelog |
 | `compliance_checks` | polymorph auf Anzeigenvorschlag, Creative, Behandlungsbeschreibung, Template und Buchungsseite |
-| Brand Guide | `banned_terms` |
+| `brand_guides` | einer je Mandant: Tonalität, Ansprache, Zielgruppe, Positionierung, Claim |
+| `brand_terms` | bevorzugte und verbotene Begriffe, je mit Ersatz und Begründung — die Quelle für `brand_violation` |
+| `brand_references` | Referenzmaterial mit **Erklärung im Wortlaut**, Person und Zeitpunkt |
+
+**Umgesetzt in WP-30.** `reviewed_by` und `reviewed_at` kamen dazu: eine
+Fassung, die kein Medizinrechtler durchgesehen hat, sagt das — im Produkt, an
+jeder Ampel.
 
 `compliance_rulesets` ist die **eine Tabelle ohne `organization_id`**. Der
 Rechtsstand ist für alle Mandanten derselbe; eine mandantenbezogene Kopie
@@ -314,6 +462,15 @@ es nach einer Regelwerksänderung mit seiner ursprünglichen Version
 nachvollziehbar bleibt.
 
 Ein Override ist nur mit Pflichtbegründung möglich und wird protokolliert.
+
+**Referenzmaterial trägt kein Ablaufdatum** (WP-29), anders als Chat-Anhänge
+(C6): es ist kein ungefragt zugesandtes Foto, sondern Material, mit dem
+geworben wird. Die Aufbewahrung greift auf den Kontext des Anhangs, nicht auf
+alle Anhänge.
+
+**Die Erklärung wird kopiert, nicht referenziert.** Wer in zwei Jahren fragt,
+was eine Praxis beim Hochladen zugesichert hat, braucht den Satz von damals —
+eine Änderung am Wortlaut gilt ab dann, nicht rückwirkend.
 
 Startregelsatz: `before_after`, `missing_risk_notice`, `healing_promise`,
 `fear_advertising`, `testimonial`, `risk_free_claims`, `superlatives`,

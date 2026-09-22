@@ -36,4 +36,15 @@ Route::prefix('buchen/{praxis}')
             ->name('buchung.buchen');
 
         Route::get('bestaetigt', [PublicBookingController::class, 'confirmed'])->name('buchung.bestaetigt');
+
+        // Das Logo (WP-07). Eine eigene Route, weil Anhaenge verschluesselt
+        // liegen -- und sie gibt nur heraus, was die Virenpruefung
+        // freigegeben hat.
+        Route::get('logo', [PublicBookingController::class, 'logo'])->name('buchung.logo');
+
+        // Die Entscheidung ueber die Messung (WP-32a). Ohne sie wird weder
+        // ein Besucher-Cookie gesetzt noch das Pixel geladen.
+        Route::post('einwilligung', [PublicBookingController::class, 'einwilligen'])
+            ->middleware('throttle:20,1')
+            ->name('buchung.einwilligung');
     });

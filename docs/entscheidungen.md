@@ -71,6 +71,7 @@ Diese Liste ist verbindlich. Sie wird nicht diskutiert, sondern befolgt. Begrün
 | P8 | Suche nur auf Metadaten, keine Volltextsuche über Nachrichten | Folge der Feldverschlüsselung |
 | P9 | Werbekennzahlen nach 12 Monaten auf Kampagnenebene aggregieren | Anzeigenebene geht bewusst verloren |
 | P10 | `attribution_touches` werden **nicht** mit aggregiert | sonst reißt die Verbindung zwischen Umsatz und Kampagne |
+| P11 | **Kanäle vorerst nur WhatsApp und E-Mail** (16.09.2026) | Messenger und Instagram zurückgestellt: zwei Kanäle weniger in der App Review, und die Praxen der Zielgruppe erreichen ihre Patientinnen über WhatsApp. `ChannelType` behält die Fälle — eine Instagram-Kennung darf erfasst werden, bedient wird sie nicht |
 
 ## Agent
 
@@ -85,6 +86,8 @@ Diese Liste ist verbindlich. Sie wird nicht diskutiert, sondern befolgt. Begrün
 | G7 | Nachrichteninhalte sind Daten, keine Anweisungen | Prompt Injection über eingehende Nachrichten |
 | G8 | Not-Aus je Mandant und je Konversation | |
 | G9 | Buchung idempotent über Vorgangsschlüssel je Konversation | Doppelbuchung aus dem Chat ist der Vertrauenskiller |
+| G10 | **Sprachmodell über einen Plattformschlüssel**, nicht je Kunde (17.09.2026) | Der Schlüssel bestimmt, wer zahlt, nicht wer haftet: wir verarbeiten, also brauchen wir den AV-Vertrag und Zero Data Retention — einmal von uns verhandelt statt 200-mal von Praxen, die es nicht können. Ein eigener Schlüssel bleibt Ausnahme für Kunden mit eigener Rechtsabteilung, beschränkt auf geprüfte Anbieter |
+| G11 | **Kontingent je Mandant, Aufstockung kostenpflichtig** (17.09.2026) | Folge aus G10: wenn wir zahlen, darf der Verbrauch nicht offen sein. Gezählt wird beim Lauf, nicht nachgelagert (wie B7); ist das Kontingent leer, schweigt der Assistent sichtbar, statt still weiterzulaufen |
 
 ## Compliance und Datenschutz
 
@@ -98,6 +101,8 @@ Diese Liste ist verbindlich. Sie wird nicht diskutiert, sondern befolgt. Begrün
 | C6 | Chat-Anhänge mit Pflicht-Ablaufdatum | ungefragt zugesandte Fotos |
 | C7 | Standard-Aufbewahrung: Lead ohne Termin 12 Monate, Chat-Anhänge 90 Tage, Konversationen 24 Monate anonymisieren, Audit-Log 36 Monate | konfigurierbar je Mandant |
 | C8 | Keine Custom Audiences aus Kontaktlisten | Zugehörigkeit zu einer ästhetischen Praxis ist selbst ein Gesundheitsdatum |
+| C9 | **Regel 2 trennt Angebot von Person** (17.09.2026) | Der Werbetext einer Anzeige darf die beworbene Leistung benennen — sonst gäbe es keine Anzeige. Verboten bleibt jedes Feld, das an einer Person, einem Ereignis, einer Zielgruppe oder einer Konversion hängt: Conversions API, Pixel-Parameter, Custom Audiences. Kampagnen-, Anzeigengruppen- und Anzeigennamen bleiben ebenfalls neutral, weil sie unverschlüsselt liegen und als `attribution_snapshot` am Termin einfrieren (D13) |
+| C10 | **Erzeugte Anzeigenbilder liegen bei uns, nicht beim Generator** (17.09.2026) | Erzeugen bei kie.ai, herunterladen, in den eigenen Bucket, beim Anbieter löschen. Ein Anzeigenbild muss Jahre später noch belegbar sein — für die HWG-Prüfung, für eine Beanstandung, für den Kunden. Eine fremde CDN-Adresse, die irgendwann 404 liefert, wäre der Beleg, den es nicht mehr gibt. Hinein geht ausschließlich Material der Praxis, niemals Patientenmaterial |
 
 ## Betrieb
 
@@ -111,3 +116,7 @@ Diese Liste ist verbindlich. Sie wird nicht diskutiert, sondern befolgt. Begrün
 | B6 | Konfliktregel Kalender: externer Kalender gewinnt bei Blockern, System gewinnt bei Terminen | |
 | B7 | Nutzungserfassung beim Versand jeder kostenpflichtigen Nachricht, nicht nachgelagert | sonst Abweichung zur Meta-Abrechnung |
 | B8 | WhatsApp-Kosten nicht unbegrenzt im Abo | ab 01.10.2026 berechnet Meta auch Service-Nachrichten und Utility-Templates im offenen Fenster |
+| B9 | **Stripe Billing**, wir bleiben Verkäufer (17.09.2026) | SEPA-Lastschrift ist in Deutschland Pflichtprogramm; Rechnungstext und Mahnwesen bleiben bei uns. Kein Cashier, sondern ein dünner eigener Client — wie bei Meta, Anthropic und den Kalendern |
+| B10 | **Eine Abo-Stufe je Praxis**, Kontingente inklusive, Aufstockung kostenpflichtig (17.09.2026) | Stufen, die Funktionen sperren, machen aus jedem Verkaufsgespräch eine Funktionsdiskussion. Eine Stufe erklärt sich in einem Satz |
+| B11 | **Die Praxis sieht Mengen, nicht Cent** (17.09.2026) | Gezählt wird in Zehntel-Cent, angezeigt in Nachrichten und Assistenzläufen. Eine Rechnung, die jede WhatsApp-Nachricht einzeln aufführt, ist lang, schwankt stark und lädt zu Diskussionen ein, die niemand gewinnt |
+| B12 | **Begrenzt wird, was Geld kostet** (17.09.2026) | Eine Antwort im offenen Service-Fenster ist kostenlos und wird nie gesperrt. Ein Template außerhalb kostet und zählt gegen das Kontingent — eine Praxis darf nie daran gehindert werden, einer Patientin zu antworten |

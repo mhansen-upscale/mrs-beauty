@@ -136,6 +136,11 @@ Eigenmarkierte Events (R1) werden beim Rücksync ignoriert und erzeugen
 **keinen** Blocker. Ohne diese Regel blockiert das System seine eigenen
 Termine.
 
+Ein Blocker greift nur auf **freie** Zeilen. Über einem Termin entsteht keiner
+(R3), und über einem gültigen Hold auch nicht: beide Spalten gleichzeitig zu
+setzen bräche die Zusage der Tabelle, dass genau eine der drei gefüllt ist. Der
+Blocker greift, sobald der Hold abgelaufen ist (WP-14).
+
 ## Schnittstelle nach außen
 
 Die Engine liefert Slots, sie entscheidet nicht über Sichtbarkeit. Wer welche
@@ -180,7 +185,9 @@ Slots sehen darf, ist Sache der aufrufenden Stelle:
 17. Zwei Buchungen mit überlappenden, aber nicht identischen Strecken
     erzeugen keinen Deadlock.
 
-**Kalender**
+**Kalender** — 18 in WP-10, 19 und 20 in WP-14 umgesetzt
+(`tests/Feature/Kalender/RueckabgleichTest.php` und
+`tests/Feature/Kalender/AusgangsabgleichTest.php`).
 18. Ein externer Blocker macht den Slot unbuchbar.
 19. Ein eigenmarkiertes Event erzeugt keinen Blocker.
 20. Ein extern gelöschter Termin bleibt im System bestehen (R3).

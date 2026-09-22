@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\CancellationReason;
+use App\Enums\LeadSource;
 use App\Enums\Role;
 use App\Models\Appointment;
 use App\Models\Contact;
@@ -150,6 +151,7 @@ it('bucht ueber die Oberflaeche und legt den Kontakt dabei an', function (): voi
             'first_name' => 'Annika',
             'last_name' => 'Mueller',
             'email' => 'annika@example.test',
+            'quelle' => LeadSource::Phone->value,
         ])
         ->assertRedirect();
 
@@ -173,6 +175,7 @@ it('meldet einen belegten Zeitraum als Formularfehler', function (): void {
             'location' => $szenario->aufbau->standort->uuid,
             'blocked_from' => $vorschlag->blockedFrom->toIso8601String(),
             'contact' => $szenario->kontakt->uuid,
+            'quelle' => LeadSource::Phone->value,
         ])
         // Keine Ausnahmeseite: die Meldung gehoert ans Formularfeld.
         ->assertSessionHasErrors('blocked_from');

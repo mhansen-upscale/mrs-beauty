@@ -19,6 +19,7 @@ const props = defineProps<{
     timezone: string;
     proposals?: Vorschlag[];
     contacts?: Kontakt[];
+    quellen: { value: string; label: string }[];
 }>();
 
 const offen = ref(false);
@@ -35,6 +36,7 @@ const formular = useForm({
     last_name: '',
     email: '',
     phone: '',
+    quelle: '',
     uebersteuern: false as boolean,
 });
 
@@ -192,6 +194,24 @@ const absenden = () =>
                             </div>
                         </div>
                     </template>
+
+                    <!--
+                        Pflichtfeld: ein Teil der Anzeigen-Leads ruft an oder
+                        kommt vorbei. Ohne diese Angabe fehlen sie in der
+                        Auswertung, und der ROAS sieht schlechter aus, als er
+                        ist — die Praxis dreht dann eine Kampagne ab, die
+                        funktioniert.
+                    -->
+                    <div class="grid gap-1.5">
+                        <Label for="quelle">Wie kam dieser Termin zustande?</Label>
+                        <Select v-model="formular.quelle">
+                            <SelectTrigger id="quelle"><SelectValue placeholder="Wählen" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="q in quellen" :key="q.value" :value="q.value">{{ q.label }}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError :message="formular.errors.quelle" />
+                    </div>
                 </div>
 
                 <DialogFooter>

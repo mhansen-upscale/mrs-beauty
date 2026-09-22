@@ -144,7 +144,14 @@ const zeilenschluessel = (zeile: T): string => String(wert(zeile, props.schluess
                 <Input v-model="suche" :placeholder="suchtext" class="pl-8" />
             </div>
 
-            <slot name="werkzeuge" />
+            <!--
+                Rechts, und zwar auch dann, wenn die Tabelle keine Suche hat:
+                die Aktion gehoert an das Ende der Werkzeugzeile, nicht an
+                ihren Anfang.
+            -->
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                <slot name="werkzeuge" />
+            </div>
         </div>
 
         <div class="rounded-md border bg-card">
