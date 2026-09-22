@@ -36,7 +36,7 @@ const absenden = () => form.post(route('password.email'));
                 </div>
 
                 <div class="my-6">
-                    <Button class="w-full" :disabled="form.processing">
+                    <Button type="submit" class="w-full" :disabled="form.processing">
                         <LoaderCircle v-if="form.processing" class="animate-spin" />
                         <Mail v-else />
                         Link zum Zurücksetzen senden

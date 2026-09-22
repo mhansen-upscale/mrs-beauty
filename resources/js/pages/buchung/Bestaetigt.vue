@@ -52,17 +52,17 @@ defineProps<{
                 </div>
             </div>
 
-            <dl class="grid gap-x-6 gap-y-1 border-t pt-4 text-sm sm:grid-cols-[10rem_1fr]">
-                <dt class="text-muted-foreground">Leistung</dt>
+            <dl class="grid gap-x-6 gap-y-3 border-t pt-4 text-sm sm:grid-cols-[10rem_1fr] sm:gap-y-1">
+                <dt class="text-xs text-muted-foreground sm:text-sm">Leistung</dt>
                 <dd>{{ appointment.type_name }}</dd>
 
-                <dt class="text-muted-foreground">Termin</dt>
+                <dt class="text-xs text-muted-foreground sm:text-sm">Termin</dt>
                 <dd>{{ appointment.date }}, {{ appointment.starts_at }}–{{ appointment.ends_at }} Uhr</dd>
 
-                <dt class="text-muted-foreground">Bei</dt>
+                <dt class="text-xs text-muted-foreground sm:text-sm">Bei</dt>
                 <dd>{{ appointment.practitioner_name }}</dd>
 
-                <dt class="text-muted-foreground">Standort</dt>
+                <dt class="text-xs text-muted-foreground sm:text-sm">Standort</dt>
                 <dd>
                     {{ appointment.location_name }}
                     <span v-if="appointment.street" class="flex items-center gap-1 text-muted-foreground">

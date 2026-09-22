@@ -128,7 +128,28 @@ const symbol = (spalte: Spalte<T>) => {
     return sortierung.value.richtung === 'auf' ? ArrowUp : ArrowDown;
 };
 
-const spaltenzahl = computed(() => props.spalten.length + 1);
+const spaltenzahl = computed<number>(() => props.spalten.length + 1);
+
+/**
+ * Tailwind liest die Klassennamen aus dem Quelltext. Sie muessen deshalb
+ * ausgeschrieben dastehen -- `hidden ${bp}:table-cell` waere im Build nicht
+ * vorhanden.
+ */
+const sichtbarAb: Record<'sm' | 'md' | 'lg', string> = {
+    sm: 'hidden sm:table-cell',
+    md: 'hidden md:table-cell',
+    lg: 'hidden lg:table-cell',
+};
+
+const spaltenklasse = (spalte: Spalte<T>): string => [spalte.klasse, spalte.ab ? sichtbarAb[spalte.ab] : ''].filter(Boolean).join(' ');
+
+const sortierzustand = (spalte: Spalte<T>): 'ascending' | 'descending' | 'none' => {
+    if (sortierung.value.feld !== spalte.schluessel) {
+        return 'none';
+    }
+
+    return sortierung.value.richtung === 'auf' ? 'ascending' : 'descending';
+};
 
 /** Der Umweg über Record ist nötig: T ist generisch, der Schlüssel kommt aus einer Prop mit Vorgabewert. */
 const wert = (zeile: T, feld: string): unknown => (zeile as Record<string, unknown>)[feld];
@@ -139,7 +160,7 @@ const zeilenschluessel = (zeile: T): string => String(wert(zeile, props.schluess
 <template>
     <div class="space-y-3">
         <div v-if="suchfelder.length || $slots.werkzeuge" class="flex flex-wrap items-center gap-2">
-            <div v-if="suchfelder.length" class="relative max-w-xs flex-1">
+            <div v-if="suchfelder.length" class="relative w-full sm:max-w-xs sm:flex-1">
                 <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input v-model="suche" :placeholder="suchtext" class="pl-8" />
             </div>
@@ -149,20 +170,25 @@ const zeilenschluessel = (zeile: T): string => String(wert(zeile, props.schluess
                 die Aktion gehoert an das Ende der Werkzeugzeile, nicht an
                 ihren Anfang.
             -->
-            <div class="ml-auto flex flex-wrap items-center gap-2">
+            <div class="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
                 <slot name="werkzeuge" />
             </div>
         </div>
 
         <div class="rounded-md border bg-card">
-            <Table>
+            <Table class="min-w-[36rem]">
                 <TableHeader>
                     <TableRow class="hover:bg-transparent">
-                        <TableHead v-for="spalte in spalten" :key="spalte.schluessel" :class="spalte.klasse">
+                        <TableHead
+                            v-for="spalte in spalten"
+                            :key="spalte.schluessel"
+                            :class="spaltenklasse(spalte)"
+                            :aria-sort="spalte.sortierbar === false ? undefined : sortierzustand(spalte)"
+                        >
                             <button
                                 v-if="spalte.sortierbar !== false"
                                 type="button"
-                                class="-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 uppercase tracking-wide hover:text-foreground"
+                                class="-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 uppercase tracking-wide hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 @click="sortieren(spalte)"
                             >
                                 {{ spalte.titel }}
@@ -170,7 +196,7 @@ const zeilenschluessel = (zeile: T): string => String(wert(zeile, props.schluess
                             </button>
                             <span v-else>{{ spalte.titel }}</span>
                         </TableHead>
-                        <TableHead class="w-px text-right"><span class="sr-only">Aktionen</span></TableHead>
+                        <TableHead v-if="$slots.aktionen" class="w-px text-right"><span class="sr-only">Aktionen</span></TableHead>
                     </TableRow>
                 </TableHeader>
 
@@ -180,12 +206,12 @@ const zeilenschluessel = (zeile: T): string => String(wert(zeile, props.schluess
                     </TableEmpty>
 
                     <TableRow v-for="zeile in sichtbar" :key="zeilenschluessel(zeile)" class="even:bg-muted/40">
-                        <TableCell v-for="spalte in spalten" :key="spalte.schluessel" :class="spalte.klasse">
+                        <TableCell v-for="spalte in spalten" :key="spalte.schluessel" :class="spaltenklasse(spalte)">
                             <slot :name="`zelle-${spalte.schluessel}`" :zeile="zeile">
                                 {{ wert(zeile, spalte.schluessel) }}
                             </slot>
                         </TableCell>
-                        <TableCell class="text-right">
+                        <TableCell v-if="$slots.aktionen" class="text-right">
                             <div class="flex items-center justify-end gap-1">
                                 <slot name="aktionen" :zeile="zeile" />
                             </div>
@@ -195,7 +221,7 @@ const zeilenschluessel = (zeile: T): string => String(wert(zeile, props.schluess
             </Table>
         </div>
 
-        <div v-if="seiten > 1" class="flex items-center justify-between text-sm text-muted-foreground">
+        <div v-if="seiten > 1" class="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
             <span>{{ sortiert.length }} Einträge</span>
 
             <div class="flex items-center gap-2">

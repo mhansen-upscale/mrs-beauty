@@ -43,15 +43,15 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Datenschutz', href: '/daten
 const fristSpalten: Spalte<Policy>[] = [
     { schluessel: 'subject_label', titel: 'Gegenstand' },
     { schluessel: 'retention_days', titel: 'Frist (Tage)' },
-    { schluessel: 'action_label', titel: 'Vorgehen' },
+    { schluessel: 'action_label', titel: 'Vorgehen', ab: 'md' },
     { schluessel: 'faellig', titel: 'Jetzt fällig', klasse: 'text-right tabular-nums' },
 ];
 
 const vorgangSpalten: Spalte<RequestItem>[] = [
     { schluessel: 'type_label', titel: 'Verlangen' },
     { schluessel: 'status_label', titel: 'Stand' },
-    { schluessel: 'created_at', titel: 'Eingegangen' },
-    { schluessel: 'result', titel: 'Umfang', sortierbar: false },
+    { schluessel: 'created_at', titel: 'Eingegangen', ab: 'md' },
+    { schluessel: 'result', titel: 'Umfang', sortierbar: false, ab: 'lg' },
 ];
 
 const entwurf = ref<Record<string, { retention_days: number; action: string; is_active: boolean }>>(

@@ -27,9 +27,9 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Protokoll', href: '/protoko
 const spalten: Spalte<Entry>[] = [
     { schluessel: 'occurred_at', titel: 'Zeitpunkt' },
     { schluessel: 'label', titel: 'Vorgang' },
-    { schluessel: 'subject', titel: 'Datensatz' },
-    { schluessel: 'actor', titel: 'Wer' },
-    { schluessel: 'fields', titel: 'Felder', sortierbar: false },
+    { schluessel: 'subject', titel: 'Datensatz', ab: 'md' },
+    { schluessel: 'actor', titel: 'Wer', ab: 'lg' },
+    { schluessel: 'fields', titel: 'Felder', sortierbar: false, ab: 'lg' },
 ];
 
 const zeitpunkt = (iso: string): string =>

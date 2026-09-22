@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import FormularDialog from '@/components/FormularDialog.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
@@ -171,8 +171,7 @@ const modusUmstellen = (modus: string) => {
 const sicherheitText = (wert: number | null): string => (wert === null ? '' : `${Math.round(wert * 100)} %`);
 
 const agentFortsetzen = () =>
-    props.conversation &&
-    router.post(route('inbox.agent.fortsetzen', { conversation: props.conversation.uuid }), {}, { preserveScroll: true });
+    props.conversation && router.post(route('inbox.agent.fortsetzen', { conversation: props.conversation.uuid }), {}, { preserveScroll: true });
 
 const senden = () => {
     if (!props.conversation) return;
@@ -214,8 +213,10 @@ const vorschau = computed(() => {
 
 /* Zustand und Zuordnung ---------------------------------------------------- */
 
-const schliessen = () => props.conversation && router.post(route('inbox.close', { conversation: props.conversation.uuid }), {}, { preserveScroll: true });
-const wiederOeffnen = () => props.conversation && router.post(route('inbox.reopen', { conversation: props.conversation.uuid }), {}, { preserveScroll: true });
+const schliessen = () =>
+    props.conversation && router.post(route('inbox.close', { conversation: props.conversation.uuid }), {}, { preserveScroll: true });
+const wiederOeffnen = () =>
+    props.conversation && router.post(route('inbox.reopen', { conversation: props.conversation.uuid }), {}, { preserveScroll: true });
 
 const zuordnenOffen = ref(false);
 const kontaktbegriff = ref('');
@@ -264,8 +265,8 @@ const zuordnen = (kontakt: string) => {
                     Zurück-Knopf wieder hierher.
                 -->
                 <div :class="['flex flex-col gap-3', ausgewaehlt ? 'hidden lg:flex' : 'flex']">
-                    <div class="flex gap-2">
-                        <div class="relative flex-1">
+                    <div class="flex flex-wrap gap-2">
+                        <div class="relative min-w-0 flex-1 basis-full sm:basis-auto">
                             <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                             <Input v-model="suche" placeholder="Name, E-Mail, Nummer" class="pl-9" />
                         </div>
@@ -274,7 +275,7 @@ const zuordnen = (kontakt: string) => {
                             :model-value="filter.kanal ?? 'alle'"
                             @update:model-value="(wert) => besuche({ kanal: wert === 'alle' ? null : String(wert), gespraech: null })"
                         >
-                            <SelectTrigger class="w-32"><SelectValue /></SelectTrigger>
+                            <SelectTrigger class="w-full sm:w-32"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="alle">Alle Kanäle</SelectItem>
                                 <SelectItem v-for="kanal in channels" :key="kanal.value" :value="kanal.value">{{ kanal.label }}</SelectItem>
@@ -325,35 +326,30 @@ const zuordnen = (kontakt: string) => {
                             >
                                 <span class="flex items-center gap-2">
                                     <component :is="symbol(eintrag.channel)" class="size-4 shrink-0 text-muted-foreground" />
-                                    <span :class="['flex-1 truncate', eintrag.ungelesen ? 'font-semibold' : '']">{{ eintrag.name }}</span>
+                                    <span :class="['min-w-0 flex-1 truncate', eintrag.ungelesen ? 'font-semibold' : '']">{{ eintrag.name }}</span>
                                     <span v-if="eintrag.ungelesen" class="size-2 shrink-0 rounded-full bg-primary"></span>
                                 </span>
                                 <span class="flex items-center gap-2 text-xs text-muted-foreground">
                                     <span>{{ zeitpunkt(eintrag.letzteAktivitaet) }}</span>
-                                    <Badge v-if="!eintrag.bekannt" variant="secondary" class="text-[0.65rem]">Unbekannt</Badge>
+                                    <Badge v-if="!eintrag.bekannt" variant="secondary" groesse="klein">Unbekannt</Badge>
                                 </span>
                             </button>
                         </li>
 
-                        <li v-if="!conversations.length" class="px-3 py-6 text-center text-sm text-muted-foreground">
-                            Nichts gefunden.
-                        </li>
+                        <li v-if="!conversations.length" class="px-3 py-6 text-center text-sm text-muted-foreground">Nichts gefunden.</li>
                     </ul>
                 </div>
 
                 <!-- Verlauf ------------------------------------------------ -->
-                <div
-                    v-if="conversation"
-                    :class="['min-h-[60vh] flex-col rounded-md border', ausgewaehlt ? 'flex' : 'hidden lg:flex']"
-                >
+                <div v-if="conversation" :class="['min-h-[60vh] flex-col rounded-md border', ausgewaehlt ? 'flex' : 'hidden lg:flex']">
                     <div class="flex flex-wrap items-center gap-3 border-b px-4 py-3">
-                        <Button variant="ghost" size="icon" class="lg:hidden" @click="besuche({ gespraech: null })">
+                        <Button variant="ghost" size="icon" class="lg:hidden" aria-label="Zurück zur Liste" @click="besuche({ gespraech: null })">
                             <ArrowLeft />
                         </Button>
 
-                        <div class="flex-1">
-                            <p class="font-medium">{{ conversation.kontakt?.name ?? conversation.anzeigename ?? conversation.kennung }}</p>
-                            <p class="text-xs text-muted-foreground">{{ conversation.channelLabel }} · {{ conversation.kennung }}</p>
+                        <div class="min-w-0 flex-1 basis-40">
+                            <p class="truncate font-medium">{{ conversation.kontakt?.name ?? conversation.anzeigename ?? conversation.kennung }}</p>
+                            <p class="truncate text-xs text-muted-foreground">{{ conversation.channelLabel }} · {{ conversation.kennung }}</p>
                         </div>
 
                         <Badge v-if="conversation.agent.absichtLabel" variant="info">
@@ -365,7 +361,7 @@ const zuordnen = (kontakt: string) => {
 
                         <Badge v-if="conversation.anfrage" variant="secondary">Anfrage: {{ conversation.anfrage.statusLabel }}</Badge>
 
-                        <Button v-if="darfZuordnen && !conversation.kontakt" variant="outline" size="sm" @click="zuordnenOffen = true">
+                        <Button v-if="darfZuordnen && !conversation.kontakt" variant="outline" @click="zuordnenOffen = true">
                             <UserPlus />
                             Zuordnen
                         </Button>
@@ -375,7 +371,7 @@ const zuordnen = (kontakt: string) => {
                             :model-value="conversation.agent.modus"
                             @update:model-value="(wert) => modusUmstellen(String(wert))"
                         >
-                            <SelectTrigger class="w-36"><SelectValue /></SelectTrigger>
+                            <SelectTrigger class="w-full sm:w-36"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="off">Assistent aus</SelectItem>
                                 <SelectItem value="suggest">Vorschlagen</SelectItem>
@@ -383,10 +379,8 @@ const zuordnen = (kontakt: string) => {
                             </SelectContent>
                         </Select>
 
-                        <Button v-if="darfAntworten && conversation.status === 'open'" variant="ghost" size="sm" @click="schliessen">
-                            Erledigt
-                        </Button>
-                        <Button v-else-if="darfAntworten" variant="ghost" size="sm" @click="wiederOeffnen">Wieder öffnen</Button>
+                        <Button v-if="darfAntworten && conversation.status === 'open'" variant="ghost" @click="schliessen">Erledigt</Button>
+                        <Button v-else-if="darfAntworten" variant="ghost" @click="wiederOeffnen">Wieder öffnen</Button>
                     </div>
 
                     <!-- Nachrichten -->
@@ -396,12 +390,7 @@ const zuordnen = (kontakt: string) => {
                             :key="nachricht.uuid"
                             :class="['flex', nachricht.eingehend ? 'justify-start' : 'justify-end']"
                         >
-                            <div
-                                :class="[
-                                    'max-w-[85%] space-y-1 rounded-lg px-3 py-2 text-sm',
-                                    nachricht.eingehend ? 'bg-muted' : 'bg-primary/10',
-                                ]"
-                            >
+                            <div :class="['max-w-[85%] space-y-1 rounded-lg px-3 py-2 text-sm', nachricht.eingehend ? 'bg-muted' : 'bg-primary/10']">
                                 <p v-if="nachricht.betreff" class="text-xs font-medium text-muted-foreground">{{ nachricht.betreff }}</p>
 
                                 <!--
@@ -412,7 +401,11 @@ const zuordnen = (kontakt: string) => {
                                 <p v-if="nachricht.inhalt" class="whitespace-pre-wrap break-words">{{ nachricht.inhalt }}</p>
                                 <p v-else-if="nachricht.medientyp" class="italic text-muted-foreground">{{ nachricht.medientyp }}</p>
 
-                                <p v-for="anhang in nachricht.anhaenge" :key="anhang.uuid" class="flex items-center gap-1 text-xs text-muted-foreground">
+                                <p
+                                    v-for="anhang in nachricht.anhaenge"
+                                    :key="anhang.uuid"
+                                    class="flex items-center gap-1 text-xs text-muted-foreground"
+                                >
                                     <Paperclip class="size-3" />
                                     {{ anhang.name }}
                                 </p>
@@ -483,18 +476,12 @@ const zuordnen = (kontakt: string) => {
                                 </span>
                             </p>
 
-                            <p v-if="conversation.agent.pausiertBis" class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                Der Assistent bleibt in diesem Gespräch stumm.
-                                <Button
-                                    v-if="conversation.agent.darfSchalten"
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    @click="agentFortsetzen"
-                                >
+                            <div v-if="conversation.agent.pausiertBis" class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span>Der Assistent bleibt in diesem Gespräch stumm.</span>
+                                <Button v-if="conversation.agent.darfSchalten" type="button" size="sm" variant="outline" @click="agentFortsetzen">
                                     Wieder zulassen
                                 </Button>
-                            </p>
+                            </div>
                         </div>
 
                         <p v-else-if="conversation.agent.fehler === 'no_model'" class="text-xs text-muted-foreground">
@@ -524,7 +511,7 @@ const zuordnen = (kontakt: string) => {
                                         @click="templateOeffnen(vorlage)"
                                     >
                                         {{ vorlage.name }}
-                                        <Badge :variant="vorlage.kostet ? 'warning' : 'secondary'" class="ml-2 text-[0.65rem]">
+                                        <Badge :variant="vorlage.kostet ? 'warning' : 'secondary'" groesse="klein" class="ml-2">
                                             {{ vorlage.kategorie }}
                                         </Badge>
                                     </Button>

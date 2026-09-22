@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { LoaderCircle } from 'lucide-vue-next';
+import { KeyRound, LoaderCircle } from 'lucide-vue-next';
 
 const props = defineProps<{
     token: string;
@@ -56,8 +56,9 @@ const annehmen = () => {
                     <InputError :message="form.errors.password_confirmation" />
                 </div>
 
-                <Button type="submit" class="mt-2 w-full" :disabled="form.processing">
-                    <LoaderCircle v-if="form.processing" class="h-4 w-4 animate-spin" />
+                <Button type="submit" class="mt-4 w-full" :disabled="form.processing">
+                    <LoaderCircle v-if="form.processing" class="animate-spin" />
+                    <KeyRound v-else />
                     Zugang einrichten
                 </Button>
             </div>

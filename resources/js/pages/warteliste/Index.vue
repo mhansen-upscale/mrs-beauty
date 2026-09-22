@@ -59,9 +59,9 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Warteliste', href: '/warteliste
 const spalten: Spalte<Eintrag>[] = [
     { schluessel: 'name', titel: 'Wer' },
     { schluessel: 'behandlung', titel: 'Wofür' },
-    { schluessel: 'vorlauf', titel: 'Vorlauf', klasse: 'text-right tabular-nums' },
-    { schluessel: 'wochentage', titel: 'Wann', sortierbar: false },
-    { schluessel: 'prioritaet', titel: 'Rang', klasse: 'text-right tabular-nums' },
+    { schluessel: 'vorlauf', titel: 'Vorlauf', klasse: 'text-right tabular-nums', ab: 'lg' },
+    { schluessel: 'wochentage', titel: 'Wann', sortierbar: false, ab: 'lg' },
+    { schluessel: 'prioritaet', titel: 'Rang', klasse: 'text-right tabular-nums', ab: 'md' },
     { schluessel: 'status', titel: 'Status' },
 ];
 
@@ -111,9 +111,7 @@ const tagUmschalten = (stelle: number) => {
 };
 
 const standortUmschalten = (uuid: string) => {
-    formular.locations = formular.locations.includes(uuid)
-        ? formular.locations.filter((eintrag) => eintrag !== uuid)
-        : [...formular.locations, uuid];
+    formular.locations = formular.locations.includes(uuid) ? formular.locations.filter((eintrag) => eintrag !== uuid) : [...formular.locations, uuid];
 };
 
 const fensterHinzu = () => formular.time_windows.push({ von: '09:00', bis: '18:00' });
@@ -137,8 +135,7 @@ const rangErhoehen = (eintrag: Eintrag) =>
 
 const entfernen = (eintrag: Eintrag) => router.delete(route('waitlist.destroy', { entry: eintrag.uuid }), { preserveScroll: true });
 
-const zeitpunkt = (iso: string | null): string =>
-    iso ? new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '';
+const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '');
 </script>
 
 <template>
@@ -152,7 +149,7 @@ const zeitpunkt = (iso: string | null): string =>
             />
 
             <!-- Kennzahlen: das Verkaufsargument gehört ins Produkt. -->
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <div class="rounded-md border p-4">
                     <p class="text-xs text-muted-foreground">Angebote diesen Monat</p>
                     <p class="text-2xl font-semibold tabular-nums">{{ metrics.angebote }}</p>
@@ -190,7 +187,7 @@ const zeitpunkt = (iso: string | null): string =>
                     <span class="flex items-center gap-2">
                         <span class="font-medium">{{ zeile.name }}</span>
                         <!-- K11 sichtbar: ohne Einwilligung geht nichts hinaus. -->
-                        <Badge v-if="!zeile.erreichbar" variant="warning" class="text-[0.65rem]">
+                        <Badge v-if="!zeile.erreichbar" variant="warning" groesse="klein">
                             <AlertTriangle />
                             Keine Einwilligung
                         </Badge>
@@ -202,9 +199,7 @@ const zeitpunkt = (iso: string | null): string =>
                 <template #zelle-wochentage="{ zeile }">
                     <span class="text-xs text-muted-foreground">
                         {{ tageText(zeile.wochentage) }}
-                        <template v-if="zeile.zeitfenster.length">
-                            · {{ zeile.zeitfenster.map((f) => `${f.von}–${f.bis}`).join(', ') }}
-                        </template>
+                        <template v-if="zeile.zeitfenster.length"> · {{ zeile.zeitfenster.map((f) => `${f.von}–${f.bis}`).join(', ') }} </template>
                         <template v-if="!zeile.alleStandorte"> · {{ zeile.standorte.join(', ') }}</template>
                     </span>
                 </template>
@@ -230,7 +225,7 @@ const zeitpunkt = (iso: string | null): string =>
                         <span class="font-medium">{{ angebot.name }}</span>
                         <span class="text-muted-foreground">{{ zeitpunkt(angebot.beginn) }}</span>
                         <Badge variant="secondary">{{ angebot.ausloeser }}</Badge>
-                        <Badge class="ml-auto" :variant="angebot.status === 'accepted' ? 'success' : 'secondary'">
+                        <Badge class="sm:ml-auto" :variant="angebot.status === 'accepted' ? 'success' : 'secondary'">
                             {{ angebot.statusLabel }}
                         </Badge>
                     </li>
@@ -253,7 +248,9 @@ const zeitpunkt = (iso: string | null): string =>
             <div class="grid gap-2">
                 <Label for="kontakt">Wer wartet?</Label>
                 <Input id="kontakt" v-model="kontaktbegriff" placeholder="Nachname, E-Mail oder Nummer" />
-                <p v-if="formular.contactName" class="text-sm">Gewählt: <strong>{{ formular.contactName }}</strong></p>
+                <p v-if="formular.contactName" class="text-sm">
+                    Gewählt: <strong>{{ formular.contactName }}</strong>
+                </p>
                 <ul v-else-if="kontaktsuche.length" class="divide-y rounded-md border">
                     <li v-for="treffer in kontaktsuche" :key="treffer.uuid" class="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                         <span>{{ treffer.name }}</span>
@@ -297,13 +294,13 @@ const zeitpunkt = (iso: string | null): string =>
 
             <div class="grid gap-2">
                 <Label>Zeitfenster</Label>
-                <div v-for="(fenster, stelle) in formular.time_windows" :key="stelle" class="flex items-center gap-2">
-                    <Input v-model="fenster.von" type="time" class="max-w-32" />
+                <div v-for="(fenster, stelle) in formular.time_windows" :key="stelle" class="flex flex-wrap items-center gap-2">
+                    <Input v-model="fenster.von" type="time" class="w-28 shrink-0" />
                     <span class="text-muted-foreground">bis</span>
-                    <Input v-model="fenster.bis" type="time" class="max-w-32" />
-                    <Button type="button" variant="ghost" size="sm" @click="formular.time_windows.splice(stelle, 1)">Entfernen</Button>
+                    <Input v-model="fenster.bis" type="time" class="w-28 shrink-0" />
+                    <Button type="button" variant="ghost" @click="formular.time_windows.splice(stelle, 1)">Entfernen</Button>
                 </div>
-                <Button type="button" variant="outline" size="sm" class="w-fit" @click="fensterHinzu">Zeitfenster hinzufügen</Button>
+                <Button type="button" variant="outline" class="w-fit" @click="fensterHinzu">Zeitfenster hinzufügen</Button>
                 <p class="text-xs text-muted-foreground">Ohne Angabe passt jede Uhrzeit.</p>
             </div>
 
@@ -318,7 +315,7 @@ const zeitpunkt = (iso: string | null): string =>
                 <p class="text-xs text-muted-foreground">Nichts angehakt heißt: jeder Standort ist recht.</p>
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-3">
+            <div class="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div class="grid gap-2">
                     <Label for="von">Frühestens</Label>
                     <Input id="von" v-model="formular.earliest_date" type="date" />

@@ -50,9 +50,9 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Standorte', href: '/standor
 
 const spalten: Spalte<LocationItem>[] = [
     { schluessel: 'name', titel: 'Name' },
-    { schluessel: 'timezone', titel: 'Zeitzone' },
+    { schluessel: 'timezone', titel: 'Zeitzone', ab: 'lg' },
     { schluessel: 'city', titel: 'Ort' },
-    { schluessel: 'practitioners', titel: 'Behandler', klasse: 'text-right tabular-nums' },
+    { schluessel: 'practitioners', titel: 'Behandler', klasse: 'text-right tabular-nums', ab: 'md' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
 
@@ -156,7 +156,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
         <div class="space-y-6 p-4">
             <Heading title="Standorte" description="Eine Praxisgruppe ist ein Mandant mit mehreren Standorten — jeder mit eigener Zeitzone." />
 
-            <DataTable :spalten="spalten" :zeilen="locations" :suchfelder="['name', 'city', 'timezone']" suchtext="Name oder Ort">
+            <DataTable :spalten="spalten" :zeilen="locations" :suchfelder="['name', 'city', 'postal_code']" suchtext="Name, Ort oder PLZ">
                 <template #werkzeuge>
                     <Button @click="anlegenOeffnen">
                         <Plus />
@@ -274,7 +274,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 <li v-for="eintrag in schliesszeiten()" :key="eintrag.uuid" class="flex items-center gap-3 p-2 text-sm">
                     <Badge variant="secondary">{{ eintrag.reason_label }}</Badge>
                     <span class="text-muted-foreground">{{ datum(eintrag.starts_at) }} – {{ datum(eintrag.ends_at) }}</span>
-                    <span v-if="eintrag.note" class="truncate text-muted-foreground">{{ eintrag.note }}</span>
+                    <span v-if="eintrag.note" class="min-w-0 truncate text-muted-foreground">{{ eintrag.note }}</span>
                     <AktionsButton :icon="Trash2" beschriftung="Entfernen" variant="ghost" class="ml-auto" @click="schliesszeitLoeschen(eintrag)" />
                 </li>
             </ul>

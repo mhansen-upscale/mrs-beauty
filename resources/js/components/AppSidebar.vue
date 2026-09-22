@@ -11,19 +11,19 @@ import {
     ClipboardList,
     Contact,
     Inbox,
+    LayoutGrid,
     ListChecks,
+    MapPin,
     Megaphone,
+    MessagesSquare,
     Palette,
     Scale,
-    Sparkles,
-    TrendingUp,
-    MessagesSquare,
-    LayoutGrid,
-    MapPin,
     ScrollText,
     ShieldCheck,
+    Sparkles,
     Stethoscope,
     Syringe,
+    TrendingUp,
     Users,
 } from 'lucide-vue-next';
 import { computed } from 'vue';
@@ -161,5 +161,4 @@ const gruppen = computed<NavGroup[]>(() =>
             <NavUser />
         </SidebarFooter>
     </Sidebar>
-    <slot />
 </template>

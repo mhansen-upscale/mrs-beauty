@@ -15,7 +15,7 @@ const organisation = computed(() => page.props.organization?.name ?? null);
         <AppLogoIcon class="size-5" />
     </div>
     <div class="ml-1 grid flex-1 text-left text-sm">
-        <span class="truncate font-semibold leading-none">Mrs. Beauty</span>
-        <span v-if="organisation" class="truncate text-xs text-muted-foreground">{{ organisation }}</span>
+        <span class="min-w-0 truncate font-semibold leading-none">Mrs. Beauty</span>
+        <span v-if="organisation" class="min-w-0 truncate text-xs text-muted-foreground">{{ organisation }}</span>
     </div>
 </template>

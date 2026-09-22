@@ -28,7 +28,9 @@ const emits = defineEmits<{
     'update:open': [open: boolean];
 }>();
 
-const isMobile = useMediaQuery('(max-width: 768px)');
+// 767, nicht 768: Tailwinds md: greift ab min-width 768px. Bei genau
+// 768px waeren sonst beide Fassungen gleichzeitig zustaendig.
+const isMobile = useMediaQuery('(max-width: 767px)');
 const openMobile = ref(false);
 
 const open = useVModel(props, 'open', emits, {

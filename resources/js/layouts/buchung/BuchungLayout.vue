@@ -103,8 +103,7 @@ const pixel = () => {
 
 onMounted(pixel);
 
-const entscheiden = (ja: boolean) =>
-    router.post(route('buchung.einwilligung', { praxis: props.practice.slug }), { ja }, { preserveScroll: true });
+const entscheiden = (ja: boolean) => router.post(route('buchung.einwilligung', { praxis: props.practice.slug }), { ja }, { preserveScroll: true });
 </script>
 
 <template>
@@ -119,7 +118,7 @@ const entscheiden = (ja: boolean) =>
                     Fehler aus.
                 -->
                 <img v-if="logoUrl" :src="logoUrl" :alt="practice.name" class="h-8 max-w-48 object-contain object-left" />
-                <span v-else class="truncate text-base font-semibold tracking-tight sm:text-lg">{{ practice.name }}</span>
+                <span v-else class="min-w-0 truncate text-base font-semibold tracking-tight sm:text-lg">{{ practice.name }}</span>
                 <span class="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">Online-Termin</span>
             </div>
         </header>
@@ -139,9 +138,7 @@ const entscheiden = (ja: boolean) =>
 
             <p v-if="imprintUrl || privacyUrl" class="flex flex-wrap gap-4">
                 <a v-if="imprintUrl" :href="imprintUrl" target="_blank" rel="noopener" class="underline underline-offset-2">Impressum</a>
-                <a v-if="privacyUrl" :href="privacyUrl" target="_blank" rel="noopener" class="underline underline-offset-2">
-                    Datenschutzerklärung
-                </a>
+                <a v-if="privacyUrl" :href="privacyUrl" target="_blank" rel="noopener" class="underline underline-offset-2"> Datenschutzerklärung </a>
             </p>
         </footer>
 
@@ -156,8 +153,8 @@ const entscheiden = (ja: boolean) =>
         <div v-if="messung === null || messung === undefined" class="sticky bottom-0 z-20 px-4 pb-4">
             <div class="mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-md border bg-background p-4 text-sm shadow-lg">
                 <p class="min-w-56 flex-1 text-muted-foreground">
-                    Dürfen wir messen, über welche Anzeige Sie hergefunden haben? Das hilft dieser Praxis, ihre Werbung einzuschätzen.
-                    Ihre Terminbuchung funktioniert auch ohne.
+                    Dürfen wir messen, über welche Anzeige Sie hergefunden haben? Das hilft dieser Praxis, ihre Werbung einzuschätzen. Ihre
+                    Terminbuchung funktioniert auch ohne.
                 </p>
                 <div class="flex gap-2">
                     <Button type="button" variant="ghost" size="sm" @click="entscheiden(false)">Nein danke</Button>

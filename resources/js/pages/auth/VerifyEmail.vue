@@ -23,7 +23,7 @@ const erneutSenden = () => form.post(route('verification.send'));
         </div>
 
         <form class="space-y-6 text-center" @submit.prevent="erneutSenden">
-            <Button variant="secondary" :disabled="form.processing">
+            <Button type="submit" class="w-full" :disabled="form.processing">
                 <LoaderCircle v-if="form.processing" class="animate-spin" />
                 <Mail v-else />
                 Bestätigungsmail erneut senden

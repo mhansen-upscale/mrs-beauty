@@ -75,7 +75,7 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 <Badge :variant="mandant.abo === 'active' ? 'success' : 'secondary'">{{ mandant.aboLabel }}</Badge>
                 <span v-if="mandant.periodeEndet" class="text-sm text-muted-foreground">Periode bis {{ datum(mandant.periodeEndet) }}</span>
 
-                <div class="ml-auto flex gap-2">
+                <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
                     <Button type="button" variant="outline" @click="gutschriftOffen = true">Kontingent gutschreiben</Button>
                     <Button type="button" :variant="mandant.gesperrt ? 'outline' : 'destructive'" @click="sperrenOffen = true">
                         {{ mandant.gesperrt ? 'Entsperren' : 'Sperren' }}
@@ -83,7 +83,7 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 </div>
             </div>
 
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div class="rounded-md border p-4">
                     <p class="text-xs text-muted-foreground">Zugänge</p>
                     <p class="text-2xl font-semibold tabular-nums">{{ mandant.benutzer }}</p>

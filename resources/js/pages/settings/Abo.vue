@@ -53,7 +53,10 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
         <SettingsLayout>
             <div class="space-y-10">
                 <div class="space-y-4">
-                    <HeadingSmall title="Ihr Abo" description="Ein Preis je Praxis, mit enthaltenen Mengen. Was darüber hinausgeht, stocken Sie auf." />
+                    <HeadingSmall
+                        title="Ihr Abo"
+                        description="Ein Preis je Praxis, mit enthaltenen Mengen. Was darüber hinausgeht, stocken Sie auf."
+                    />
 
                     <div class="flex flex-wrap items-center gap-3">
                         <Badge :variant="status === 'active' ? 'success' : status === 'canceled' ? 'destructive' : 'secondary'">
@@ -63,12 +66,13 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                         <span v-if="testphase && testphaseEndet" class="text-sm text-muted-foreground">
                             Testphase bis {{ datum(testphaseEndet) }}
                         </span>
-                        <span v-else-if="periodeEndet" class="text-sm text-muted-foreground">
-                            Laufende Periode bis {{ datum(periodeEndet) }}
-                        </span>
+                        <span v-else-if="periodeEndet" class="text-sm text-muted-foreground"> Laufende Periode bis {{ datum(periodeEndet) }} </span>
                     </div>
 
-                    <p v-if="status === 'past_due'" class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+                    <p
+                        v-if="status === 'past_due'"
+                        class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"
+                    >
                         <AlertTriangle class="mt-0.5 size-4 shrink-0" />
                         Die letzte Zahlung ist offen. Ihre Praxis arbeitet weiter — bitte prüfen Sie die Zahlungsart, bevor es eng wird.
                     </p>
@@ -88,7 +92,10 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
 
                 <!-- Mengen, nicht Cent (Entscheidung B11). -->
                 <div class="space-y-4">
-                    <HeadingSmall :title="`Verbrauch · ${monat}`" description="Gezählt wird, was Geld kostet. Antworten im offenen Fenster sind frei." />
+                    <HeadingSmall
+                        :title="`Verbrauch · ${monat}`"
+                        description="Gezählt wird, was Geld kostet. Antworten im offenen Fenster sind frei."
+                    />
 
                     <div class="space-y-4">
                         <div class="space-y-1">
@@ -130,9 +137,7 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                         <div class="space-y-1">
                             <div class="flex items-baseline justify-between text-sm">
                                 <span>Anzeigenbilder</span>
-                                <span class="tabular-nums text-muted-foreground">
-                                    {{ verbrauch.bilder }} von {{ enthalten.bilder }}
-                                </span>
+                                <span class="tabular-nums text-muted-foreground"> {{ verbrauch.bilder }} von {{ enthalten.bilder }} </span>
                             </div>
                             <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
                                 <div
@@ -140,9 +145,7 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                                     :style="{ width: `${anteil(verbrauch.bilder, enthalten.bilder)}%` }"
                                 ></div>
                             </div>
-                            <p v-if="aufgestockt.bilder > 0" class="text-xs text-muted-foreground">
-                                Davon {{ aufgestockt.bilder }} nachgekauft.
-                            </p>
+                            <p v-if="aufgestockt.bilder > 0" class="text-xs text-muted-foreground">Davon {{ aufgestockt.bilder }} nachgekauft.</p>
                         </div>
                     </div>
 
@@ -160,11 +163,9 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                         <Button type="button" variant="outline" @click="zurKasse('nachrichten')">Nachrichten aufstocken</Button>
                         <Button type="button" variant="outline" @click="zurKasse('agentenlaeufe')">Assistenzläufe aufstocken</Button>
 
-                        <div class="flex items-center gap-2">
-                            <Input v-model="bildmenge" type="number" min="1" max="100" class="w-20" />
-                            <Button type="button" variant="outline" @click="zurKasse('bilder', Number(bildmenge))">
-                                Bilder nachkaufen
-                            </Button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <Input v-model="bildmenge" type="number" min="1" max="100" class="w-20 shrink-0" />
+                            <Button type="button" variant="outline" @click="zurKasse('bilder', Number(bildmenge))"> Bilder nachkaufen </Button>
                             <span class="text-xs text-muted-foreground">
                                 je {{ euro(bildpreisCent) }} — macht {{ euro(bildpreisCent * Number(bildmenge || 1)) }}
                             </span>

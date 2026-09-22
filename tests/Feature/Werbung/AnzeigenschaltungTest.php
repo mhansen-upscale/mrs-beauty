@@ -218,6 +218,37 @@ it('laesst eine Anzeige bei fehlender Berechtigung offen', function (): void {
         ->and($frisch?->sync_error)->toBeNull();
 });
 
+it('schaltet ohne hinterlegte Facebook-Seite nicht und sagt warum', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Der Aufbau hinterlegt eine Seite, weil ohne sie nichts geht. Genau das
+    // ist hier der Fall: ein Werbekonto, dem noch keine zugeordnet wurde.
+    $aufbau->werbung->konto->page_external_id = null;
+    $aufbau->werbung->konto->save();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $frisch = $anzeige->fresh();
+
+    // Nicht wiederholen: ein zweiter Lauf scheitert genauso, solange niemand
+    // die Seite eintraegt. Der Satz steht deutsch an der Anzeige, weil die
+    // Praxis das selbst beheben kann -- und nur sie.
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        ->and($frisch?->sync_error)->toBe('Diesem Werbekonto ist keine Facebook-Seite zugeordnet. Ohne sie kann Meta keine Anzeige ausliefern.');
+
+    // Ohne Seite wird kein Creative angelegt -- der Abbruch kommt davor.
+    Http::assertNotSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adcreatives'));
+});
+
 it('haelt eine fachliche Ablehnung im Klartext an der Anzeige fest', function (): void {
     $aufbau = new Anzeigenaufbau;
     $anzeige = $aufbau->geplanteAnzeige();

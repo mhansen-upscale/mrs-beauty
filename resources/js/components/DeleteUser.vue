@@ -18,7 +18,7 @@ import { useForm } from '@inertiajs/vue3';
 import { AlertTriangle, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 
-const passwordInput = ref<HTMLInputElement | null>(null);
+const passwordInput = ref<{ focus: () => void } | null>(null);
 
 const form = useForm({
     password: '',

@@ -87,6 +87,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // nicht an einer Rolle: der Betreiber gehoert zu keiner Praxis.
         $middleware->alias(['super-admin' => EnsureSuperAdmin::class]);
 
+        // Der Zustand der Seitenleiste wird im Browser gesetzt
+        // (SidebarProvider) und beim naechsten Aufruf serverseitig gelesen,
+        // damit die Leiste nicht bei jedem Seitenwechsel sichtbar von auf
+        // nach zu springt. Ein verschluesseltes Cookie kann JavaScript nicht
+        // schreiben: Laravel wuerde es beim Lesen verwerfen, und der Wert
+        // waere immer der Vorgabewert.
+        //
+        // Unbedenklich, weil darin kein Geheimnis steht -- nur auf oder zu.
+        $middleware->encryptCookies(except: [
+            'sidebar:state',
+        ]);
+
         $middleware->validateCsrfTokens(except: [
             'kalender/google/zustellung',
             'kalender/microsoft/zustellung',

@@ -33,7 +33,7 @@ const beenden = () => router.delete(route('impersonation.destroy'));
 
         <span class="text-muted-foreground">Läuft ab um {{ frist }} Uhr</span>
 
-        <Button variant="outline" size="sm" class="ml-auto" @click="beenden">
+        <Button variant="outline" size="sm" class="w-full sm:ml-auto sm:w-auto" @click="beenden">
             <LogOut />
             Beenden
         </Button>

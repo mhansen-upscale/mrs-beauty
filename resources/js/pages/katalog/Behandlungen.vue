@@ -42,11 +42,11 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Behandlungen', href: '/beha
 
 const spalten: Spalte<TreatmentItem>[] = [
     { schluessel: 'name', titel: 'Behandlung' },
-    { schluessel: 'category', titel: 'Kategorie' },
-    { schluessel: 'price_from_cents', titel: 'Preisspanne', klasse: 'text-right tabular-nums' },
-    { schluessel: 'avg_revenue_cents', titel: 'Ø Umsatz', klasse: 'text-right tabular-nums' },
-    { schluessel: 'practitioner_names', titel: 'Wer macht das?', sortierbar: false },
-    { schluessel: 'appointment_types', titel: 'Terminarten', klasse: 'text-right tabular-nums' },
+    { schluessel: 'category', titel: 'Kategorie', ab: 'md' },
+    { schluessel: 'price_from_cents', titel: 'Preisspanne', klasse: 'text-right tabular-nums', ab: 'sm' },
+    { schluessel: 'avg_revenue_cents', titel: 'Ø Umsatz', klasse: 'text-right tabular-nums', ab: 'lg' },
+    { schluessel: 'practitioner_names', titel: 'Wer macht das?', sortierbar: false, ab: 'lg' },
+    { schluessel: 'appointment_types', titel: 'Terminarten', klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
 

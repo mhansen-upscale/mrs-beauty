@@ -52,10 +52,10 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Terminarten', href: '/termi
 
 const spalten: Spalte<TypeItem>[] = [
     { schluessel: 'name', titel: 'Terminart' },
-    { schluessel: 'treatment_name', titel: 'Behandlung' },
+    { schluessel: 'treatment_name', titel: 'Behandlung', ab: 'md' },
     { schluessel: 'duration_minutes', titel: 'Dauer', klasse: 'text-right tabular-nums' },
-    { schluessel: 'lead_time_hours', titel: 'Vorlauf', klasse: 'text-right tabular-nums' },
-    { schluessel: 'is_public', titel: 'Sichtbar' },
+    { schluessel: 'lead_time_hours', titel: 'Vorlauf', klasse: 'text-right tabular-nums', ab: 'lg' },
+    { schluessel: 'is_public', titel: 'Sichtbar', ab: 'lg' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
 
@@ -249,12 +249,12 @@ const bereit = (eintrag: TypeItem): boolean => eintrag.practitioners.length > 0 
 
                 <div class="grid gap-2">
                     <Label for="farbe">Farbe</Label>
-                    <Input id="farbe" v-model="formular.color" type="color" class="h-9 w-20 p-1" />
+                    <Input id="farbe" v-model="formular.color" type="color" class="w-20 p-1" />
                     <InputError :message="formular.errors.color" />
                 </div>
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-4">
+            <div class="grid items-start gap-4 sm:grid-cols-2 md:grid-cols-4">
                 <div class="grid gap-2">
                     <Label for="dauer">Dauer (min)</Label>
                     <Input id="dauer" v-model.number="formular.duration_minutes" type="number" min="5" step="5" />

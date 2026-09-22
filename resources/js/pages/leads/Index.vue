@@ -43,9 +43,9 @@ const spalten: Spalte<LeadItem>[] = [
     { schluessel: 'contact', titel: 'Kontakt' },
     { schluessel: 'treatment', titel: 'Behandlung' },
     { schluessel: 'status', titel: 'Status' },
-    { schluessel: 'source_label', titel: 'Herkunft' },
-    { schluessel: 'first_response_seconds', titel: 'Erste Reaktion' },
-    { schluessel: 'last_activity_at', titel: 'Zuletzt' },
+    { schluessel: 'source_label', titel: 'Herkunft', ab: 'md' },
+    { schluessel: 'first_response_seconds', titel: 'Erste Reaktion', ab: 'lg' },
+    { schluessel: 'last_activity_at', titel: 'Zuletzt', ab: 'lg' },
 ];
 
 /**
@@ -101,20 +101,21 @@ const verlieren = () => {
                 description="Jede Anfrage ist ein eigener Vorgang — dieselbe Person kann mehrere haben, mit eigener Herkunft und eigenem Ergebnis."
             />
 
-            <div class="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
                 <button
                     v-for="stufe in stufen"
                     :key="stufe.value"
                     type="button"
-                    class="rounded-md border bg-card px-4 py-3 text-left transition hover:border-primary"
-                    :class="status === stufe.value ? 'border-primary' : ''"
+                    class="rounded-md border bg-card px-4 py-3 text-left transition hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    :class="status === stufe.value ? 'border-primary ring-1 ring-primary' : ''"
+                    :aria-pressed="status === stufe.value"
                     @click="filtern(status === stufe.value ? 'alle' : stufe.value)"
                 >
                     <span class="block text-2xl font-semibold tabular-nums">{{ stufe.anzahl }}</span>
                     <span class="block text-xs text-muted-foreground">{{ stufe.label }}</span>
                 </button>
 
-                <div class="rounded-md border bg-card px-4 py-3">
+                <div class="rounded-md border border-dashed bg-muted/30 px-4 py-3">
                     <span class="flex items-center gap-1 text-2xl font-semibold tabular-nums">
                         <Timer class="size-4 text-muted-foreground" />
                         {{ dauer(speed_to_lead) }}

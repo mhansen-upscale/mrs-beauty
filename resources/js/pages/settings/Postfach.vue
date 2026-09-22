@@ -75,7 +75,7 @@ const probeSenden = () => router.post(route('postfach.pruefen'), {}, { preserveS
                     />
 
                     <div class="flex items-center gap-2">
-                        <code class="flex-1 truncate rounded-md border bg-muted/40 px-3 py-2 font-mono text-sm">{{ eingang }}</code>
+                        <code class="min-w-0 flex-1 truncate rounded-md border bg-muted/40 px-3 py-2 font-mono text-sm">{{ eingang }}</code>
                         <Button type="button" variant="outline" size="icon" :aria-label="'Adresse kopieren'" @click="kopieren">
                             <Check v-if="kopiert" class="text-success" />
                             <Copy v-else />
@@ -129,7 +129,7 @@ const probeSenden = () => router.post(route('postfach.pruefen'), {}, { preserveS
                         </div>
                     </div>
 
-                    <div class="grid gap-4 sm:grid-cols-3">
+                    <div class="grid gap-4 md:grid-cols-3">
                         <div class="grid gap-2 sm:col-span-2">
                             <Label for="host">Server</Label>
                             <Input id="host" v-model="formular.smtp_host" placeholder="smtp.ihre-domain.de" autocomplete="off" />
@@ -143,7 +143,7 @@ const probeSenden = () => router.post(route('postfach.pruefen'), {}, { preserveS
                         </div>
                     </div>
 
-                    <div class="grid gap-4 sm:grid-cols-3">
+                    <div class="grid gap-4 md:grid-cols-3">
                         <div class="grid gap-2">
                             <Label for="verschluesselung">Verschlüsselung</Label>
                             <Select v-model="formular.smtp_encryption">
@@ -201,13 +201,14 @@ const probeSenden = () => router.post(route('postfach.pruefen'), {}, { preserveS
                     </div>
 
                     <p v-if="letzterFehler === 'smtp_failed'" class="text-sm text-destructive">
-                        Der Mailserver hat die Zugangsdaten nicht angenommen oder war nicht erreichbar. Bitte Server, Port, Benutzername und
-                        Passwort prüfen.
+                        Der Mailserver hat die Zugangsdaten nicht angenommen oder war nicht erreichbar. Bitte Server, Port, Benutzername und Passwort
+                        prüfen.
                     </p>
 
-                    <Button type="button" variant="outline" @click="probeSenden">
-                        Probemail an {{ probeAn }} senden
-                    </Button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <Button type="button" variant="outline" @click="probeSenden">Probemail senden</Button>
+                        <span class="min-w-0 break-all text-xs text-muted-foreground">an {{ probeAn }}</span>
+                    </div>
 
                     <p class="text-xs text-muted-foreground">
                         Die Probemail wird eingereiht und läuft im Hintergrund — das Ergebnis erscheint hier, sobald sie durch ist.

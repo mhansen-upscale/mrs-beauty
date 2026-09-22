@@ -30,7 +30,7 @@ const absenden = () => {
                     <InputError :message="form.errors.password" />
                 </div>
 
-                <Button class="w-full" :disabled="form.processing">
+                <Button type="submit" class="w-full" :disabled="form.processing">
                     <LoaderCircle v-if="form.processing" class="animate-spin" />
                     <ShieldCheck v-else />
                     Bestätigen

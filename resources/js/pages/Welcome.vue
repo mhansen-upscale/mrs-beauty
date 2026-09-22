@@ -18,9 +18,9 @@ const angemeldet = computed(() => page.props.auth?.user != null);
 </script>
 
 <template>
-    <Head />
+    <Head title="Willkommen" />
 
-    <div class="flex min-h-screen flex-col items-center justify-center gap-8 bg-background p-6 text-foreground">
+    <div class="flex min-h-svh flex-col items-center justify-center gap-8 bg-background p-6 text-foreground">
         <div class="flex items-center gap-3">
             <div class="flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground">
                 <AppLogoIcon class="size-5 fill-current" />

@@ -54,22 +54,14 @@ const submit = () => {
                 <form @submit.prevent="submit" class="space-y-6">
                     <div class="grid gap-2">
                         <Label for="name">Name</Label>
-                        <Input id="name" class="mt-1 block w-full" v-model="form.name" required autocomplete="name" placeholder="Vor- und Nachname" />
-                        <InputError class="mt-2" :message="form.errors.name" />
+                        <Input id="name" v-model="form.name" required autocomplete="name" placeholder="Vor- und Nachname" />
+                        <InputError :message="form.errors.name" />
                     </div>
 
                     <div class="grid gap-2">
                         <Label for="email">E-Mail-Adresse</Label>
-                        <Input
-                            id="email"
-                            type="email"
-                            class="mt-1 block w-full"
-                            v-model="form.email"
-                            required
-                            autocomplete="username"
-                            placeholder="name@praxis.de"
-                        />
-                        <InputError class="mt-2" :message="form.errors.email" />
+                        <Input id="email" type="email" v-model="form.email" required autocomplete="username" placeholder="name@praxis.de" />
+                        <InputError :message="form.errors.email" />
                     </div>
 
                     <div v-if="mustVerifyEmail && !user.email_verified_at">

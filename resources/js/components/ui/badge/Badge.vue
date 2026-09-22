@@ -5,12 +5,13 @@ import { badgeVariants, type BadgeVariants } from '.';
 
 const props = defineProps<{
     variant?: BadgeVariants['variant'];
+    groesse?: BadgeVariants['groesse'];
     class?: HTMLAttributes['class'];
 }>();
 </script>
 
 <template>
-    <div :class="cn(badgeVariants({ variant: props.variant }), props.class)">
+    <div :class="cn(badgeVariants({ variant: props.variant, groesse: props.groesse }), props.class)">
         <slot />
     </div>
 </template>

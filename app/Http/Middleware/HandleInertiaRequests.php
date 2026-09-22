@@ -111,6 +111,12 @@ class HandleInertiaRequests extends Middleware
                     ->all()
                 : [],
 
+            // Die Seitenleiste rendert sonst immer erst aufgeklappt und
+            // klappt nach onMounted zusammen -- ein sichtbarer Sprung des
+            // ganzen Inhalts bei jedem Aufruf. SidebarProvider schreibt den
+            // Zustand ohnehin in dieses Cookie.
+            'sidebar_open' => $request->cookie('sidebar:state') !== 'false',
+
             'organization' => $organisation === null ? null : [
                 'uuid' => $organisation->uuid,
                 'name' => $organisation->name,

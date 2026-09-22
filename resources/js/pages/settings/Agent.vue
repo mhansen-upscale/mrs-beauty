@@ -38,8 +38,7 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Assistent', href: '/settings/as
 
 const formular = useForm({ aktiv: props.aktiv, schwelle: String(props.schwelle), vorgabemodus: props.vorgabemodus });
 
-const zeitpunkt = (iso: string | null): string =>
-    iso ? new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '';
+const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 const monat = computed(() => {
     const [jahr, monatsteil] = props.kontingent.zeitraum.split('-');
@@ -48,8 +47,6 @@ const monat = computed(() => {
 });
 
 const anteilProzent = computed(() => Math.round(props.kontingent.anteil * 100));
-
-
 </script>
 
 <template>
@@ -64,7 +61,10 @@ const anteilProzent = computed(() => Math.round(props.kontingent.anteil * 100));
                         description="Er liest mit, ordnet ein und schlägt Antworten vor. Abschicken tut sie ein Mensch."
                     />
 
-                    <p v-if="killSwitch" class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning">
+                    <p
+                        v-if="killSwitch"
+                        class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"
+                    >
                         <AlertTriangle class="mt-0.5 size-4 shrink-0" />
                         Der Assistent ist für diese Installation abgeschaltet. Diese Einstellung hier ändert daran nichts.
                     </p>
@@ -95,8 +95,8 @@ const anteilProzent = computed(() => Math.round(props.kontingent.anteil * 100));
                                 </SelectContent>
                             </Select>
                             <p class="text-xs text-muted-foreground">
-                                Gilt nur für <strong>neue</strong> Gespräche. Laufende behalten, was Sie dort eingestellt haben.
-                                Bei „Automatisch" trägt die erste Antwort je Gespräch den Hinweis, dass ein KI-Assistent schreibt.
+                                Gilt nur für <strong>neue</strong> Gespräche. Laufende behalten, was Sie dort eingestellt haben. Bei „Automatisch“
+                                trägt die erste Antwort je Gespräch den Hinweis, dass ein KI-Assistent schreibt.
                             </p>
                         </div>
 
@@ -118,8 +118,8 @@ const anteilProzent = computed(() => Math.round(props.kontingent.anteil * 100));
                                     <strong>ohne Textvorschlag</strong> an Sie — bei Komplikationssignalen zusätzlich als E-Mail an das Team.
                                 </p>
                                 <p class="text-muted-foreground">
-                                    Erzeugte Antworten werden vor der Anzeige geprüft: Preise nur aus dem Katalog, keine Rabatte, keine Zusagen,
-                                    keine erfundenen Behandlungen.
+                                    Erzeugte Antworten werden vor der Anzeige geprüft: Preise nur aus dem Katalog, keine Rabatte, keine Zusagen, keine
+                                    erfundenen Behandlungen.
                                 </p>
                             </div>
                         </div>
@@ -138,7 +138,10 @@ const anteilProzent = computed(() => Math.round(props.kontingent.anteil * 100));
                     <div class="space-y-2">
                         <div class="h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
-                                :class="['h-full rounded-full transition-all', kontingent.erschoepft ? 'bg-destructive' : kontingent.knapp ? 'bg-warning' : 'bg-primary']"
+                                :class="[
+                                    'h-full rounded-full transition-all',
+                                    kontingent.erschoepft ? 'bg-destructive' : kontingent.knapp ? 'bg-warning' : 'bg-primary',
+                                ]"
                                 :style="{ width: `${Math.min(100, anteilProzent)}%` }"
                             ></div>
                         </div>
@@ -151,15 +154,15 @@ const anteilProzent = computed(() => Math.round(props.kontingent.anteil * 100));
                         </p>
                     </div>
 
-                    <p v-if="kontingent.erschoepft" class="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    <p
+                        v-if="kontingent.erschoepft"
+                        class="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                    >
                         <AlertTriangle class="mt-0.5 size-4 shrink-0" />
-                        Das Kontingent dieses Monats ist aufgebraucht. Der Assistent schlägt nichts mehr vor — Ihre Nachrichten kommen
-                        unverändert an.
+                        Das Kontingent dieses Monats ist aufgebraucht. Der Assistent schlägt nichts mehr vor — Ihre Nachrichten kommen unverändert an.
                     </p>
 
-                    <p v-else-if="kontingent.knapp" class="text-sm text-warning">
-                        Das Kontingent geht zur Neige.
-                    </p>
+                    <p v-else-if="kontingent.knapp" class="text-sm text-warning">Das Kontingent geht zur Neige.</p>
 
                     <div class="flex flex-wrap items-center gap-3">
                         <Button type="button" variant="outline" as-child>
@@ -179,7 +182,7 @@ const anteilProzent = computed(() => Math.round(props.kontingent.anteil * 100));
                             <Link
                                 v-if="eintrag.gespraech"
                                 :href="route('inbox.index', { gespraech: eintrag.gespraech })"
-                                class="ml-auto text-xs underline underline-offset-4"
+                                class="text-xs underline underline-offset-4 sm:ml-auto"
                             >
                                 Gespräch öffnen
                             </Link>

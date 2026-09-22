@@ -50,6 +50,16 @@ export interface Spalte<T> {
     /** Standard ist sortierbar. */
     sortierbar?: boolean;
     klasse?: string;
+
+    /**
+     * Ab welcher Breite die Spalte erscheint. Ohne Angabe: immer.
+     *
+     * Eine Tabelle mit neun Spalten ist auf einem Telefon nicht lesbar, und
+     * Wischen in einer 1100px breiten Flaeche ist keine Antwort darauf. Jede
+     * Seite entscheidet deshalb selbst, welche zwei bis drei Spalten die
+     * Zeile auf dem Handy tragen.
+     */
+    ab?: 'sm' | 'md' | 'lg';
 }
 
 // Muss PageProps erweitern, sonst weist Inertia 2 den Typ in usePage<SharedData>()
@@ -63,6 +73,10 @@ export interface SharedData extends PageProps {
     abilities: string[];
 
     organization: OrganizationSummary | null;
+
+    // Der Zustand der Seitenleiste kommt vom Server, damit sie nicht bei
+    // jedem Seitenaufruf sichtbar von auf nach zu springt.
+    sidebar_open: boolean;
 
     // Solange eine Impersonation läuft, ist sie in jeder Antwort erkennbar.
     impersonation: ImpersonationState | null;

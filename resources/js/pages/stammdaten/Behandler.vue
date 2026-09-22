@@ -66,9 +66,9 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Behandler', href: '/behandl
 
 const spalten: Spalte<PractitionerItem>[] = [
     { schluessel: 'name', titel: 'Name' },
-    { schluessel: 'locations', titel: 'Standorte', sortierbar: false },
-    { schluessel: 'working_hours', titel: 'Arbeitszeiten', sortierbar: false, klasse: 'text-right tabular-nums' },
-    { schluessel: 'absences', titel: 'Abwesend', sortierbar: false, klasse: 'text-right tabular-nums' },
+    { schluessel: 'locations', titel: 'Standorte', sortierbar: false, ab: 'md' },
+    { schluessel: 'working_hours', titel: 'Arbeitszeiten', sortierbar: false, klasse: 'text-right tabular-nums', ab: 'lg' },
+    { schluessel: 'absences', titel: 'Abwesend', sortierbar: false, klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
 
@@ -189,7 +189,7 @@ const abwesenheitLoeschen = (eintrag: Absence) => {
 /* Portraet ---------------------------------------------------------------- */
 
 const bildVon = ref<PractitionerItem | null>(null);
-const dateifeld = ref<HTMLInputElement | null>(null);
+const dateifeld = ref<{ element: HTMLInputElement | null } | null>(null);
 const vorschau = ref<string | null>(null);
 
 const bild = useForm({
@@ -225,8 +225,8 @@ const bildHochladen = () => {
             bild.reset();
             vorschau.value = null;
 
-            if (dateifeld.value) {
-                dateifeld.value.value = '';
+            if (dateifeld.value?.element) {
+                dateifeld.value.element.value = '';
             }
         },
     });
@@ -323,9 +323,14 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
 
                 <template #aktionen="{ zeile }">
                     <AktionsButton :icon="Pencil" beschriftung="Bearbeiten" @click="bearbeitenOeffnen(zeile)" />
-                    <AktionsButton :icon="ImagePlus" beschriftung="Bild" @click="bildOeffnen(zeile)" />
-                    <AktionsButton :icon="Clock" beschriftung="Arbeitszeiten" @click="zeitenOeffnen(zeile)" />
-                    <AktionsButton :icon="CalendarOff" beschriftung="Abwesenheiten" @click="abwesenheitenOeffnen(zeile)" />
+                    <AktionsButton :icon="Clock" beschriftung="Arbeitszeiten" class="hidden sm:inline-flex" @click="zeitenOeffnen(zeile)" />
+                    <AktionsButton :icon="ImagePlus" beschriftung="Bild" class="hidden lg:inline-flex" @click="bildOeffnen(zeile)" />
+                    <AktionsButton
+                        :icon="CalendarOff"
+                        beschriftung="Abwesenheiten"
+                        class="hidden lg:inline-flex"
+                        @click="abwesenheitenOeffnen(zeile)"
+                    />
                     <AktionsButton v-if="zeile.is_active" :icon="PowerOff" beschriftung="Deaktivieren" @click="deaktivieren(zeile)" />
                     <AktionsButton v-else :icon="Power" beschriftung="Aktivieren" @click="aktivieren(zeile)" />
                 </template>
@@ -341,7 +346,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             :absende-text="bearbeitet ? 'Speichern' : 'Anlegen'"
             @absenden="speichern"
         >
-            <div class="grid gap-4 sm:grid-cols-3">
+            <div class="grid items-start gap-4 sm:grid-cols-3">
                 <div class="grid gap-2">
                     <Label for="titel">Titel</Label>
                     <Input id="titel" v-model="formular.title" />
@@ -393,7 +398,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
 
             <p v-else class="text-sm text-muted-foreground">Keine Arbeitszeit hinterlegt. Ohne sie entstehen keine Slots.</p>
 
-            <div class="grid gap-4 border-t pt-4 sm:grid-cols-4">
+            <div class="grid items-start gap-4 border-t pt-4 sm:grid-cols-2 md:grid-cols-4">
                 <div class="grid gap-2">
                     <Label for="ort">Standort</Label>
                     <Select v-model="arbeitszeit.location">
@@ -449,7 +454,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
 
             <p v-else class="text-sm text-muted-foreground">Keine Abwesenheit hinterlegt.</p>
 
-            <div class="grid gap-4 border-t pt-4 sm:grid-cols-3">
+            <div class="grid items-start gap-4 border-t pt-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div class="grid gap-2">
                     <Label for="grund">Grund</Label>
                     <Select v-model="abwesenheit.reason">
@@ -491,12 +496,12 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
 
                 <div class="grid flex-1 gap-2">
                     <Label for="portraet">Neues Bild</Label>
-                    <input
+                    <Input
                         id="portraet"
                         ref="dateifeld"
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
-                        class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-sm file:font-medium file:text-secondary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        class="file:mr-3 file:rounded-md file:bg-secondary file:px-2 file:py-1 file:text-secondary-foreground"
                         @change="bildGewaehlt"
                     />
                     <InputError :message="bild.errors.avatar" />
@@ -510,6 +515,5 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 </Button>
             </div>
         </FormularDialog>
-
     </AppLayout>
 </template>

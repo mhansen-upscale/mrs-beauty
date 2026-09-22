@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AktionsButton from '@/components/AktionsButton.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -57,10 +58,7 @@ const entfernen = () => router.delete(route('erscheinungsbild.logo.entfernen'), 
 
         <SettingsLayout>
             <div class="space-y-8">
-                <HeadingSmall
-                    title="Erscheinungsbild"
-                    description="Gilt für Ihre Buchungsseite. Der Arbeitsbereich hier bleibt unverändert."
-                />
+                <HeadingSmall title="Erscheinungsbild" description="Gilt für Ihre Buchungsseite. Der Arbeitsbereich hier bleibt unverändert." />
 
                 <!--
                     docs/design/farben.md: den Admin-Bereich anfassbar zu
@@ -68,8 +66,8 @@ const entfernen = () => router.delete(route('erscheinungsbild.logo.entfernen'), 
                     macht. Das gehört gesagt, nicht nur eingehalten.
                 -->
                 <p class="rounded-md border p-3 text-xs text-muted-foreground">
-                    Ihre Marke erscheint auf der öffentlichen Buchungsseite — in Schaltflächen, Fokusrahmen und ausgewählten Zeiten.
-                    Dieser Arbeitsbereich bleibt in unserer Farbe: er ist ein Werkzeug, und Statusfarben müssen überall dasselbe bedeuten.
+                    Ihre Marke erscheint auf der öffentlichen Buchungsseite — in Schaltflächen, Fokusrahmen und ausgewählten Zeiten. Dieser
+                    Arbeitsbereich bleibt in unserer Farbe: er ist ein Werkzeug, und Statusfarben müssen überall dasselbe bedeuten.
                 </p>
 
                 <form class="space-y-6" @submit.prevent="speichern">
@@ -78,10 +76,7 @@ const entfernen = () => router.delete(route('erscheinungsbild.logo.entfernen'), 
                             <Label for="farbe">Markenfarbe</Label>
                             <div class="flex items-center gap-3">
                                 <Input id="farbe" v-model="formular.primaryColor" placeholder="#1F5D5B" class="font-mono" />
-                                <span
-                                    class="size-9 shrink-0 rounded-md border"
-                                    :style="{ backgroundColor: formular.primaryColor || produktfarbe }"
-                                />
+                                <span class="size-9 shrink-0 rounded-md border" :style="{ backgroundColor: formular.primaryColor || produktfarbe }" />
                             </div>
                             <p class="text-xs text-muted-foreground">Leer lassen: dann gilt unsere Farbe.</p>
                             <InputError :message="formular.errors.primaryColor" />
@@ -116,8 +111,8 @@ const entfernen = () => router.delete(route('erscheinungsbild.logo.entfernen'), 
                             Ihre Buchungsseite ist öffentlich erreichbar, ohne Impressum
                         </p>
                         <p>
-                            Eine öffentlich erreichbare Seite braucht ein Impressum und eine Datenschutzerklärung. Beides sind Ihre eigenen
-                            Seiten — wir verlinken sie nur im Fuß der Buchungsseite.
+                            Eine öffentlich erreichbare Seite braucht ein Impressum und eine Datenschutzerklärung. Beides sind Ihre eigenen Seiten —
+                            wir verlinken sie nur im Fuß der Buchungsseite.
                         </p>
                     </div>
 
@@ -125,10 +120,7 @@ const entfernen = () => router.delete(route('erscheinungsbild.logo.entfernen'), 
                 </form>
 
                 <div class="space-y-3 border-t pt-6">
-                    <HeadingSmall
-                        title="Logo"
-                        description="Steht im Kopf der Buchungsseite. Ohne Logo erscheint dort Ihr Name."
-                    />
+                    <HeadingSmall title="Logo" description="Steht im Kopf der Buchungsseite. Ohne Logo erscheint dort Ihr Name." />
 
                     <!--
                         Kein SVG: eine SVG-Datei kann ein Skript enthalten,
@@ -146,9 +138,7 @@ const entfernen = () => router.delete(route('erscheinungsbild.logo.entfernen'), 
                                 <ShieldCheck class="size-4" />
                                 sichtbar auf Ihrer Buchungsseite
                             </span>
-                            <Button type="button" variant="ghost" size="sm" @click="entfernen">
-                                <Trash2 class="size-4" />
-                            </Button>
+                            <AktionsButton :icon="Trash2" beschriftung="Logo entfernen" @click="entfernen" />
                         </template>
 
                         <!--

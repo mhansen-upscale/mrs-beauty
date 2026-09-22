@@ -58,6 +58,30 @@ const termineVon = (behandler: string): Termin[] => props.appointments.filter((t
 const kalenderfarbe = (stelle: number): string => `hsl(var(--calendar-${stelle}))`;
 
 /**
+ * Eine Spalte je Behandler war ein Inline-Raster ohne Breakpoint: bei vier
+ * Behandlern blieben auf einem Telefon 78px je Spalte, und darin stehen
+ * Uhrzeit, Name und Terminart. Die Spalten muessen deshalb an der Breite
+ * haengen, nicht an der Zahl der Behandler -- diese begrenzt sie nur nach
+ * oben. Die Klassen stehen ausgeschrieben da, weil Tailwind den Quelltext
+ * liest.
+ */
+const spaltenraster = computed<string>(() => {
+    if (props.practitioners.length <= 1) {
+        return 'grid-cols-1';
+    }
+
+    if (props.practitioners.length === 2) {
+        return 'grid-cols-1 md:grid-cols-2';
+    }
+
+    if (props.practitioners.length === 3) {
+        return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3';
+    }
+
+    return 'grid-cols-1 md:grid-cols-2 xl:grid-cols-4';
+});
+
+/**
  * Der Status läuft über Rahmenstil und Symbol, nicht über Farbe — die Fläche
  * gehört bereits dem Behandler (docs/design/farben.md).
  */
@@ -80,7 +104,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                     <Button variant="outline" size="icon" aria-label="Vorheriger Tag" @click="tagVerschieben(-1)">
                         <ChevronLeft />
                     </Button>
-                    <Button variant="outline" size="sm" @click="heute">
+                    <Button variant="outline" @click="heute">
                         <CalendarClock />
                         Heute
                     </Button>
@@ -95,7 +119,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                         :model-value="location.uuid"
                         @update:model-value="(wert: unknown) => gehe({ location: String(wert) })"
                     >
-                        <SelectTrigger class="w-56">
+                        <SelectTrigger class="w-full sm:w-56">
                             <MapPin class="size-4 text-muted-foreground" />
                             <SelectValue />
                         </SelectTrigger>
@@ -106,7 +130,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                         </SelectContent>
                     </Select>
 
-                    <span class="ml-auto flex items-center gap-3">
+                    <div class="flex w-full items-center gap-3 sm:ml-auto sm:w-auto">
                         <span class="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock class="size-3" />
                             {{ location.timezone }}
@@ -122,12 +146,12 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                             :contacts="contacts"
                             :quellen="sources ?? []"
                         />
-                    </span>
+                    </div>
                 </div>
 
                 <p v-if="!practitioners.length" class="rounded-md border p-6 text-sm text-muted-foreground">An diesem Standort arbeitet niemand.</p>
 
-                <div v-else class="grid gap-4" :style="{ gridTemplateColumns: `repeat(${Math.min(practitioners.length, 4)}, minmax(0, 1fr))` }">
+                <div v-else class="grid gap-4" :class="spaltenraster">
                     <section v-for="person in practitioners" :key="person.uuid" class="space-y-2">
                         <h2 class="flex items-center gap-2 text-sm font-medium">
                             <span class="size-2.5 rounded-full" :style="{ backgroundColor: kalenderfarbe(person.color_index) }" aria-hidden="true" />
@@ -148,13 +172,13 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                             @click="gewaehlt = termin"
                         >
                             <span class="flex items-center gap-2 text-sm font-medium">
-                                <span class="tabular-nums">{{ termin.starts_at }}–{{ termin.ends_at }}</span>
+                                <span class="shrink-0 tabular-nums">{{ termin.starts_at }}–{{ termin.ends_at }}</span>
                                 <Dot class="size-3 text-muted-foreground" />
-                                <span class="truncate">{{ termin.contact_name }}</span>
+                                <span class="min-w-0 truncate">{{ termin.contact_name }}</span>
                             </span>
 
                             <span class="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                <span class="truncate">{{ termin.type_name }}</span>
+                                <span class="min-w-0 truncate">{{ termin.type_name }}</span>
                                 <Badge :variant="termin.status === 'pending' ? 'warning' : 'secondary'">
                                     {{ termin.status_label }}
                                 </Badge>

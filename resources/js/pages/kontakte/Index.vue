@@ -62,9 +62,9 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Kontakte', href: '/kontakte
 const spalten: Spalte<ContactItem>[] = [
     { schluessel: 'name', titel: 'Name' },
     { schluessel: 'email', titel: 'E-Mail' },
-    { schluessel: 'phone_display', titel: 'Telefon' },
-    { schluessel: 'identities', titel: 'Kanäle', sortierbar: false },
-    { schluessel: 'created_at', titel: 'Angelegt' },
+    { schluessel: 'phone_display', titel: 'Telefon', ab: 'md' },
+    { schluessel: 'identities', titel: 'Kanäle', sortierbar: false, ab: 'lg' },
+    { schluessel: 'created_at', titel: 'Angelegt', ab: 'lg' },
 ];
 
 /**
@@ -200,20 +200,20 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
             </div>
 
             <div class="flex flex-wrap items-end gap-2">
-                <div class="grid gap-1.5">
+                <div class="grid w-full gap-1.5 sm:w-auto">
                     <Label for="suche">Suche</Label>
                     <div class="relative">
                         <Search class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             id="suche"
                             v-model="suchbegriff"
-                            class="w-80 pl-8"
+                            class="w-full pl-8 sm:w-80"
                             placeholder="Nachname, E-Mail oder Telefonnummer"
                             @keyup.enter="suchen"
                         />
                     </div>
                 </div>
-                <Button variant="outline" @click="suchen">Suchen</Button>
+                <Button variant="outline" class="w-full sm:w-auto" @click="suchen">Suchen</Button>
             </div>
 
             <!--
@@ -351,7 +351,7 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
                 <p v-if="kanaele().length === 0" class="text-sm text-muted-foreground">Noch kein Kanal hinterlegt.</p>
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-3">
+            <div class="grid gap-4 md:grid-cols-3">
                 <div class="grid gap-1.5">
                     <Label for="channel">Kanal</Label>
                     <Select v-model="kanal.channel">

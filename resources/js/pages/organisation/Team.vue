@@ -70,15 +70,15 @@ const freigeben = () => {
 const mitgliedSpalten: Spalte<Member>[] = [
     { schluessel: 'name', titel: 'Name' },
     { schluessel: 'email', titel: 'E-Mail' },
-    { schluessel: 'role', titel: 'Rolle' },
-    { schluessel: 'verified', titel: 'Bestätigt' },
+    { schluessel: 'role', titel: 'Rolle', ab: 'md' },
+    { schluessel: 'verified', titel: 'Bestätigt', ab: 'lg' },
     { schluessel: 'deactivated', titel: 'Status' },
 ];
 
 const einladungSpalten: Spalte<Invitation>[] = [
     { schluessel: 'email', titel: 'E-Mail' },
-    { schluessel: 'role', titel: 'Rolle' },
-    { schluessel: 'expires_at', titel: 'Läuft ab' },
+    { schluessel: 'role', titel: 'Rolle', ab: 'md' },
+    { schluessel: 'expires_at', titel: 'Läuft ab', ab: 'md' },
 ];
 
 const einladungOffen = ref(false);

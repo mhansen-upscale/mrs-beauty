@@ -26,8 +26,11 @@ const breadcrumbItems: BreadcrumbItem[] = [
     },
 ];
 
-const passwordInput = ref<HTMLInputElement>();
-const currentPasswordInput = ref<HTMLInputElement>();
+// Ein ref auf <Input> liefert die Komponente, nicht das Element. Input
+// reicht focus() ausdruecklich nach aussen -- ohne das war der Aufruf hier
+// stillschweigend wirkungslos.
+const passwordInput = ref<{ focus: () => void }>();
+const currentPasswordInput = ref<{ focus: () => void }>();
 
 const form = useForm({
     current_password: '',
@@ -42,16 +45,12 @@ const passwortAendern = () => {
         onError: (errors: any) => {
             if (errors.password) {
                 form.reset('password', 'password_confirmation');
-                if (passwordInput.value instanceof HTMLInputElement) {
-                    passwordInput.value.focus();
-                }
+                passwordInput.value?.focus();
             }
 
             if (errors.current_password) {
                 form.reset('current_password');
-                if (currentPasswordInput.value instanceof HTMLInputElement) {
-                    currentPasswordInput.value.focus();
-                }
+                currentPasswordInput.value?.focus();
             }
         },
     });
@@ -77,7 +76,6 @@ const passwortAendern = () => {
                             ref="currentPasswordInput"
                             v-model="form.current_password"
                             type="password"
-                            class="mt-1 block w-full"
                             autocomplete="current-password"
                             placeholder="Aktuelles Passwort"
                         />
@@ -91,7 +89,6 @@ const passwortAendern = () => {
                             ref="passwordInput"
                             v-model="form.password"
                             type="password"
-                            class="mt-1 block w-full"
                             autocomplete="new-password"
                             placeholder="Neues Passwort"
                         />
@@ -104,7 +101,6 @@ const passwortAendern = () => {
                             id="password_confirmation"
                             v-model="form.password_confirmation"
                             type="password"
-                            class="mt-1 block w-full"
                             autocomplete="new-password"
                             placeholder="Wiederholen"
                         />

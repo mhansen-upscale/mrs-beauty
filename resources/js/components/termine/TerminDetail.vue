@@ -85,7 +85,7 @@ const absagen = () => {
 
 <template>
     <Dialog :open="!!termin" @update:open="(wert) => !wert && schliessen()">
-        <DialogContent v-if="termin" class="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogContent v-if="termin" class="max-w-2xl">
             <DialogHeader>
                 <DialogTitle>{{ termin.contact_name }}</DialogTitle>
                 <DialogDescription>

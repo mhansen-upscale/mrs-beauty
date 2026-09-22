@@ -32,16 +32,16 @@ const sidebarNavItems = computed<NavItem[]>(() => [
     ...(darf('billing.manage') ? [{ title: 'Abo', href: '/settings/abo', icon: CreditCard }] : []),
 ]);
 
-const currentPath = window.location.pathname;
+const currentPath = computed((): string => page.url.split('?')[0]);
 </script>
 
 <template>
     <div class="px-4 py-6">
         <Heading title="Einstellungen" description="Das eigene Konto und die Einstellungen der Praxis" />
 
-        <div class="flex flex-col space-y-8 md:space-y-0 lg:flex-row lg:space-x-12 lg:space-y-0">
+        <div class="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0">
             <aside class="w-full max-w-xl lg:w-48">
-                <nav class="flex flex-col space-x-0 space-y-1">
+                <nav class="flex flex-col space-y-1">
                     <Button
                         v-for="item in sidebarNavItems"
                         :key="item.href"
@@ -57,9 +57,9 @@ const currentPath = window.location.pathname;
                 </nav>
             </aside>
 
-            <Separator class="my-6 md:hidden" />
+            <Separator class="my-6 lg:hidden" />
 
-            <div class="flex-1 md:max-w-2xl">
+            <div class="flex-1">
                 <section class="max-w-xl space-y-12">
                     <slot />
                 </section>

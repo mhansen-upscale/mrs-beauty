@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import Sheet from '@/components/ui/sheet/Sheet.vue';
 import SheetContent from '@/components/ui/sheet/SheetContent.vue';
+import SheetDescription from '@/components/ui/sheet/SheetDescription.vue';
+import SheetTitle from '@/components/ui/sheet/SheetTitle.vue';
 import { cn } from '@/lib/utils';
 import type { HTMLAttributes } from 'vue';
 import { SIDEBAR_WIDTH_MOBILE, useSidebar } from './utils';
@@ -40,11 +42,14 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
             data-sidebar="sidebar"
             data-mobile="true"
             :side="side"
-            class="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            class="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground"
             :style="{
                 '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
             }"
         >
+            <SheetTitle class="sr-only">Navigation</SheetTitle>
+            <SheetDescription class="sr-only">Die Bereiche der Anwendung</SheetDescription>
+
             <div class="flex h-full w-full flex-col">
                 <slot />
             </div>

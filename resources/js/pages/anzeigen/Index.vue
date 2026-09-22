@@ -85,12 +85,9 @@ const sichten = [
 
 const sicht = ref<string>('offen');
 
-const zaehler = (wert: string): number =>
-    props.vorschlaege.filter((v) => (wert === 'offen' ? v.status === 'draft' : v.status === wert)).length;
+const zaehler = (wert: string): number => props.vorschlaege.filter((v) => (wert === 'offen' ? v.status === 'draft' : v.status === wert)).length;
 
-const sichtbar = computed(() =>
-    props.vorschlaege.filter((v) => (sicht.value === 'offen' ? v.status === 'draft' : v.status === sicht.value)),
-);
+const sichtbar = computed(() => props.vorschlaege.filter((v) => (sicht.value === 'offen' ? v.status === 'draft' : v.status === sicht.value)));
 
 const uebersteuernOffen = ref(false);
 const detailOffen = ref(false);
@@ -255,7 +252,7 @@ onUnmounted(haltAn);
                 </div>
 
                 <Button type="button" @click="oeffneNeu">
-                    <Plus class="mr-2 size-4" />
+                    <Plus />
                     Eigene Anzeige
                 </Button>
             </div>
@@ -265,14 +262,11 @@ onUnmounted(haltAn);
                 diesen Hinweis sucht jemand den Fehler beim Bildanbieter,
                 während in Wahrheit niemand die Warteschlange abarbeitet.
             -->
-            <div
-                v-if="warteschlangeSteht"
-                class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning"
-            >
+            <div v-if="warteschlangeSteht" class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
                 <AlertTriangle class="mt-0.5 size-4 shrink-0" />
                 <span>
-                    <strong>Die Warteschlange wird gerade nicht abgearbeitet.</strong> Ihre Grafikaufträge liegen dort und warten.
-                    Das ist kein Fehler des Bildmodells — bitte melden Sie sich bei uns.
+                    <strong>Die Warteschlange wird gerade nicht abgearbeitet.</strong> Ihre Grafikaufträge liegen dort und warten. Das ist kein Fehler
+                    des Bildmodells — bitte melden Sie sich bei uns.
                 </span>
             </div>
 
@@ -290,22 +284,18 @@ onUnmounted(haltAn);
                     Ihr Brand Guide ist noch zu dünn für Vorschläge
                 </p>
                 <p>
-                    {{ reifegrad.anteil }} % von mindestens {{ mindestReifegrad }} %. Es fehlt: {{ reifegrad.fehlt.join(', ') }}. Wir
-                    denken uns nichts dazu aus — eine Anzeige aus Platzhaltern klingt nach jeder anderen Praxis. Eine eigene
-                    Anzeige können Sie trotzdem jederzeit schreiben.
+                    {{ reifegrad.anteil }} % von mindestens {{ mindestReifegrad }} %. Es fehlt: {{ reifegrad.fehlt.join(', ') }}. Wir denken uns
+                    nichts dazu aus — eine Anzeige aus Platzhaltern klingt nach jeder anderen Praxis. Eine eigene Anzeige können Sie trotzdem
+                    jederzeit schreiben.
                 </p>
             </div>
 
             <div v-if="!sichtbar.length" class="space-y-3 rounded-md border border-dashed p-10 text-center">
                 <p class="text-sm text-muted-foreground">
-                    {{
-                        sicht === 'offen'
-                            ? 'Nichts in Arbeit. Vorschläge entstehen montags — eine eigene Anzeige jederzeit.'
-                            : 'Hier liegt nichts.'
-                    }}
+                    {{ sicht === 'offen' ? 'Nichts in Arbeit. Vorschläge entstehen montags — eine eigene Anzeige jederzeit.' : 'Hier liegt nichts.' }}
                 </p>
                 <Button v-if="sicht === 'offen'" type="button" variant="outline" @click="oeffneNeu">
-                    <Plus class="mr-2 size-4" />
+                    <Plus />
                     Eigene Anzeige schreiben
                 </Button>
             </div>
@@ -321,7 +311,7 @@ onUnmounted(haltAn);
                     v-for="vorschlag in sichtbar"
                     :key="vorschlag.uuid"
                     type="button"
-                    class="overflow-hidden rounded-lg border bg-card text-left transition hover:border-foreground/20 hover:shadow-sm"
+                    class="overflow-hidden rounded-lg border bg-card text-left transition hover:border-foreground/20 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     @click="oeffne(vorschlag)"
                 >
                     <span class="relative block aspect-square w-full">
@@ -334,11 +324,7 @@ onUnmounted(haltAn);
 
                             <span class="text-xs text-muted-foreground">
                                 {{
-                                    vorschlag.bildLaeuft
-                                        ? 'Grafik wird erzeugt'
-                                        : vorschlag.bildFehler
-                                          ? 'Grafik fehlgeschlagen'
-                                          : 'Noch ohne Grafik'
+                                    vorschlag.bildLaeuft ? 'Grafik wird erzeugt' : vorschlag.bildFehler ? 'Grafik fehlgeschlagen' : 'Noch ohne Grafik'
                                 }}
                             </span>
                         </span>
@@ -357,18 +343,10 @@ onUnmounted(haltAn);
                                 <Badge v-if="vorschlag.ampel === 'green'" variant="success" class="bg-background/90 backdrop-blur-sm">
                                     Geprüft
                                 </Badge>
-                                <Badge
-                                    v-else-if="vorschlag.ampel === 'yellow'"
-                                    variant="warning"
-                                    class="bg-background/90 backdrop-blur-sm"
-                                >
+                                <Badge v-else-if="vorschlag.ampel === 'yellow'" variant="warning" class="bg-background/90 backdrop-blur-sm">
                                     Bitte prüfen
                                 </Badge>
-                                <Badge
-                                    v-else-if="vorschlag.ampel === 'red'"
-                                    variant="destructive"
-                                    class="bg-background/90 backdrop-blur-sm"
-                                >
+                                <Badge v-else-if="vorschlag.ampel === 'red'" variant="destructive" class="bg-background/90 backdrop-blur-sm">
                                     Beanstandet
                                 </Badge>
                             </template>
@@ -376,7 +354,7 @@ onUnmounted(haltAn);
                     </span>
 
                     <span class="flex items-baseline justify-between gap-2 border-t px-3 py-2">
-                        <span class="truncate text-sm font-medium">{{ vorschlag.ueberschrift }}</span>
+                        <span class="min-w-0 truncate text-sm font-medium">{{ vorschlag.ueberschrift }}</span>
                         <span class="shrink-0 text-xs text-muted-foreground">{{ wochentext(vorschlag.woche) }}</span>
                     </span>
                 </button>
@@ -393,7 +371,7 @@ onUnmounted(haltAn);
             Befunde liegen bereit, füllen aber nicht die Spalte.
         -->
         <Dialog v-model:open="detailOffen">
-            <DialogContent class="max-h-[90vh] max-w-3xl overflow-y-auto">
+            <DialogContent class="max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>{{ gewaehlt?.ueberschrift }}</DialogTitle>
                     <DialogDescription>
@@ -403,12 +381,7 @@ onUnmounted(haltAn);
 
                 <div v-if="gewaehlt" class="grid gap-5 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
                     <div class="space-y-3">
-                        <img
-                            v-if="gewaehlt.bildUrl"
-                            :src="gewaehlt.bildUrl"
-                            alt=""
-                            class="aspect-square w-full rounded-md border object-cover"
-                        />
+                        <img v-if="gewaehlt.bildUrl" :src="gewaehlt.bildUrl" alt="" class="aspect-square w-full rounded-md border object-cover" />
                         <p
                             v-else
                             class="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground"
@@ -449,8 +422,8 @@ onUnmounted(haltAn);
                                 class="text-xs"
                             />
                             <p class="text-xs text-muted-foreground">
-                                Leer lassen: dann zeigen wir Ihre Räume. Menschen sind erlaubt — Behandlungsergebnisse und
-                                Vorher-Nachher nicht, unabhängig davon, was hier steht.
+                                Leer lassen: dann zeigen wir Ihre Räume. Menschen sind erlaubt — Behandlungsergebnisse und Vorher-Nachher nicht,
+                                unabhängig davon, was hier steht.
                             </p>
                         </div>
 
@@ -468,7 +441,7 @@ onUnmounted(haltAn);
                             :title="bildGrund"
                             @click="bildAnfordern(gewaehlt)"
                         >
-                            <Sparkles class="mr-2 size-4" />
+                            <Sparkles />
                             {{ gewaehlt.hatBild ? 'Neue Grafik erzeugen' : 'Grafik erzeugen' }}
                         </Button>
 
@@ -495,8 +468,8 @@ onUnmounted(haltAn);
                         </div>
 
                         <p v-if="gewaehlt.hatBild" class="rounded-md border p-2 text-xs text-muted-foreground">
-                            Die Schrift auf der Grafik hat das Bildmodell gesetzt — bitte lesen Sie sie, bevor Sie freigeben.
-                            Geprüft haben wir den Text, nicht das Bild.
+                            Die Schrift auf der Grafik hat das Bildmodell gesetzt — bitte lesen Sie sie, bevor Sie freigeben. Geprüft haben wir den
+                            Text, nicht das Bild.
                         </p>
 
                         <!--
@@ -532,8 +505,8 @@ onUnmounted(haltAn);
                         </div>
 
                         <p v-if="gewaehlt.geschaltet > 0" class="rounded-md border p-2 text-xs text-muted-foreground">
-                            Läuft in {{ gewaehlt.geschaltet }} {{ gewaehlt.geschaltet === 1 ? 'Kampagne' : 'Kampagnen' }} — den
-                            Zustand sehen Sie unter <strong>Kampagnen</strong>.
+                            Läuft in {{ gewaehlt.geschaltet }} {{ gewaehlt.geschaltet === 1 ? 'Kampagne' : 'Kampagnen' }} — den Zustand sehen Sie
+                            unter <strong>Kampagnen</strong>.
                         </p>
 
                         <p v-if="gewaehlt.uebersteuert" class="rounded-md border p-2 text-xs text-muted-foreground">
@@ -547,16 +520,12 @@ onUnmounted(haltAn);
                         -->
                         <div class="flex flex-wrap gap-2 border-t pt-3">
                             <template v-if="gewaehlt.status === 'draft'">
-                                <Button v-if="gewaehlt.darfFreigeben" type="button" size="sm" @click="freigeben(gewaehlt)">
-                                    Freigeben
-                                </Button>
+                                <Button v-if="gewaehlt.darfFreigeben" type="button" size="sm" @click="freigeben(gewaehlt)"> Freigeben </Button>
                                 <Button v-else type="button" size="sm" variant="outline" @click="oeffneUebersteuerung(gewaehlt)">
                                     Übersteuern und freigeben
                                 </Button>
 
-                                <Button class="ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)">
-                                    Verwerfen
-                                </Button>
+                                <Button class="sm:ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)"> Verwerfen </Button>
                             </template>
 
                             <template v-else-if="gewaehlt.status === 'approved'">
@@ -568,21 +537,15 @@ onUnmounted(haltAn);
                                     :title="kampagnen.length ? '' : 'Legen Sie zuerst eine Kampagne an.'"
                                     @click="oeffneSchalten(gewaehlt)"
                                 >
-                                    <Megaphone class="mr-2 size-4" />
+                                    <Megaphone />
                                     In Kampagne schalten
                                 </Button>
 
-                                <Button type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)">
-                                    Freigabe zurücknehmen
-                                </Button>
-                                <Button class="ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)">
-                                    Verwerfen
-                                </Button>
+                                <Button type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)"> Freigabe zurücknehmen </Button>
+                                <Button class="sm:ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)"> Verwerfen </Button>
                             </template>
 
-                            <Button v-else type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)">
-                                Zurückholen
-                            </Button>
+                            <Button v-else type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)"> Zurückholen </Button>
                         </div>
                     </div>
                 </div>
@@ -617,12 +580,7 @@ onUnmounted(haltAn);
 
             <div class="grid gap-2">
                 <Label for="handlungsaufruf">Handlungsaufruf <span class="text-muted-foreground">(optional)</span></Label>
-                <Input
-                    id="handlungsaufruf"
-                    v-model="neu.handlungsaufruf"
-                    :maxlength="laengen.handlungsaufruf"
-                    placeholder="Termin anfragen"
-                />
+                <Input id="handlungsaufruf" v-model="neu.handlungsaufruf" :maxlength="laengen.handlungsaufruf" placeholder="Termin anfragen" />
                 <InputError :message="neu.errors.handlungsaufruf" />
             </div>
 

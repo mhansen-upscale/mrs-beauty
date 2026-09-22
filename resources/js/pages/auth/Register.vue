@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { LoaderCircle } from 'lucide-vue-next';
+import { Building2, LoaderCircle } from 'lucide-vue-next';
 
 const form = useForm({
     organization: '',
@@ -74,8 +74,9 @@ const submit = () => {
                     <InputError :message="form.errors.password_confirmation" />
                 </div>
 
-                <Button type="submit" class="mt-2 w-full" :tabindex="6" :disabled="form.processing">
-                    <LoaderCircle v-if="form.processing" class="h-4 w-4 animate-spin" />
+                <Button type="submit" class="mt-4 w-full" :tabindex="6" :disabled="form.processing">
+                    <LoaderCircle v-if="form.processing" class="animate-spin" />
+                    <Building2 v-else />
                     Praxis anlegen
                 </Button>
             </div>

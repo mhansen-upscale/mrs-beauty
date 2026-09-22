@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import BuchungLayout from '@/layouts/buchung/BuchungLayout.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock, LoaderCircle, MapPin, Timer } from 'lucide-vue-next';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 interface Behandler {
     uuid: string;
@@ -74,6 +74,35 @@ const props = defineProps<{
 const art = ref<string>('');
 const standort = ref<string>('');
 const laedt = ref(false);
+
+/**
+ * Nach einer Auswahl erscheint der naechste Schritt *unterhalb* des Falzes.
+ * Auf einem Telefon sieht man davon nichts -- fuer die Buchende passiert
+ * scheinbar gar nichts, und sie tippt die Karte noch einmal an. Die Strecke
+ * fuehrt deshalb selbst zum naechsten Abschnitt.
+ */
+const schrittOrt = ref<HTMLElement | null>(null);
+const schrittZeit = ref<HTMLElement | null>(null);
+
+const zeigeSchritt = async (ziel: typeof schrittOrt): Promise<void> => {
+    await nextTick();
+
+    ziel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+watch(art, (gewaehlt) => {
+    if (gewaehlt === '') {
+        return;
+    }
+
+    void zeigeSchritt(moeglicheStandorte.value.length > 1 ? schrittOrt : schrittZeit);
+});
+
+watch(standort, (gewaehlt) => {
+    if (gewaehlt !== '') {
+        void zeigeSchritt(schrittZeit);
+    }
+});
 
 const gewaehlteArt = computed<Terminart | undefined>(() => props.appointmentTypes.find((eintrag) => eintrag.uuid === art.value));
 
@@ -263,10 +292,16 @@ const behandlerNamen = (eintrag: Terminart): string =>
 </script>
 
 <template>
-    <BuchungLayout :practice="practice" :brand-style="brandStyle" :pixel-id="pixelId" :messung="messung"
+    <BuchungLayout
+        :practice="practice"
+        :brand-style="brandStyle"
+        :pixel-id="pixelId"
+        :messung="messung"
         :logo-url="logoUrl"
         :imprint-url="imprintUrl"
-        :privacy-url="privacyUrl" title="Termin buchen">
+        :privacy-url="privacyUrl"
+        title="Termin buchen"
+    >
         <div v-if="!appointmentTypes.length" class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
             Zurzeit sind keine Termine online buchbar. Bitte rufen Sie uns an.
         </div>
@@ -279,24 +314,27 @@ const behandlerNamen = (eintrag: Terminart): string =>
                     <p class="text-sm text-muted-foreground">{{ hold.date }}</p>
                 </div>
 
-                <dl class="grid gap-x-6 gap-y-2 px-5 py-4 text-sm sm:grid-cols-[8rem_1fr]">
-                    <dt class="text-muted-foreground">Uhrzeit</dt>
+                <dl class="grid gap-x-6 gap-y-3 px-5 py-4 text-sm sm:grid-cols-[8rem_1fr] sm:gap-y-2">
+                    <dt class="text-xs text-muted-foreground sm:text-sm">Uhrzeit</dt>
                     <dd class="font-medium tabular-nums">{{ hold.starts_at }}–{{ hold.ends_at }} Uhr</dd>
 
-                    <dt class="text-muted-foreground">Leistung</dt>
+                    <dt class="text-xs text-muted-foreground sm:text-sm">Leistung</dt>
                     <dd>{{ hold.type_name }}</dd>
 
-                    <dt class="text-muted-foreground">Bei</dt>
+                    <dt class="text-xs text-muted-foreground sm:text-sm">Bei</dt>
                     <dd>{{ hold.practitioner_name }}</dd>
 
-                    <dt class="text-muted-foreground">Standort</dt>
+                    <dt class="text-xs text-muted-foreground sm:text-sm">Standort</dt>
                     <dd>{{ hold.location_name }}</dd>
                 </dl>
 
                 <div class="flex flex-wrap items-center justify-between gap-2 border-t bg-muted/40 px-5 py-3">
                     <p class="flex items-center gap-2 text-xs text-muted-foreground">
                         <Timer class="size-3.5 shrink-0" />
-                        Noch <span class="font-semibold tabular-nums text-foreground">{{ verbleibend }}</span> Minuten für Sie reserviert
+                        <template v-if="verbleibend">
+                            Noch <span class="font-semibold tabular-nums text-foreground">{{ verbleibend }}</span> für Sie reserviert
+                        </template>
+                        <template v-else>Für Sie reserviert</template>
                     </p>
 
                     <Button variant="ghost" size="sm" @click="freigeben">
@@ -394,20 +432,20 @@ const behandlerNamen = (eintrag: Terminart): string =>
                         </span>
 
                         <!-- Wer sie macht: ein Gesicht nimmt mehr Unsicherheit als jeder Beschreibungstext. -->
-                        <span v-if="eintrag.practitioners.length" class="mt-3 flex items-center gap-2">
+                        <span v-if="eintrag.practitioners.length" class="mt-3 flex min-w-0 items-center gap-2">
                             <span class="flex -space-x-2">
                                 <Avatar v-for="person in eintrag.practitioners.slice(0, 4)" :key="person.uuid" class="size-7 border-2 border-card">
                                     <AvatarImage v-if="person.avatar_url" :src="person.avatar_url" :alt="person.name" />
                                     <AvatarFallback class="text-[0.6rem]">{{ person.initials }}</AvatarFallback>
                                 </Avatar>
                             </span>
-                            <span class="truncate text-xs text-muted-foreground">bei {{ behandlerNamen(eintrag) }}</span>
+                            <span class="min-w-0 truncate text-xs text-muted-foreground">bei {{ behandlerNamen(eintrag) }}</span>
                         </span>
                     </button>
                 </div>
             </section>
 
-            <section v-if="art && moeglicheStandorte.length > 1" class="space-y-3">
+            <section v-if="art && moeglicheStandorte.length > 1" ref="schrittOrt" class="scroll-mt-4 space-y-3">
                 <h2 class="text-xl font-semibold tracking-tight">Wo?</h2>
 
                 <div class="grid gap-3 sm:grid-cols-2">
@@ -428,7 +466,7 @@ const behandlerNamen = (eintrag: Terminart): string =>
                 </div>
             </section>
 
-            <section v-if="art && standort" class="space-y-3">
+            <section v-if="art && standort" ref="schrittZeit" class="scroll-mt-4 space-y-3">
                 <h2 class="text-xl font-semibold tracking-tight">Wann passt es Ihnen?</h2>
 
                 <div v-if="laedt" class="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
@@ -490,7 +528,7 @@ const behandlerNamen = (eintrag: Terminart): string =>
                                 :key="`${slot.blocked_from}-${slot.practitioner}`"
                                 type="button"
                                 :title="`bei ${slot.practitioner_name}`"
-                                class="rounded-lg border bg-background py-2.5 text-sm font-medium tabular-nums shadow-sm transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                                class="min-h-11 rounded-lg border bg-background py-2.5 text-sm font-medium tabular-nums shadow-sm transition-colors hover:border-primary hover:bg-primary hover:text-primary-foreground"
                                 @click="reservieren(slot)"
                             >
                                 {{ slot.time }}

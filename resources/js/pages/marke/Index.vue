@@ -1,18 +1,20 @@
 <script setup lang="ts">
+import AktionsButton from '@/components/AktionsButton.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/vue3';
 import { TransitionRoot } from '@headlessui/vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, ShieldCheck, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 
@@ -148,10 +150,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             <!-- 1 · Tonalität -->
             <section class="rounded-md border bg-card">
                 <header class="border-b px-4 py-3">
-                    <HeadingSmall
-                        title="Tonalität"
-                        description="Die folgenreichste Angabe: eine Anzeige in der falschen Ansprache wirkt fremd."
-                    />
+                    <HeadingSmall title="Tonalität" description="Die folgenreichste Angabe: eine Anzeige in der falschen Ansprache wirkt fremd." />
                 </header>
 
                 <div class="space-y-4 p-4">
@@ -225,7 +224,9 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             <section class="rounded-md border bg-card">
                 <header class="flex flex-wrap items-center gap-3 border-b px-4 py-3">
                     <HeadingSmall title="Wortwahl" description="Was Sie schreiben wollen — und was nicht." />
-                    <Button class="ml-auto" type="button" variant="outline" size="sm" @click="begriffOffen = true">Begriff hinzufügen</Button>
+                    <Button class="w-full sm:ml-auto sm:w-auto" type="button" variant="outline" size="sm" @click="begriffOffen = true"
+                        >Begriff hinzufügen</Button
+                    >
                 </header>
 
                 <div class="p-4">
@@ -239,9 +240,12 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                             <span class="font-medium">{{ eintrag.begriff }}</span>
                             <span v-if="eintrag.ersatz" class="text-muted-foreground">→ {{ eintrag.ersatz }}</span>
                             <span v-if="eintrag.begruendung" class="text-xs text-muted-foreground">{{ eintrag.begruendung }}</span>
-                            <Button class="ml-auto" type="button" variant="ghost" size="sm" @click="entferneBegriff(eintrag.uuid)">
-                                <Trash2 class="size-4" />
-                            </Button>
+                            <AktionsButton
+                                :icon="Trash2"
+                                beschriftung="Begriff entfernen"
+                                class="sm:ml-auto"
+                                @click="entferneBegriff(eintrag.uuid)"
+                            />
                         </li>
                     </ul>
                 </div>
@@ -251,7 +255,9 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             <section class="rounded-md border bg-card">
                 <header class="flex flex-wrap items-center gap-3 border-b px-4 py-3">
                     <HeadingSmall title="Referenzmaterial" description="Womit geworben werden darf: Räume, Team, Ablauf." />
-                    <Button class="ml-auto" type="button" variant="outline" size="sm" @click="referenzOffen = true">Material hinzufügen</Button>
+                    <Button class="w-full sm:ml-auto sm:w-auto" type="button" variant="outline" size="sm" @click="referenzOffen = true"
+                        >Material hinzufügen</Button
+                    >
                 </header>
 
                 <div class="space-y-4 p-4">
@@ -284,9 +290,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                                 geprüft
                             </Badge>
                             <Badge v-else variant="secondary">Prüfung ausstehend</Badge>
-                            <Button type="button" variant="ghost" size="sm" @click="entferneReferenz(stueck.uuid)">
-                                <Trash2 class="size-4" />
-                            </Button>
+                            <AktionsButton :icon="Trash2" beschriftung="Material entfernen" @click="entferneReferenz(stueck.uuid)" />
                         </li>
                     </ul>
                 </div>
@@ -302,11 +306,10 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 die Leiste selbst — und die klebte erst, wenn man ohnehin ganz
                 unten ist.
             -->
-            <div
-                v-if="guide.isDirty || guide.recentlySuccessful"
-                class="pointer-events-none sticky bottom-4 z-10 flex justify-center"
-            >
-                <div class="pointer-events-auto flex items-center gap-3 rounded-md border bg-card px-4 py-2 shadow-lg">
+            <div v-if="guide.isDirty || guide.recentlySuccessful" class="pointer-events-none sticky bottom-4 z-10 flex justify-center px-2">
+                <div
+                    class="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-md border bg-card px-4 py-2 shadow-lg"
+                >
                     <TransitionRoot
                         :show="guide.recentlySuccessful && !guide.isDirty"
                         enter="transition ease-in-out"
@@ -409,7 +412,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 Wortlaut wird mitgespeichert, nicht nur das Häkchen.
             -->
             <label class="flex items-start gap-2 rounded-md border p-3 text-sm">
-                <input v-model="referenz.erklaert" type="checkbox" class="mt-1" />
+                <Checkbox :checked="referenz.erklaert" class="mt-1" @update:checked="(wert: boolean) => (referenz.erklaert = wert)" />
                 <span>{{ erklaerung }}</span>
             </label>
             <InputError :message="referenz.errors.erklaert" />

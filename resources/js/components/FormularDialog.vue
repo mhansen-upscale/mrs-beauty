@@ -31,7 +31,7 @@ const emit = defineEmits<{ (e: 'absenden'): void }>();
 
 <template>
     <Dialog v-model:open="offen">
-        <DialogContent :class="['max-h-[90vh] overflow-y-auto', breit ? 'max-w-3xl' : 'max-w-lg']">
+        <DialogContent :class="breit ? 'max-w-3xl' : 'max-w-lg'">
             <DialogHeader>
                 <DialogTitle>{{ titel }}</DialogTitle>
                 <DialogDescription v-if="beschreibung">{{ beschreibung }}</DialogDescription>
@@ -40,7 +40,7 @@ const emit = defineEmits<{ (e: 'absenden'): void }>();
             <form class="space-y-4" @submit.prevent="emit('absenden')">
                 <slot />
 
-                <DialogFooter class="gap-2">
+                <DialogFooter>
                     <Button type="button" variant="ghost" @click="offen = false">Abbrechen</Button>
                     <Button type="submit" :disabled="laeuft || absendenAus">
                         <Loader2 v-if="laeuft" class="animate-spin" />

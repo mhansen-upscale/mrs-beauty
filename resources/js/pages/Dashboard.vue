@@ -73,13 +73,9 @@ const kopieren = async (adresse: string) => {
                     {{ kanal.kanal }}: {{ kanal.status }} — bitte die Verbindung erneuern.
                 </p>
 
-                <p v-if="betrieb.gestoerteKalender > 0">
-                    {{ betrieb.gestoerteKalender }} Kalenderverbindung(en) brauchen Aufmerksamkeit.
-                </p>
+                <p v-if="betrieb.gestoerteKalender > 0">{{ betrieb.gestoerteKalender }} Kalenderverbindung(en) brauchen Aufmerksamkeit.</p>
 
-                <p v-if="betrieb.gestoerteWerbekonten > 0">
-                    Die Verbindung zum Werbekonto ist gestört — solange bleiben die Zahlen stehen.
-                </p>
+                <p v-if="betrieb.gestoerteWerbekonten > 0">Die Verbindung zum Werbekonto ist gestört — solange bleiben die Zahlen stehen.</p>
 
                 <p v-if="betrieb.liegengebliebeneEreignisse > 0">
                     {{ betrieb.liegengebliebeneEreignisse }} eingegangene Nachricht(en) konnten nicht verarbeitet werden. Wir sehen uns das an.
@@ -93,7 +89,7 @@ const kopieren = async (adresse: string) => {
             -->
             <div v-if="booking" class="rounded-md border bg-card p-4">
                 <div class="flex flex-wrap items-start gap-6">
-                    <div class="min-w-64 flex-1 space-y-3">
+                    <div class="min-w-0 flex-1 space-y-3 sm:min-w-64">
                         <div>
                             <h3 class="text-sm font-medium">Ihr Buchungslink</h3>
                             <p class="text-xs text-muted-foreground">
@@ -103,13 +99,13 @@ const kopieren = async (adresse: string) => {
                         </div>
 
                         <div class="flex flex-wrap items-center gap-2">
-                            <Input :model-value="booking.url" readonly class="w-full max-w-md font-mono text-xs" />
-                            <Button variant="outline" size="sm" @click="kopieren(booking.url)">
+                            <Input :model-value="booking.url" readonly class="min-w-0 flex-1 basis-full font-mono text-xs sm:basis-64" />
+                            <Button variant="outline" @click="kopieren(booking.url)">
                                 <Check v-if="kopiert" />
                                 <Copy v-else />
                                 {{ kopiert ? 'Kopiert' : 'Kopieren' }}
                             </Button>
-                            <Button variant="ghost" size="sm" as="a" :href="booking.url" target="_blank" rel="noopener">
+                            <Button variant="ghost" as="a" :href="booking.url" target="_blank" rel="noopener">
                                 <ExternalLink />
                                 Öffnen
                             </Button>

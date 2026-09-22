@@ -419,6 +419,71 @@ it('weist einen importierten Namen mit Katalogbezeichnung aus', function (): voi
         });
 });
 
+/*
+|--------------------------------------------------------------------------
+| Die Facebook-Seite
+|--------------------------------------------------------------------------
+|
+| Sie ist der Absender jeder Anzeige und wird abgetippt: sie zu lesen
+| braeuchte `pages_show_list`, und jede Berechtigung mehr verzoegert den App
+| Review (WP-27b). Ohne sie lehnt Meta jedes Creative ab -- deshalb gibt es
+| ein Feld dafuer, und deshalb muss es auch bedienbar sein.
+|
+*/
+
+it('hinterlegt die Facebook-Seite am Werbekonto', function (): void {
+    $aufbau = new Werbeaufbau;
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->patch(route('werbung.seite', ['werbekonto' => $aufbau->konto->uuid]), ['seite' => '102938475610293'])
+        ->assertSessionHas('erfolg');
+
+    expect($aufbau->konto->fresh()?->page_external_id)->toBe('102938475610293');
+});
+
+it('nimmt als Seiten-ID nur Ziffern an', function (): void {
+    $aufbau = new Werbeaufbau;
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->patch(route('werbung.seite', ['werbekonto' => $aufbau->konto->uuid]), ['seite' => 'meine-praxis'])
+        ->assertSessionHasErrors('seite');
+
+    expect($aufbau->konto->fresh()?->page_external_id)->toBeNull();
+});
+
+it('laesst die Facebook-Seite wieder loeschen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $aufbau->konto->page_external_id = '778899';
+    $aufbau->konto->save();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->patch(route('werbung.seite', ['werbekonto' => $aufbau->konto->uuid]), ['seite' => ''])
+        ->assertSessionHas('erfolg');
+
+    expect($aufbau->konto->fresh()?->page_external_id)->toBeNull();
+});
+
+it('gibt die hinterlegte Seite an die Oberflaeche', function (): void {
+    $aufbau = new Werbeaufbau;
+    $aufbau->konto->page_external_id = '778899';
+    $aufbau->konto->save();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->get(route('werbung.index'))
+        ->assertInertia(fn ($seite) => $seite->where('konto.seite', '778899'));
+});
+
+it('laesst niemanden ohne campaigns.manage die Facebook-Seite setzen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $mitarbeiterin = User::factory()->fuer($aufbau->organisation, Role::Reception)->create();
+
+    actingAs($mitarbeiterin)
+        ->patch(route('werbung.seite', ['werbekonto' => $aufbau->konto->uuid]), ['seite' => '102938475610293'])
+        ->assertForbidden();
+
+    expect($aufbau->konto->fresh()?->page_external_id)->toBeNull();
+});
+
 it('laesst niemanden ohne campaigns.manage an die Werbung', function (): void {
     $organisation = alsMandant(organisation('Demo-Praxis'));
     $mitarbeiterin = User::factory()->fuer($organisation, Role::Reception)->create();

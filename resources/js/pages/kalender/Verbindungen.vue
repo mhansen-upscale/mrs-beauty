@@ -66,11 +66,11 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Kalender', href: '/kalender
 
 const spalten: Spalte<Zeile>[] = [
     { schluessel: 'name', titel: 'Behandler' },
-    { schluessel: 'anbieter', titel: 'Anbieter' },
+    { schluessel: 'anbieter', titel: 'Anbieter', ab: 'md' },
     { schluessel: 'status', titel: 'Status' },
-    { schluessel: 'konto', titel: 'Kalender' },
-    { schluessel: 'zuletzt', titel: 'Zuletzt abgeglichen' },
-    { schluessel: 'sichtbarkeit', titel: 'Sichtbarkeit', sortierbar: false },
+    { schluessel: 'konto', titel: 'Kalender', ab: 'lg' },
+    { schluessel: 'zuletzt', titel: 'Zuletzt abgeglichen', ab: 'lg' },
+    { schluessel: 'sichtbarkeit', titel: 'Sichtbarkeit', sortierbar: false, ab: 'lg' },
 ];
 
 const zeilen = computed<Zeile[]>(() =>

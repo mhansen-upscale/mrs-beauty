@@ -3,6 +3,7 @@ import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -29,7 +30,9 @@ const props = defineProps<{
         geprueftVon: string | null;
         geprueftAm: string | null;
     } | null;
-    probe: ({ text: string; hatBild: boolean; ampel: string; befunde: Befund[]; version: number; rechtsstand: string } & Record<string, unknown>) | null;
+    probe:
+        | ({ text: string; hatBild: boolean; ampel: string; befunde: Befund[]; version: number; rechtsstand: string } & Record<string, unknown>)
+        | null;
     katalog: { uuid: string; name: string; ampel: string; ampelText: string; befunde: Befund[] }[];
     formate: { titel: string; beschreibung: string }[];
     bussgeld: number;
@@ -56,7 +59,7 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
             <Heading title="HWG-Prüfung" description="Was Sie über Ihre Behandlungen sagen dürfen — und was nicht." />
 
             <!--
-                „Das Produkt ist eine Prüfhilfe, keine Rechtsberatung."
+                „Das Produkt ist eine Prüfhilfe, keine Rechtsberatung.“
                 Das steht hier oben, nicht in einer Fußnote — sonst entsteht
                 eine Haftung, die niemand tragen will.
             -->
@@ -66,9 +69,8 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                     Eine Prüfhilfe, keine Rechtsberatung
                 </p>
                 <p class="text-muted-foreground">
-                    Wir zeigen, was uns auffällt, und nennen die Fundstelle. Die Entscheidung bleibt bei Ihnen — im Zweifel mit jemandem,
-                    der dafür zugelassen ist. Verstöße gegen das Heilmittelwerbegesetz können mit bis zu {{ geld(bussgeld) }} geahndet
-                    werden.
+                    Wir zeigen, was uns auffällt, und nennen die Fundstelle. Die Entscheidung bleibt bei Ihnen — im Zweifel mit jemandem, der dafür
+                    zugelassen ist. Verstöße gegen das Heilmittelwerbegesetz können mit bis zu {{ geld(bussgeld) }} geahndet werden.
                 </p>
             </div>
 
@@ -77,24 +79,20 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                 sagt das. Eine Ampel, der jemand vertraut, ohne dass sie
                 geprüft ist, ist gefährlicher als gar keine.
             -->
-            <div
-                v-if="regelwerk && !regelwerk.geprueft"
-                class="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning"
-            >
+            <div v-if="regelwerk && !regelwerk.geprueft" class="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
                 <p class="flex items-center gap-2 font-medium">
                     <AlertTriangle class="size-4 shrink-0" />
                     Dieses Regelwerk ist noch nicht juristisch geprüft
                 </p>
                 <p>
-                    Fassung {{ regelwerk.version }}, Rechtsstand {{ datum(regelwerk.rechtsstand) }}. Die Regeln bilden das ab, was wir aus
-                    Gesetz und Rechtsprechung entnommen haben — eine anwaltliche Durchsicht steht aus. Nehmen Sie die Ampel als Hinweis,
-                    nicht als Freigabe.
+                    Fassung {{ regelwerk.version }}, Rechtsstand {{ datum(regelwerk.rechtsstand) }}. Die Regeln bilden das ab, was wir aus Gesetz und
+                    Rechtsprechung entnommen haben — eine anwaltliche Durchsicht steht aus. Nehmen Sie die Ampel als Hinweis, nicht als Freigabe.
                 </p>
             </div>
 
             <p v-else-if="regelwerk" class="rounded-md border border-success/40 bg-success/5 p-4 text-sm">
-                Regelwerk Fassung {{ regelwerk.version }}, Rechtsstand {{ datum(regelwerk.rechtsstand) }} — geprüft von
-                {{ regelwerk.geprueftVon }} am {{ datum(regelwerk.geprueftAm) }}.
+                Regelwerk Fassung {{ regelwerk.version }}, Rechtsstand {{ datum(regelwerk.rechtsstand) }} — geprüft von {{ regelwerk.geprueftVon }} am
+                {{ datum(regelwerk.geprueftAm) }}.
             </p>
 
             <!-- Text prüfen -->
@@ -110,7 +108,7 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                     </div>
 
                     <label class="flex items-center gap-2 text-sm">
-                        <input v-model="formular.hatBild" type="checkbox" />
+                        <Checkbox id="hat-bild" :checked="formular.hatBild" @update:checked="(wert: boolean) => (formular.hatBild = wert)" />
                         <span>Zu diesem Text gehört ein Bild</span>
                     </label>
 
@@ -162,9 +160,7 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                 </header>
 
                 <div class="space-y-3 p-4">
-                    <p v-if="!katalog.length" class="text-sm text-muted-foreground">
-                        Sie haben noch keine Behandlungsbeschreibungen hinterlegt.
-                    </p>
+                    <p v-if="!katalog.length" class="text-sm text-muted-foreground">Sie haben noch keine Behandlungsbeschreibungen hinterlegt.</p>
 
                     <p v-else-if="!beanstandet.length" class="text-sm text-muted-foreground">
                         An Ihren {{ katalog.length }} Behandlungsbeschreibungen ist uns nichts aufgefallen.
@@ -176,7 +172,7 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                             {{ eintrag.name }}
                         </p>
                         <p v-for="befund in eintrag.befunde" :key="befund.code" class="mt-1 text-muted-foreground">
-                            {{ befund.titel }} ({{ befund.fundstelle }})<template v-if="befund.stelle">: „{{ befund.stelle }}"</template>
+                            {{ befund.titel }} ({{ befund.fundstelle }})<template v-if="befund.stelle">: „{{ befund.stelle }}“</template>
                         </p>
                     </div>
                 </div>
