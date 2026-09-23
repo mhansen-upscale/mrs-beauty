@@ -189,7 +189,12 @@ final class Kampagnenverwaltung
             'campaign_id' => $kampagne->external_id,
             'status' => 'PAUSED',
             'billing_event' => 'IMPRESSIONS',
-            'optimization_goal' => $kampagne->objective === 'OUTCOME_AWARENESS' ? 'REACH' : 'LEAD_GENERATION',
+            // Die Zuordnung steht in config/mrs.php, mit der Messung als
+            // Fundstelle -- nicht jede Kombination laesst Meta zu.
+            'optimization_goal' => (string) config(
+                'mrs.ads.optimization_goals.'.(string) $kampagne->objective,
+                'LINK_CLICKS',
+            ),
 
             // **Umkreis, Alter, Geschlecht -- und nichts sonst.**
             'targeting' => (string) json_encode([

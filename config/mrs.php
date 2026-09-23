@@ -663,6 +663,27 @@ return [
             'OUTCOME_AWARENESS' => 'Bekanntheit in der Umgebung',
         ],
 
+        // **Optimierungsziel je Kampagnenziel.**
+        //
+        // Nicht jede Kombination laesst Meta zu. Am 23.09.2026 am eigenen
+        // Konto gemessen (`execution_options=["validate_only"]` auf
+        // `/adsets`, ohne etwas anzulegen):
+        //
+        //   OUTCOME_TRAFFIC  LINK_CLICKS, LANDING_PAGE_VIEWS, REACH, IMPRESSIONS
+        //   OUTCOME_LEADS    ausschliesslich LEAD_GENERATION
+        //
+        // Fuer Besuche faellt die Wahl auf LANDING_PAGE_VIEWS statt
+        // LINK_CLICKS: gezaehlt wird, wer die Buchungsseite wirklich geladen
+        // hat, nicht wer geklickt und abgebrochen hat.
+        //
+        // OUTCOME_AWARENESS ist nicht gemessen -- es gab keine solche
+        // Kampagne. REACH stand vorher im Code und bleibt.
+        'optimization_goals' => [
+            'OUTCOME_LEADS' => 'LEAD_GENERATION',
+            'OUTCOME_TRAFFIC' => 'LANDING_PAGE_VIEWS',
+            'OUTCOME_AWARENESS' => 'REACH',
+        ],
+
         // **Laenge eines selbst gewaehlten Namens.** Meta laesst mehr zu,
         // aber ein Name, der in keine Spalte passt, hilft niemandem -- und
         // das Merkmal haengt hinten noch an (Regel 2, gelockert 23.09.2026).

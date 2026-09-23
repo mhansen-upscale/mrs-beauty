@@ -634,6 +634,85 @@ it('meldet eine Kampagne ohne Anzeigengruppe als Fehler, nicht als Erfolg', func
     expect(AdCampaign::query()->first()?->sync_state)->toBe(SyncState::Failed);
 });
 
+/*
+|--------------------------------------------------------------------------
+| Das Optimierungsziel gehoert zum Kampagnenziel
+|--------------------------------------------------------------------------
+|
+| Der Code kannte zwei Faelle: REACH fuer OUTCOME_AWARENESS, LEAD_GENERATION
+| fuer alles andere. Das Produkt bietet aber drei Ziele an -- und bei
+| OUTCOME_TRAFFIC lehnt Meta LEAD_GENERATION ab: "Das ausgewaehlte
+| Performance-Ziel kann nicht mit deinem Kampagnenziel verwendet werden."
+|
+| Am 23.09.2026 an Metas eigenem Konto gemessen (execution_options
+| validate_only, ohne etwas anzulegen):
+|
+|   OUTCOME_TRAFFIC  LINK_CLICKS, LANDING_PAGE_VIEWS, REACH, IMPRESSIONS
+|   OUTCOME_LEADS    ausschliesslich LEAD_GENERATION
+|
+| Die Zuordnung steht deshalb in config/mrs.php, nicht als Bedingung im Code.
+|
+*/
+
+it('waehlt zu jedem Kampagnenziel ein gueltiges Optimierungsziel', function (): void {
+    $ziele = (array) config('mrs.ads.objectives');
+    $optimierung = (array) config('mrs.ads.optimization_goals');
+
+    // Ein neues Kampagnenziel ohne Zuordnung faellt hier auf -- und nicht
+    // erst an Metas Ablehnung.
+    expect(array_keys($optimierung))->toBe(array_keys($ziele));
+});
+
+it('schickt bei Besuchen nicht das Ziel fuer Anfragen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_TRAFFIC']));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(['id' => 'gruppe-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    Http::assertSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adsets')
+        && ($anfrage->data()['optimization_goal'] ?? null) === 'LANDING_PAGE_VIEWS');
+});
+
+it('schickt bei Anfragen weiterhin LEAD_GENERATION', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_LEADS']));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(['id' => 'gruppe-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    Http::assertSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adsets')
+        && ($anfrage->data()['optimization_goal'] ?? null) === 'LEAD_GENERATION');
+});
+
 it('gibt bei der Kampagne nach dem letzten Versuch auf', function (): void {
     $aufbau = new Werbeaufbau;
     $standort = werbestandort();
