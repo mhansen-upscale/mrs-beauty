@@ -218,6 +218,124 @@ it('laesst eine Anzeige bei fehlender Berechtigung offen', function (): void {
         ->and($frisch?->sync_error)->toBeNull();
 });
 
+/*
+|--------------------------------------------------------------------------
+| Wo laeuft diese Anzeige?
+|--------------------------------------------------------------------------
+|
+| "Laeuft in 2 Kampagnen" beantwortet nicht die Frage, die man tatsaechlich
+| hat: in welchen. Wer eine Anzeige anhalten oder ihr Budget aendern will,
+| muss sonst jede Kampagne einzeln aufmachen und nachsehen.
+|
+*/
+
+it('nennt die Kampagne, in der eine Anzeige laeuft', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $aufbau->geplanteAnzeige();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite->where('vorschlaege.0.laeuftIn', [$aufbau->kampagne->name]));
+});
+
+it('laesst die Liste leer, solange eine Anzeige nirgends laeuft', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $aufbau->vorschlagMitGrafik();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite->where('vorschlaege.0.laeuftIn', []));
+});
+
+it('nennt jede Kampagne nur einmal', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $vorschlag = $aufbau->vorschlagMitGrafik();
+
+    // Zwei Anzeigengruppen derselben Kampagne -- der Name gehoert trotzdem
+    // nur einmal in die Liste.
+    $zweite = $aufbau->gruppe->replicate();
+    $zweite->external_id = 'gruppe-extern-2';
+    $zweite->save();
+
+    app(Anzeigenschaltung::class)->plane($aufbau->gruppe, $vorschlag);
+    app(Anzeigenschaltung::class)->plane($zweite, $vorschlag);
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite->where('vorschlaege.0.laeuftIn', [$aufbau->kampagne->name]));
+});
+
+/*
+|--------------------------------------------------------------------------
+| Was leer ist, geht nicht mit
+|--------------------------------------------------------------------------
+|
+| `ad_suggestions.description` ist nullable, und das Feld ging trotzdem
+| bedingungslos in `link_data`. Meta beantwortet ein `"description": null`
+| mit "Invalid parameter" -- und lehnt damit **jedes** Creative ab, zu dem
+| das Modell keine Beschreibung geliefert hat.
+|
+| Aufgefallen ist es erst auf der Staging-Umgebung. Der Testaufbau setzt
+| Ueberschrift, Text und Handlungsaufruf, aber keine Beschreibung -- der Fall
+| lief hier also die ganze Zeit mit, nur nahm `Http::fake()` jeden Payload
+| widerspruchslos an.
+|
+*/
+
+it('schickt kein leeres Feld in das Creative', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    expect($anzeige->vorschlag()->first()?->description)->toBeNull();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['id' => 'anzeige-1']),
+    ]);
+
+    app(Anzeigenschaltung::class)->uebertrage($anzeige, $aufbau->werbung->konto);
+
+    Http::assertSent(function ($anfrage): bool {
+        if (! str_ends_with((string) $anfrage->url(), '/adcreatives')) {
+            return false;
+        }
+
+        $inhalt = json_decode((string) $anfrage->data()['object_story_spec'], true);
+
+        return is_array($inhalt) && ! array_key_exists('description', $inhalt['link_data']);
+    });
+});
+
+it('schickt eine vorhandene Beschreibung mit', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    $vorschlag = $anzeige->vorschlag()->firstOrFail();
+    $vorschlag->description = 'In Ruhe und ohne Druck.';
+    $vorschlag->save();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['id' => 'anzeige-1']),
+    ]);
+
+    app(Anzeigenschaltung::class)->uebertrage($anzeige, $aufbau->werbung->konto);
+
+    Http::assertSent(function ($anfrage): bool {
+        if (! str_ends_with((string) $anfrage->url(), '/adcreatives')) {
+            return false;
+        }
+
+        $inhalt = json_decode((string) $anfrage->data()['object_story_spec'], true);
+
+        return is_array($inhalt) && ($inhalt['link_data']['description'] ?? null) === 'In Ruhe und ohne Druck.';
+    });
+});
+
 it('schaltet ohne hinterlegte Facebook-Seite nicht und sagt warum', function (): void {
     $aufbau = new Anzeigenaufbau;
     $anzeige = $aufbau->geplanteAnzeige();

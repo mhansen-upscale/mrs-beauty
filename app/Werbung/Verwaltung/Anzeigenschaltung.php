@@ -232,18 +232,26 @@ final class Anzeigenschaltung
             ));
         }
 
+        // **Was leer ist, geht nicht mit.** `description` ist nullable, und ein
+        // `"description": null` beantwortet Meta mit "Invalid parameter" --
+        // es lehnt damit das ganze Creative ab, nicht nur das Feld. Der
+        // Handlungsaufruf steht ausserhalb der Filterung: er ist ein Array
+        // und immer gesetzt.
+        $inhalt = array_filter([
+            'image_hash' => $anzeige->image_hash,
+            'link' => $this->ziel(),
+            'message' => $vorschlag->body,
+            'name' => $vorschlag->headline,
+            'description' => $vorschlag->description,
+        ], fn (?string $wert): bool => $wert !== null && $wert !== '');
+
+        $inhalt['call_to_action'] = ['type' => (string) config('mrs.ads.call_to_action')];
+
         return $this->schreiber->lege($token, $konto->external_id.'/adcreatives', [
             'name' => (string) $anzeige->name,
             'object_story_spec' => (string) json_encode([
                 'page_id' => $seite,
-                'link_data' => [
-                    'image_hash' => $anzeige->image_hash,
-                    'link' => $this->ziel(),
-                    'message' => $vorschlag->body,
-                    'name' => $vorschlag->headline,
-                    'description' => $vorschlag->description,
-                    'call_to_action' => ['type' => (string) config('mrs.ads.call_to_action')],
-                ],
+                'link_data' => $inhalt,
             ], JSON_UNESCAPED_UNICODE),
         ]);
     }

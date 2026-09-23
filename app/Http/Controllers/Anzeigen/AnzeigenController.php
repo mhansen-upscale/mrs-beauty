@@ -26,6 +26,7 @@ use App\Models\Organization;
 use App\Models\User;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -73,9 +74,26 @@ final class AnzeigenController extends Controller
             ->limit(30)
             ->get();
 
+        // **In welchen Kampagnen laeuft dieser Entwurf?** Eine blosse Zahl
+        // beantwortet die Frage nicht, die man tatsaechlich hat -- wer eine
+        // Anzeige anhalten will, muesste sonst jede Kampagne einzeln
+        // aufmachen. Einmal geladen, nicht je Zeile gezaehlt.
+        $laeuftIn = Ad::query()
+            ->whereIn('ad_suggestion_id', $vorschlaege->modelKeys())
+            ->with('set.campaign')
+            ->get()
+            ->groupBy(fn (Ad $a): string => (string) $a->ad_suggestion_id)
+            ->map(fn (Collection $anzeigen): array => $anzeigen
+                ->map(fn (Ad $a): ?string => $a->set?->campaign?->name)
+                ->filter()
+                // Zwei Anzeigengruppen derselben Kampagne sind eine Kampagne.
+                ->unique()
+                ->values()
+                ->all());
+
         return Inertia::render('anzeigen/Index', [
             'vorschlaege' => $vorschlaege
-                ->map(function (AdSuggestion $v) use ($frist, $steht): array {
+                ->map(function (AdSuggestion $v) use ($frist, $steht, $laeuftIn): array {
                     $bild = $v->bild();
                     $laeuft = ! $bild instanceof Attachment
                         && $v->image_requested_at !== null
@@ -106,8 +124,6 @@ final class AnzeigenController extends Controller
                         // dreht sie ewig.
                         'bildLaeuft' => $laeuft,
 
-                        // In welchen Kampagnen diese Anzeige schon laeuft --
-                        // damit niemand dieselbe zweimal schaltet.
                         'motiv' => $v->image_brief,
 
                         // **Welches Modell die Grafik gemacht hat.** Am
@@ -116,9 +132,7 @@ final class AnzeigenController extends Controller
                         // den alten Auftrag -- ohne Bildmotiv. Sichtbar
                         // waere das in einer Zeile gewesen.
                         'bildmodell' => $v->image_model,
-                        'geschaltet' => Ad::query()
-                            ->where('ad_suggestion_id', $v->getKey())
-                            ->count(),
+                        'laeuftIn' => $laeuftIn->get((string) $v->getKey(), []),
                         'bildFehler' => $v->image_error ?? ($this->abgebrochen($v, $bild, $laeuft)
                             ? ($steht
                                 ? 'Der Auftrag wartet noch — die Warteschlange wird gerade nicht abgearbeitet.'

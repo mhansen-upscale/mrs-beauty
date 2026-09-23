@@ -45,7 +45,8 @@ interface Vorschlag {
     bildFehler: string | null;
     motiv: string | null;
     bildmodell: string | null;
-    geschaltet: number;
+    /** Namen der Kampagnen, in denen dieser Entwurf laeuft. */
+    laeuftIn: string[];
 }
 
 interface Kampagne {
@@ -353,9 +354,21 @@ onUnmounted(haltAn);
                         </span>
                     </span>
 
-                    <span class="flex items-baseline justify-between gap-2 border-t px-3 py-2">
-                        <span class="min-w-0 truncate text-sm font-medium">{{ vorschlag.ueberschrift }}</span>
-                        <span class="shrink-0 text-xs text-muted-foreground">{{ wochentext(vorschlag.woche) }}</span>
+                    <span class="block border-t px-3 py-2">
+                        <span class="flex items-baseline justify-between gap-2">
+                            <span class="min-w-0 truncate text-sm font-medium">{{ vorschlag.ueberschrift }}</span>
+                            <span class="shrink-0 text-xs text-muted-foreground">{{ wochentext(vorschlag.woche) }}</span>
+                        </span>
+
+                        <!--
+                            Wo die Anzeige laeuft, gehoert auf die Kachel:
+                            „laeuft in 2 Kampagnen" zwingt sonst dazu, jede
+                            einzeln aufzumachen, um die eine zu finden.
+                        -->
+                        <span v-if="vorschlag.laeuftIn.length" class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Megaphone class="size-3 shrink-0" />
+                            <span class="min-w-0 truncate">{{ vorschlag.laeuftIn.join(', ') }}</span>
+                        </span>
                     </span>
                 </button>
             </div>
@@ -504,10 +517,16 @@ onUnmounted(haltAn);
                             </div>
                         </div>
 
-                        <p v-if="gewaehlt.geschaltet > 0" class="rounded-md border p-2 text-xs text-muted-foreground">
-                            Läuft in {{ gewaehlt.geschaltet }} {{ gewaehlt.geschaltet === 1 ? 'Kampagne' : 'Kampagnen' }} — den Zustand sehen Sie
-                            unter <strong>Kampagnen</strong>.
-                        </p>
+                        <div v-if="gewaehlt.laeuftIn.length" class="rounded-md border p-2 text-xs text-muted-foreground">
+                            <span class="flex items-center gap-1.5 font-medium text-foreground">
+                                <Megaphone class="size-3 shrink-0" />
+                                {{ gewaehlt.laeuftIn.length === 1 ? 'Läuft in dieser Kampagne' : 'Läuft in diesen Kampagnen' }}
+                            </span>
+                            <ul class="mt-1 space-y-0.5">
+                                <li v-for="name in gewaehlt.laeuftIn" :key="name" class="truncate">{{ name }}</li>
+                            </ul>
+                            <p class="mt-1">Den Zustand sehen Sie unter <strong>Kampagnen</strong>.</p>
+                        </div>
 
                         <p v-if="gewaehlt.uebersteuert" class="rounded-md border p-2 text-xs text-muted-foreground">
                             Übersteuert: {{ gewaehlt.uebersteuerungsgrund }}
