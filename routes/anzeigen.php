@@ -33,4 +33,11 @@ Route::middleware(['auth', 'verified', 'can:campaigns.manage'])->group(function 
     // Der letzte Meter: aus dem freigegebenen Entwurf wird eine Anzeige
     // (WP-27b). Angestossen, nicht abgewartet.
     Route::post('anzeigen/{vorschlag}/schalten', [AnzeigenController::class, 'schalten'])->name('anzeigen.schalten');
+
+    // **Noch einmal, auf Verlangen.** Eine fachliche Ablehnung wiederholt das
+    // Produkt nicht von selbst -- lag die Ursache aber ausserhalb (eine
+    // fehlende Freigabe, eine App im Entwicklungsmodus), bliebe die Anzeige
+    // sonst fuer immer liegen: erneut schalten lehnt der Controller ab, weil
+    // es sie ja schon gibt.
+    Route::post('anzeigen/uebertragung/{anzeige}', [AnzeigenController::class, 'erneutUebertragen'])->name('anzeigen.erneut');
 });

@@ -7,9 +7,11 @@ namespace App\Http\Controllers\Werbung;
 use App\Enums\Ability;
 use App\Enums\SyncState;
 use App\Http\Controllers\Controller;
+use App\Jobs\AnzeigeUebertragen;
 use App\Jobs\KampagneUebertragen;
 use App\Jobs\WerbestrukturAbgleichen;
 use App\Jobs\WerbezahlenAbgleichen;
+use App\Models\Ad;
 use App\Models\AdAccount;
 use App\Models\AdCampaign;
 use App\Models\AdSet;
@@ -229,6 +231,17 @@ final class WerbekontoController extends Controller
             ->where('sync_state', SyncState::Pending->value)
             ->get()
             ->each(fn (AdCampaign $wartend) => KampagneUebertragen::dispatch(
+                (string) $organisation->uuid,
+                (string) $wartend->uuid,
+            ));
+
+        // Dasselbe fuer Anzeigen. Nur die wartenden: eine fachlich abgelehnte
+        // wird beim zwanzigsten Versuch nicht angenommen -- die stellt ein
+        // Mensch erneut ein (anzeigen.erneut).
+        Ad::query()
+            ->where('sync_state', SyncState::Pending->value)
+            ->get()
+            ->each(fn (Ad $wartend) => AnzeigeUebertragen::dispatch(
                 (string) $organisation->uuid,
                 (string) $wartend->uuid,
             ));

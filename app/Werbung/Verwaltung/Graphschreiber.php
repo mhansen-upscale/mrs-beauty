@@ -8,6 +8,7 @@ use App\Support\Fehlereinordnung;
 use App\Werbung\Werbefehler;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * **Die einzige Stelle im Produkt, die bei Meta schreibt.**
@@ -97,9 +98,25 @@ final class Graphschreiber
         }
 
         if ($antwort->failed()) {
-            throw new Werbefehler(
-                Fehlereinordnung::ausMetaAntwort($antwort->status(), (array) $antwort->json())
-            );
+            $fehler = (array) $antwort->json();
+
+            // **Die ganze Antwort ins Protokoll.** An die Praxis geht ein
+            // lesbarer Satz; `error_subcode` und `fbtrace_id` sind aber das
+            // Einzige, womit sich Metas Doku und Metas Support durchsuchen
+            // lassen. Am 23.09.2026 stand an der Anzeige "Invalid parameter"
+            // -- die Ursache (App im Entwicklungsmodus) stand im Subcode,
+            // und den hatte niemand mehr.
+            Log::warning('Meta hat einen Schreibvorgang abgelehnt.', [
+                'pfad' => $pfad,
+                'status' => $antwort->status(),
+                'code' => data_get($fehler, 'error.code'),
+                'subcode' => data_get($fehler, 'error.error_subcode'),
+                'meldung' => data_get($fehler, 'error.message'),
+                'klartext' => data_get($fehler, 'error.error_user_msg'),
+                'fbtrace_id' => data_get($fehler, 'error.fbtrace_id'),
+            ]);
+
+            throw new Werbefehler(Fehlereinordnung::ausMetaAntwort($antwort->status(), $fehler));
         }
 
         $daten = $antwort->json();

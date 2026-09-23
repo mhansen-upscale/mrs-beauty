@@ -353,6 +353,83 @@ it('zieht beim erneuten Verbinden liegengebliebene Aenderungen nach', function (
     Queue::assertPushed(KampagneUebertragen::class);
 });
 
+/*
+|--------------------------------------------------------------------------
+| Fertig heisst: Kampagne **und** Gruppe
+|--------------------------------------------------------------------------
+|
+| Die Kampagne wurde als `Synced` gespeichert, sobald ihre eigene Kennung da
+| war -- die Anzeigengruppe entsteht erst danach. Bricht dieser zweite
+| Schritt ab, bleibt ein halber Zustand: bei Meta eine Kampagne ohne Gruppe,
+| lokal eine Kampagne, die sich fuer fertig haelt.
+|
+| Und weil beide Wiederanlaeufe `Pending` suchen, holt sie danach **keiner**
+| mehr ein. Jede Anzeige scheitert dann auf ewig mit `adset_not_synced`.
+| Genau so lag es am 23.09.2026 auf der Staging-Umgebung.
+|
+*/
+
+it('meldet die Kampagne erst als uebertragen, wenn auch die Gruppe steht', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(Werbeaufbau::fehler(100, 0, 'Die Zielgruppe ist zu klein.'), 400),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    $frisch = AdCampaign::query()->first();
+
+    // Nicht "fertig": sonst holt sie kein Wiederanlauf mehr ein.
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        ->and($frisch?->sync_error)->toBe('Die Zielgruppe ist zu klein.')
+        // Metas Kennung bleibt trotzdem stehen -- sie ist dort angelegt, und
+        // ein zweiter Lauf soll keine zweite Kampagne erzeugen.
+        ->and($frisch?->external_id)->toBe('kampagne-1');
+});
+
+it('meldet eine Kampagne ohne Anzeigengruppe als Fehler, nicht als Erfolg', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    // Eine Kampagne ohne Gruppe ist ein Datenfehler, kein Normalfall. Bisher
+    // kehrte die Uebertragung dabei wortlos zurueck und verbuchte Erfolg.
+    AdSet::query()->delete();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'kampagne-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    expect(AdCampaign::query()->first()?->sync_state)->toBe(SyncState::Failed);
+});
+
 it('zeigt eine fachliche Ablehnung im Klartext', function (): void {
     $aufbau = new Werbeaufbau;
     $standort = werbestandort();

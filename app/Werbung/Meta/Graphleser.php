@@ -36,7 +36,10 @@ final class Graphleser
     {
         $anfrage['limit'] ??= (int) config('mrs.ads.page_size');
 
-        $adresse = $this->basis().'/'.ltrim($pfad, '/');
+        $grundadresse = $this->basis().'/'.ltrim($pfad, '/');
+        $grundanfrage = $anfrage;
+
+        $adresse = $grundadresse;
         $grenze = max(1, (int) config('mrs.ads.max_pages'));
         $zeilen = [];
         $gesehen = [];
@@ -45,15 +48,43 @@ final class Graphleser
             $antwort = $this->hole($token, $adresse, $anfrage);
 
             $daten = data_get($antwort, 'data', []);
+            $neue = 0;
 
             if (is_array($daten)) {
                 foreach ($daten as $zeile) {
                     if (is_array($zeile)) {
                         $zeilen[] = $zeile;
+                        $neue++;
                     }
                 }
             }
 
+            // **Die Folgeseite bauen wir selbst.** Metas `paging.next` zeigt
+            // auf *seine* aktuelle Version statt auf die festgenagelte
+            // (docs/integrationen/meta.md) und traegt doppelt kodierte
+            // Parameter: `%255B%2522` statt `%5B%22`. Wer ihr folgt, bekommt
+            // "Invalid parameter" -- und `/search` liefert sie **immer**,
+            // auch wenn nichts folgt. Genau das liess am 23.09.2026 jede
+            // Ortsaufloesung scheitern, obwohl die erste Seite das Ergebnis
+            // schon hatte. Vom Cursor kommt deshalb nur der Cursor.
+            $cursor = data_get($antwort, 'paging.cursors.after');
+
+            if (is_string($cursor) && $cursor !== '') {
+                if ($neue === 0 || isset($gesehen[$cursor])) {
+                    return $zeilen;
+                }
+
+                $gesehen[$cursor] = true;
+
+                $adresse = $grundadresse;
+                $anfrage = $grundanfrage;
+                $anfrage['after'] = $cursor;
+
+                continue;
+            }
+
+            // Ohne Cursor bleibt nur Metas Adresse -- aeltere Kanten liefern
+            // keinen. Sie traegt Token und Parameter bereits mit sich.
             $weiter = data_get($antwort, 'paging.next');
 
             if (! is_string($weiter) || $weiter === '' || isset($gesehen[$weiter])) {
@@ -62,7 +93,6 @@ final class Graphleser
 
             $gesehen[$weiter] = true;
 
-            // Die Folgeadresse traegt Token und Parameter bereits mit sich.
             $adresse = $weiter;
             $anfrage = [];
         }

@@ -2,17 +2,22 @@
 
 declare(strict_types=1);
 
+use App\Enums\Role;
 use App\Enums\SyncState;
 use App\Enums\Vorschlagsstatus;
 use App\Jobs\AnzeigeUebertragen;
 use App\Models\Ad;
 use App\Models\AdSet;
 use App\Models\Treatment;
+use App\Models\User;
 use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use App\Werbung\Verwaltung\Kampagnenname;
 use Carbon\CarbonImmutable;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
 use function Pest\Laravel\actingAs;
@@ -220,6 +225,108 @@ it('laesst eine Anzeige bei fehlender Berechtigung offen', function (): void {
 
 /*
 |--------------------------------------------------------------------------
+| Eine gescheiterte Anzeige bleibt sonst fuer immer liegen
+|--------------------------------------------------------------------------
+|
+| Fuer Kampagnen zieht das Verbinden Liegengebliebenes nach. Fuer Anzeigen
+| gab es das nicht: eine einmal gescheiterte Anzeige stand dauerhaft auf
+| `failed` -- erneut schalten lehnte der Controller ab ("laeuft in dieser
+| Kampagne bereits"), und nichts stellte den Auftrag neu ein.
+|
+| Am 23.09.2026 lag die Ursache ausserhalb des Produkts (App im
+| Entwicklungsmodus). Nach dem Beheben blieb die Anzeige trotzdem liegen.
+|
+| **Wartend zieht das System selbst nach, abgelehnt entscheidet ein Mensch.**
+| Eine fachliche Ablehnung blind zu wiederholen ist genau das, was die
+| Wiederholungslogik sonst vermeidet.
+|
+*/
+
+it('zeigt eine gescheiterte Uebertragung an der Anzeige', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+    $anzeige->sync_state = SyncState::Failed;
+    $anzeige->sync_error = 'Die App ist im Entwicklungsmodus.';
+    $anzeige->save();
+
+    // Ohne diese Angabe steht der Fehler nur in der Datenbank -- die Praxis
+    // sieht eine Anzeige, die aussieht wie geschaltet und es nicht ist.
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite
+            ->where('vorschlaege.0.uebertragung.zustand', 'failed')
+            ->where('vorschlaege.0.uebertragung.fehler', 'Die App ist im Entwicklungsmodus.')
+            ->where('vorschlaege.0.uebertragung.anzeige', (string) $anzeige->uuid));
+});
+
+it('meldet nichts, solange die Uebertragung geglueckt ist', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+    $anzeige->sync_state = SyncState::Synced;
+    $anzeige->save();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite->where('vorschlaege.0.uebertragung', null));
+});
+
+it('zieht eine wartende Anzeige beim Verbinden nach', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    expect($anzeige->sync_state)->toBe(SyncState::Pending);
+
+    // Die Auswahl, wie sie nach dem Rueckweg von Meta in der Sitzung liegt.
+    session()->put('werbung.auswahl', [
+        'token' => Crypt::encryptString('neues-token'),
+        'laeuftAb' => null,
+        'konten' => [['kennung' => Werbeaufbau::KONTO, 'name' => 'Praxis', 'waehrung' => 'EUR', 'nutzbar' => true]],
+    ]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->post(route('werbung.auswaehlen'), ['kennung' => Werbeaufbau::KONTO])
+        ->assertRedirect();
+
+    Queue::assertPushed(AnzeigeUebertragen::class);
+});
+
+it('stellt eine gescheiterte Anzeige auf Verlangen erneut ein', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+    $anzeige->sync_state = SyncState::Failed;
+    $anzeige->sync_error = 'Die App ist im Entwicklungsmodus.';
+    $anzeige->save();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->post(route('anzeigen.erneut', ['anzeige' => $anzeige->uuid]))
+        ->assertSessionHas('erfolg');
+
+    Queue::assertPushed(AnzeigeUebertragen::class);
+
+    // Der alte Fehler steht der neuen Uebertragung nicht mehr im Weg.
+    $frisch = $anzeige->fresh();
+
+    expect($frisch?->sync_state)->toBe(SyncState::Pending)
+        ->and($frisch?->sync_error)->toBeNull();
+});
+
+it('laesst niemanden ohne campaigns.manage erneut uebertragen', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    $mitarbeiterin = User::factory()->fuer($aufbau->werbung->organisation, Role::Reception)->create();
+
+    actingAs($mitarbeiterin)
+        ->post(route('anzeigen.erneut', ['anzeige' => $anzeige->uuid]))
+        ->assertForbidden();
+});
+
+/*
+|--------------------------------------------------------------------------
 | Wo laeuft diese Anzeige?
 |--------------------------------------------------------------------------
 |
@@ -281,6 +388,116 @@ it('nennt jede Kampagne nur einmal', function (): void {
 | widerspruchslos an.
 |
 */
+
+/*
+|--------------------------------------------------------------------------
+| Metas Meldung ist fuer Entwickler, error_user_msg fuer Menschen
+|--------------------------------------------------------------------------
+|
+| `error.message` ist bei fachlichen Ablehnungen oft nur "Invalid parameter".
+| Der Satz, der sagt, was zu tun ist, steht daneben in `error_user_msg` --
+| und der Schluessel zu Metas Doku in `error_subcode`. Beides wurde
+| weggeworfen.
+|
+| Das hat am 23.09.2026 fuenf Runden gekostet: Eine App im Entwicklungsmodus
+| kann kein Creative anlegen. An der Anzeige stand "Invalid parameter"; die
+| Antwort daneben sagte es im Klartext.
+|
+*/
+
+it('nimmt Metas Klartext statt der Entwicklermeldung', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*' => Http::response([
+            'error' => [
+                'message' => 'Invalid parameter',
+                'code' => 100,
+                'error_subcode' => 1885183,
+                'error_user_title' => 'Beitrag der Werbeanzeige wurde mit einer App im Entwicklungsmodus erstellt',
+                'error_user_msg' => 'Der Beitrag der Werbeanzeige wurde von einer App im Entwicklungsmodus erstellt. Sie muss öffentlich sein, um diese Werbeanzeige erstellen zu können.',
+            ],
+        ], 400),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $fehler = (string) $anzeige->fresh()?->sync_error;
+
+    // An der Anzeige steht der Satz, der sagt, was zu tun ist -- nicht
+    // "Invalid parameter", und ohne Code: die Praxis kann nur beheben, was
+    // sie lesen kann.
+    expect($fehler)->toContain('Entwicklungsmodus')
+        ->and($fehler)->not->toContain('1885183')
+        ->and($fehler)->not->toBe('Invalid parameter');
+});
+
+it('haelt Subcode und fbtrace_id im Protokoll fest', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    /** @var list<array<string, mixed>> $protokoll */
+    $protokoll = [];
+
+    Log::listen(function (MessageLogged $eintrag) use (&$protokoll): void {
+        $protokoll[] = $eintrag->context;
+    });
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*' => Http::response([
+            'error' => [
+                'message' => 'Invalid parameter',
+                'code' => 100,
+                'error_subcode' => 1885183,
+                'error_user_msg' => 'Die App ist im Entwicklungsmodus.',
+                'fbtrace_id' => 'Af75eVNGetlA9Ek5YQ-MSwq',
+            ],
+        ], 400),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    // Ohne Subcode und fbtrace_id laesst sich weder Metas Doku noch Metas
+    // Support durchsuchen. Genau die fehlten am 23.09.2026.
+    $treffer = array_filter(
+        $protokoll,
+        fn (array $zusatz): bool => ($zusatz['subcode'] ?? null) === 1885183
+            && ($zusatz['fbtrace_id'] ?? null) === 'Af75eVNGetlA9Ek5YQ-MSwq'
+    );
+
+    expect($treffer)->not->toBeEmpty();
+});
+
+it('faellt auf die Entwicklermeldung zurueck, wenn Meta keinen Klartext schickt', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*' => Http::response([
+            'error' => ['message' => 'Das Bild ist zu klein für dieses Format.', 'code' => 100],
+        ], 400),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    expect($anzeige->fresh()?->sync_error)->toBe('Das Bild ist zu klein für dieses Format.');
+});
 
 it('schickt kein leeres Feld in das Creative', function (): void {
     $aufbau = new Anzeigenaufbau;

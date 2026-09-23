@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, Image as Bild, ChevronDown, Loader2, Megaphone, Plus, Sparkles } from 'lucide-vue-next';
+import { AlertTriangle, Image as Bild, ChevronDown, Loader2, Megaphone, Plus, RefreshCw, Sparkles } from 'lucide-vue-next';
 import { computed, onUnmounted, ref, watch } from 'vue';
 
 interface Befund {
@@ -47,6 +47,9 @@ interface Vorschlag {
     bildmodell: string | null;
     /** Namen der Kampagnen, in denen dieser Entwurf laeuft. */
     laeuftIn: string[];
+
+    /** Haengt die Uebertragung zu Meta? `null`, solange alles durch ist. */
+    uebertragung: { anzeige: string; zustand: string; fehler: string | null } | null;
 }
 
 interface Kampagne {
@@ -159,6 +162,15 @@ const anzeigeSchalten = () =>
         preserveScroll: true,
         onSuccess: () => (schaltenOffen.value = false),
     });
+
+/**
+ * **Noch einmal, auf Verlangen.** Eine fachliche Ablehnung wiederholt das
+ * Produkt nicht von selbst — lag die Ursache aber ausserhalb, bliebe die
+ * Anzeige sonst fuer immer liegen.
+ */
+const erneut = useForm({});
+
+const erneutUebertragen = (anzeige: string) => erneut.post(route('anzeigen.erneut', { anzeige }), { preserveScroll: true });
 
 const uebersteuerung = useForm({ grund: '' });
 
@@ -369,6 +381,20 @@ onUnmounted(haltAn);
                             <Megaphone class="size-3 shrink-0" />
                             <span class="min-w-0 truncate">{{ vorschlag.laeuftIn.join(', ') }}</span>
                         </span>
+
+                        <!--
+                            Eine Anzeige, die nicht angekommen ist, sieht sonst
+                            aus wie eine, die laeuft.
+                        -->
+                        <span
+                            v-if="vorschlag.uebertragung"
+                            class="mt-1 flex items-center gap-1.5 text-xs"
+                            :class="vorschlag.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-muted-foreground'"
+                        >
+                            <AlertTriangle v-if="vorschlag.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
+                            <Loader2 v-else class="size-3 shrink-0 animate-spin" />
+                            {{ vorschlag.uebertragung.zustand === 'failed' ? 'Nicht übertragen' : 'Wird übertragen' }}
+                        </span>
                     </span>
                 </button>
             </div>
@@ -515,6 +541,29 @@ onUnmounted(haltAn);
                                     </template>
                                 </p>
                             </div>
+                        </div>
+
+                        <div
+                            v-if="gewaehlt.uebertragung?.zustand === 'failed'"
+                            class="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs"
+                        >
+                            <p class="flex items-center gap-1.5 font-medium text-destructive">
+                                <AlertTriangle class="size-3 shrink-0" />
+                                Diese Anzeige ist nicht bei Meta angekommen.
+                            </p>
+                            <p v-if="gewaehlt.uebertragung.fehler" class="text-muted-foreground">
+                                {{ gewaehlt.uebertragung.fehler }}
+                            </p>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                :disabled="erneut.processing"
+                                @click="erneutUebertragen(gewaehlt.uebertragung.anzeige)"
+                            >
+                                <RefreshCw />
+                                Erneut übertragen
+                            </Button>
                         </div>
 
                         <div v-if="gewaehlt.laeuftIn.length" class="rounded-md border p-2 text-xs text-muted-foreground">

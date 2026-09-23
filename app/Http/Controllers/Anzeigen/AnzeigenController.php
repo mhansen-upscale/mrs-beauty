@@ -12,6 +12,7 @@ use App\Anzeigen\Vorschlagslauf;
 use App\Datenschutz\Anhangspeicher;
 use App\Enums\Ability;
 use App\Enums\Ampel;
+use App\Enums\SyncState;
 use App\Enums\Vorschlagsstatus;
 use App\Http\Controllers\Controller;
 use App\Jobs\AnzeigenbildErzeugen;
@@ -24,6 +25,7 @@ use App\Models\AdSuggestion;
 use App\Models\Attachment;
 use App\Models\Organization;
 use App\Models\User;
+use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
@@ -91,9 +93,27 @@ final class AnzeigenController extends Controller
                 ->values()
                 ->all());
 
+        // **Eine Anzeige, die nicht bei Meta ankam, sieht aus wie eine, die
+        // laeuft.** Der Fehler stand bisher nur in der Datenbank. Gemeldet
+        // wird die erste, die haengt -- wartend oder abgelehnt.
+        $uebertragung = Ad::query()
+            ->whereIn('ad_suggestion_id', $vorschlaege->modelKeys())
+            ->whereIn('sync_state', [SyncState::Pending->value, SyncState::Failed->value])
+            ->get()
+            ->groupBy(fn (Ad $a): string => (string) $a->ad_suggestion_id)
+            ->map(function (Collection $anzeigen): ?array {
+                $haengt = $anzeigen->firstWhere('sync_state', SyncState::Failed) ?? $anzeigen->first();
+
+                return $haengt instanceof Ad ? [
+                    'anzeige' => (string) $haengt->uuid,
+                    'zustand' => $haengt->sync_state->value,
+                    'fehler' => $haengt->sync_error,
+                ] : null;
+            });
+
         return Inertia::render('anzeigen/Index', [
             'vorschlaege' => $vorschlaege
-                ->map(function (AdSuggestion $v) use ($frist, $steht, $laeuftIn): array {
+                ->map(function (AdSuggestion $v) use ($frist, $steht, $laeuftIn, $uebertragung): array {
                     $bild = $v->bild();
                     $laeuft = ! $bild instanceof Attachment
                         && $v->image_requested_at !== null
@@ -133,6 +153,7 @@ final class AnzeigenController extends Controller
                         // waere das in einer Zeile gewesen.
                         'bildmodell' => $v->image_model,
                         'laeuftIn' => $laeuftIn->get((string) $v->getKey(), []),
+                        'uebertragung' => $uebertragung->get((string) $v->getKey()),
                         'bildFehler' => $v->image_error ?? ($this->abgebrochen($v, $bild, $laeuft)
                             ? ($steht
                                 ? 'Der Auftrag wartet noch — die Warteschlange wird gerade nicht abgearbeitet.'
@@ -287,6 +308,37 @@ final class AnzeigenController extends Controller
      * Angelegt wird lokal und pausiert; hinaus traegt sie ein Auftrag
      * (Regel 4).
      */
+    /**
+     * Eine gescheiterte Uebertragung noch einmal einstellen.
+     *
+     * **Ein Mensch entscheidet das, nicht der Auftrag.** Eine fachliche
+     * Ablehnung blind zu wiederholen ist genau das, was die
+     * Wiederholungslogik vermeidet -- sie wird beim zwanzigsten Versuch
+     * nicht richtiger. Lag die Ursache aber ausserhalb des Produkts, ist
+     * dies der einzige Weg zurueck: erneut schalten geht nicht, weil es die
+     * Anzeige schon gibt.
+     */
+    public function erneutUebertragen(Ad $anzeige, TenantContext $mandant): RedirectResponse
+    {
+        Gate::authorize(Ability::ManageCampaigns->value);
+
+        $organisation = $mandant->current();
+
+        if (! $organisation instanceof Organization) {
+            abort(404);
+        }
+
+        // Der alte Fehler steht der neuen Uebertragung nicht mehr im Weg --
+        // sonst bliebe er stehen, auch wenn sie glueckt.
+        $anzeige->sync_state = SyncState::Pending;
+        $anzeige->sync_error = null;
+        $anzeige->save();
+
+        AnzeigeUebertragen::dispatch((string) $organisation->uuid, (string) $anzeige->uuid);
+
+        return back()->with('erfolg', 'Die Anzeige wird erneut übertragen.');
+    }
+
     public function schalten(Request $request, AdSuggestion $vorschlag): RedirectResponse
     {
         Gate::authorize(Ability::ManageCampaigns->value);

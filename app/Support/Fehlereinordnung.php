@@ -49,8 +49,12 @@ final class Fehlereinordnung
     {
         $code = (int) (data_get($antwort, 'error.code') ?? 0);
         $unterCode = (int) (data_get($antwort, 'error.error_subcode') ?? 0);
-        $meldung = data_get($antwort, 'error.message');
-        $meldung = is_string($meldung) ? $meldung : null;
+        // **`message` ist fuer Entwickler, `error_user_msg` fuer Menschen.**
+        // Bei fachlichen Ablehnungen steht in `message` oft nur "Invalid
+        // parameter"; der Satz, der sagt, was zu tun ist, steht daneben.
+        // Der Subcode kommt mit, weil er der Schluessel zu Metas Doku ist --
+        // ohne ihn sucht man in einer generischen Meldung nach der Ursache.
+        $meldung = self::klartextAus($antwort);
 
         // Rate Limit: zurueckweichen und erneut versuchen.
         if ($status === 429 || in_array($code, [4, 17, 32, 613], true)) {
@@ -81,5 +85,25 @@ final class Fehlereinordnung
 
         // Fachlich: dem Nutzer im Klartext anzeigen, nicht wiederholen.
         return new self('rejected', wiederholen: false, zustand: null, klartext: $meldung);
+    }
+
+    /**
+     * Metas Antwort als ein Satz, den jemand lesen kann.
+     *
+     * @param  array<string, mixed>  $antwort
+     */
+    private static function klartextAus(array $antwort): ?string
+    {
+        $fuerMenschen = data_get($antwort, 'error.error_user_msg');
+        $fuerEntwickler = data_get($antwort, 'error.message');
+
+        $satz = is_string($fuerMenschen) && $fuerMenschen !== ''
+            ? $fuerMenschen
+            : (is_string($fuerEntwickler) ? $fuerEntwickler : null);
+
+        // **Kein Code im Text.** Er geht an die Praxis, und die kann nur
+        // beheben, was sie lesen kann. Der Subcode gehoert ins Protokoll --
+        // Graphschreiber und Graphleser halten die ganze Antwort fest.
+        return $satz;
     }
 }

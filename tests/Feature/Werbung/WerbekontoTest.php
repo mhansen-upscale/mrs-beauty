@@ -9,12 +9,14 @@ use App\Models\Ad;
 use App\Models\AdAccount;
 use App\Models\AdCampaign;
 use App\Models\AdSet;
+use App\Models\Location;
 use App\Models\Treatment;
 use App\Models\User;
 use App\Tenancy\TenantContext;
 use App\Werbung\Kontenauswahl;
 use App\Werbung\Meta\Werbezugang;
 use App\Werbung\Strukturabgleich;
+use App\Werbung\Verwaltung\Standortaufloesung;
 use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -216,6 +218,72 @@ it('liest eine Antwort ueber mehrere Seiten vollstaendig', function (): void {
         'graph.test/*/campaigns*' => Http::sequence()
             ->push(Werbeaufbau::seite([Werbeaufbau::kampagne('c1', 'Seite eins')], 'https://graph.test/weiter'))
             ->push(Werbeaufbau::seite([Werbeaufbau::kampagne('c2', 'Seite zwei')])),
+        'graph.test/weiter*' => Http::response(Werbeaufbau::seite([Werbeaufbau::kampagne('c2', 'Seite zwei')])),
+        'graph.test/*/adsets*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/ads*' => Http::response(Werbeaufbau::seite([])),
+    ]);
+
+    app(Strukturabgleich::class)->gleicheAb($aufbau->konto);
+
+    expect(AdCampaign::query()->count())->toBe(2);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Metas eigene Folgeadresse ist nicht vertrauenswuerdig
+|--------------------------------------------------------------------------
+|
+| `/search` liefert **immer** einen next-Cursor, auch wenn nichts folgt. Und
+| diese Adresse traegt zwei Eigenschaften, die den zweiten Aufruf zerstoeren:
+| sie zeigt auf Metas *aktuelle* Version statt auf die festgenagelte, und die
+| Parameter sind doppelt kodiert (`%255B%2522` statt `%5B%22`). Meta antwortet
+| darauf mit "Invalid parameter".
+|
+| Am 23.09.2026 hat das jede Ortsaufloesung scheitern lassen -- und damit
+| jede Anzeigengruppe und jede Anzeige. Die erste Seite hatte das Ergebnis
+| laengst; der zweite Aufruf machte es zunichte.
+|
+| Die Folgeseite wird deshalb selbst gebaut: eigener Grundpfad, eigene
+| Parameter, nur der Cursor kommt von Meta.
+|
+*/
+
+it('baut die Folgeseite selbst, statt Metas Adresse zu folgen', function (): void {
+    new Werbeaufbau;
+    $standort = Location::factory()->create(['city' => 'Hamburg', 'country' => 'DE', 'is_active' => true]);
+
+    Http::fake([
+        'graph.test/*/search*' => Http::sequence()
+            ->push([
+                'data' => [['key' => '560419', 'name' => 'Hamburg', 'type' => 'city']],
+                'paging' => [
+                    'cursors' => ['before' => 'MAZDZD', 'after' => 'NAZDZD'],
+                    'next' => 'https://graph.facebook.com/v26.0/search?location_types=%255B%2522city%2522%255D&after=NAZDZD',
+                ],
+            ])
+            ->push(['data' => []]),
+        '*' => Http::response(['error' => ['message' => 'Invalid parameter', 'code' => 100]], 400),
+    ]);
+
+    $kennung = app(Standortaufloesung::class)->kennung($standort, 'token');
+
+    expect($kennung)->toBe('560419')
+        // Einmal gefunden, nie wieder gesucht.
+        ->and($standort->fresh()?->meta_city_key)->toBe('560419');
+
+    // Metas Adresse traegt eine fremde Version -- die darf nie aufgerufen werden.
+    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'v26.0'));
+});
+
+it('folgt Metas Adresse weiterhin, wenn kein Cursor dabei ist', function (): void {
+    $aufbau = new Werbeaufbau;
+
+    // Aeltere Kanten liefern nur `next`. Dort bleibt es beim alten Weg --
+    // sonst bliebe die zweite Seite ungelesen.
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([Werbeaufbau::kampagne('c1', 'Seite eins')], 'https://graph.test/weiter'))
+            ->push(Werbeaufbau::seite([])),
         'graph.test/weiter*' => Http::response(Werbeaufbau::seite([Werbeaufbau::kampagne('c2', 'Seite zwei')])),
         'graph.test/*/adsets*' => Http::response(Werbeaufbau::seite([])),
         'graph.test/*/ads*' => Http::response(Werbeaufbau::seite([])),

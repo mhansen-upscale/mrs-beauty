@@ -112,13 +112,21 @@ final class Kampagnenverwaltung
             'daily_budget' => (string) $kampagne->daily_budget,
         ]);
 
+        // Die Kennung sofort sichern: ein zweiter Lauf soll keine zweite
+        // Kampagne anlegen, auch wenn der naechste Schritt scheitert.
         $kampagne->external_id = $kennung;
+        $kampagne->save();
+
+        $this->uebertrageGruppe($kampagne, $konto, $token);
+
+        // **Fertig heisst: Kampagne und Gruppe.** Waere sie schon oben
+        // "uebertragen", bliebe bei einem Abbruch dazwischen eine Kampagne
+        // ohne Gruppe zurueck, die sich fuer erledigt haelt -- und die kein
+        // Wiederanlauf mehr einholt, weil beide Schleifen `Pending` suchen.
         $kampagne->sync_state = SyncState::Synced;
         $kampagne->sync_error = null;
         $kampagne->synced_at = CarbonImmutable::now();
         $kampagne->save();
-
-        $this->uebertrageGruppe($kampagne, $konto, $token);
     }
 
     /**
@@ -136,7 +144,21 @@ final class Kampagnenverwaltung
             ->where('client_token', $kampagne->client_token)
             ->first();
 
-        if (! $gruppe instanceof AdSet || ! str_starts_with($gruppe->external_id, 'lokal-')) {
+        if (! $gruppe instanceof AdSet) {
+            // Kein stiller Erfolg: eine Kampagne ohne Anzeigengruppe ist ein
+            // Datenfehler. Frueher kehrte die Uebertragung hier wortlos
+            // zurueck -- und jede Anzeige scheiterte danach an einer Gruppe,
+            // die niemand vermisst hatte.
+            throw new Werbefehler(new Fehlereinordnung(
+                'no_adset',
+                wiederholen: false,
+                zustand: null,
+                klartext: 'Zu dieser Kampagne gibt es keine Anzeigengruppe. Bitte legen Sie die Kampagne neu an.',
+            ));
+        }
+
+        // Steht sie schon bei Meta, ist nichts zu tun.
+        if (! str_starts_with($gruppe->external_id, 'lokal-')) {
             return;
         }
 

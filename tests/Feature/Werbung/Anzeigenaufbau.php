@@ -95,6 +95,18 @@ final class Anzeigenaufbau
         return $vorschlag->fresh() ?? $vorschlag;
     }
 
+    /**
+     * **`description` bleibt mit Absicht leer.**
+     *
+     * Das Feld ist nullable, und genau dieser Fall liess Meta am 23.09.2026
+     * jedes Creative ablehnen -- `"description": null` beantwortet es mit
+     * "Invalid parameter". Aufgefallen ist es erst auf der Staging-Umgebung,
+     * weil `Http::fake()` jeden Payload widerspruchslos annimmt.
+     *
+     * Wer einen Testfall mit Beschreibung braucht, setzt sie am Rueckgabewert
+     * -- der Vorgabefall bleibt der leere. Ein Aufbau, der jedes optionale
+     * Feld fuellt, prueft immer nur den guten Fall.
+     */
     public function vorschlagOhneGrafik(
         Vorschlagsstatus $status = Vorschlagsstatus::Freigegeben,
         string $ueberschrift = 'In Ruhe beraten lassen',
