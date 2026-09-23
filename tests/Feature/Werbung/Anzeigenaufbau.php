@@ -68,7 +68,7 @@ final class Anzeigenaufbau
         $gruppe->status = 'PAUSED';
         $gruppe->effective_status = 'PAUSED';
         $gruppe->location_id = $standort->getKey();
-        $gruppe->radius_km = 15;
+        $gruppe->radius_km = 20;
         $gruppe->age_min = 30;
         $gruppe->age_max = 60;
         $gruppe->sync_state = SyncState::Synced;

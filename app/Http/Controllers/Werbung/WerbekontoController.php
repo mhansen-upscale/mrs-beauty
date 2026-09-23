@@ -340,6 +340,7 @@ final class WerbekontoController extends Controller
             'altervon.min' => 'Werbung für ästhetische Behandlungen richtet sich nicht an Minderjährige.',
             'alterbis.min' => 'Werbung für ästhetische Behandlungen richtet sich nicht an Minderjährige.',
             'tagesbudget.min' => 'Unterhalb dieses Betrags liefert Meta nicht aus — das Geld läge fest, ohne zu wirken.',
+            'umkreis.min' => 'Meta liefert unterhalb dieses Umkreises nicht aus — die Kampagne käme nie zum Laufen.',
         ]);
 
         $kampagne = $this->verwaltung->plane($konto, new Kampagnenplan(

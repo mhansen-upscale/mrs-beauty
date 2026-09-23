@@ -110,6 +110,13 @@ final class Kampagnenverwaltung
             'status' => 'PAUSED',
             'special_ad_categories' => (string) json_encode([]),
             'daily_budget' => (string) $kampagne->daily_budget,
+
+            // **Ausdruecklich ohne Gebotsbegrenzung.** Ohne diese Angabe
+            // waehlt Meta eine Strategie, die an *jeder* Anzeigengruppe ein
+            // `bid_amount` verlangt -- einen Wert, den dieses Produkt
+            // nirgends erhebt und eine Praxis nicht sinnvoll setzen kann.
+            // Jede Gruppe scheiterte daran, auch mit gueltigem Umkreis.
+            'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP',
         ]);
 
         // Die Kennung sofort sichern: ein zweiter Lauf soll keine zweite

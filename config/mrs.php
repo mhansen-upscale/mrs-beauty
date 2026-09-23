@@ -664,7 +664,17 @@ return [
         ],
 
         // Umkreis in Kilometern.
-        'radius_km' => ['min' => 1, 'max' => 50],
+        //
+        // **Die Untergrenze ist Metas, nicht unsere.** Fuer eine Stadt
+        // verlangt Meta mindestens 10 Meilen; darunter lehnt es die
+        // Anzeigengruppe ab -- gemessen am 23.09.2026: 15 km scheitert,
+        // 16 km geht durch, bei jedem Optimierungsziel. Ein kleinerer Wert
+        // im Formular waere eine Kampagne, die garantiert nicht ausliefert
+        // und es erst Stunden spaeter aus der Warteschlange meldet.
+        //
+        // Die Obergrenze ist dagegen unsere: Meta liesse 80 km zu, aber eine
+        // Praxis wirbt nicht ueber einen halben Bundesstaat.
+        'radius_km' => ['min' => 16, 'max' => 50],
 
         // **Unter diesem Reifegrad des Brand Guide laeuft kein Vorschlag**
         // (WP-31). Aus "keine Angaben" entstuende eine Allerweltsanzeige, und

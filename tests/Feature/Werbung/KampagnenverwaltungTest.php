@@ -56,7 +56,7 @@ function kampagnenformular(Location $standort, array $abweichend = []): array
         'beginn' => '2026-10-01',
         'ende' => '2026-10-31',
         'standort' => (string) $standort->uuid,
-        'umkreis' => 15,
+        'umkreis' => 20,
         'altervon' => 30,
         'alterbis' => 55,
         'geschlecht' => 'weiblich',
@@ -368,6 +368,76 @@ it('zieht beim erneuten Verbinden liegengebliebene Aenderungen nach', function (
 | Genau so lag es am 23.09.2026 auf der Staging-Umgebung.
 |
 */
+
+/*
+|--------------------------------------------------------------------------
+| Was Meta ohnehin ablehnt, nimmt das Formular gar nicht erst an
+|--------------------------------------------------------------------------
+|
+| **Umkreis.** Meta verlangt fuer eine Stadt mindestens 10 Meilen, also
+| 16 km. Die Konfiguration liess 1 km zu -- eine Praxis konnte einen Wert
+| eintragen, der garantiert scheitert, und erfuhr es Stunden spaeter aus der
+| Warteschlange. Am 23.09.2026 lag genau deshalb eine Kampagne mit 15 km.
+|
+| **Gebotsstrategie.** Ohne ausdrueckliche Angabe legte Meta die Kampagne mit
+| `LOWEST_COST_WITH_BID_CAP` an -- und die verlangt an *jeder* Anzeigengruppe
+| ein `bid_amount`, das dieses Produkt nirgends erhebt. Jede Gruppe scheiterte
+| daran, auch mit gueltigem Umkreis.
+|
+*/
+
+it('weist einen Umkreis unterhalb von Metas Untergrenze am Feld zurueck', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['umkreis' => 15]))
+        ->assertSessionHasErrors('umkreis');
+
+    expect(AdCampaign::query()->count())->toBe(0);
+});
+
+it('nimmt Metas Untergrenze selbst an', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['umkreis' => 16]))
+        ->assertSessionHasNoErrors();
+
+    expect(AdCampaign::query()->count())->toBe(1);
+});
+
+it('legt die Kampagne ohne Gebotsbegrenzung an', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(['id' => 'gruppe-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    // Ohne diese Angabe waehlt Meta eine Strategie, die an jeder
+    // Anzeigengruppe ein Gebot verlangt -- das dieses Produkt nicht erhebt.
+    Http::assertSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/campaigns')
+        && ($anfrage->data()['bid_strategy'] ?? null) === 'LOWEST_COST_WITHOUT_CAP');
+});
 
 it('meldet die Kampagne erst als uebertragen, wenn auch die Gruppe steht', function (): void {
     $aufbau = new Werbeaufbau;
