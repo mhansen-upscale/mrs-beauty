@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Werbung\Verwaltung;
 
 use App\Models\AdAccount;
+use App\Werbung\Namenspruefung;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Validation\Rule;
 
 /**
@@ -37,6 +39,11 @@ final class Kampagnenplan
         public readonly int $altervon,
         public readonly int $alterbis,
         public readonly ?string $geschlecht,
+
+        // **Die Praxis waehlt den Namen** (Regel 2, gelockert am
+        // 23.09.2026). Leer heisst: das Produkt erzeugt ihn wie bisher.
+        public readonly ?string $name = null,
+        public readonly ?string $gruppenname = null,
     ) {}
 
     /**
@@ -72,7 +79,32 @@ final class Kampagnenplan
             'alterbis' => ['required', 'integer', 'min:'.$mindestalter, 'max:'.$hoechstalter, 'gte:altervon'],
 
             'geschlecht' => ['nullable', Rule::in(['weiblich', 'maennlich'])],
+
+            // **Frei, aber ohne Katalogbezeichnung.** Diese Namen liegen bei
+            // Meta offen und frieren als attribution_snapshot am Termin ein
+            // (D13) -- "Botox Herbst" setzte einen Behandlungsnamen neben
+            // einen Kontakt. Geprueft wird hier, nicht in der Warteschlange.
+            'name' => ['nullable', 'string', 'max:'.(int) config('mrs.ads.name_max'), self::ohneKatalogbezeichnung()],
+            'gruppenname' => ['nullable', 'string', 'max:'.(int) config('mrs.ads.name_max'), self::ohneKatalogbezeichnung()],
         ];
+    }
+
+    /**
+     * Ein Name, der keine Bezeichnung aus dem Leistungskatalog traegt.
+     *
+     * Die Meldung nennt den Treffer: "enthaelt eine Bezeichnung" liesse die
+     * Praxis raten, welches Wort gemeint ist.
+     */
+    private static function ohneKatalogbezeichnung(): Closure
+    {
+        return function (string $feld, mixed $wert, Closure $scheitert): void {
+            $treffer = app(Namenspruefung::class)->treffer(is_string($wert) ? $wert : null);
+
+            if ($treffer !== null) {
+                $scheitert('Der Name darf keine Behandlung nennen — „'.$treffer.'" steht in Ihrem Katalog. '
+                    .'Er liegt bei Meta offen und später neben einem Kontakt.');
+            }
+        };
     }
 
     /**

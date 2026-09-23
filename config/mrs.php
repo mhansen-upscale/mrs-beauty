@@ -663,6 +663,11 @@ return [
             'OUTCOME_AWARENESS' => 'Bekanntheit in der Umgebung',
         ],
 
+        // **Laenge eines selbst gewaehlten Namens.** Meta laesst mehr zu,
+        // aber ein Name, der in keine Spalte passt, hilft niemandem -- und
+        // das Merkmal haengt hinten noch an (Regel 2, gelockert 23.09.2026).
+        'name_max' => 80,
+
         // Umkreis in Kilometern.
         //
         // **Die Untergrenze ist Metas, nicht unsere.** Fuer eine Stadt

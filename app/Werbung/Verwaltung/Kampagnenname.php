@@ -28,20 +28,44 @@ final class Kampagnenname
     /** Kurz genug fuer Metas Namensgrenze, lang genug gegen Zufallstreffer. */
     private const MERKMAL_LAENGE = 10;
 
+    /** Der Name der Anzeigengruppe -- dieselbe Regel, andere Vorgabe. */
+    public static function fuerGruppe(string $merkmal, ?string $eigener = null): string
+    {
+        $gewaehlt = trim((string) $eigener);
+
+        return ($gewaehlt === '' ? 'Zielgruppe' : $gewaehlt).' ['.$merkmal.']';
+    }
+
     public static function merkmal(): string
     {
         return Str::lower(Str::random(self::MERKMAL_LAENGE));
     }
 
     /**
-     * Zeitraum, Ziel und Standort -- und sonst nichts.
+     * Der Name der Praxis -- oder, wenn sie keinen wählt, Zeitraum, Ziel und
+     * Standort.
+     *
+     * **Das Merkmal haengt in jedem Fall hinten an.** Es ist der Ersatz fuer
+     * den Idempotenzschluessel, den Metas Marketing-API nicht hat, und gilt
+     * fuer einen selbst gewaehlten Namen genauso.
+     *
+     * Ob der eigene Name eine Katalogbezeichnung traegt, entscheidet die
+     * Validierung vor dieser Stelle (Namenspruefung) -- hier kommt nur an,
+     * was durchgekommen ist.
      */
     public static function fuer(
         string $ziel,
         CarbonImmutable $beginn,
         ?Location $standort,
         string $merkmal,
+        ?string $eigener = null,
     ): string {
+        $gewaehlt = trim((string) $eigener);
+
+        if ($gewaehlt !== '') {
+            return $gewaehlt.' ['.$merkmal.']';
+        }
+
         $teile = [
             (string) config("mrs.ads.objectives.{$ziel}", $ziel),
             self::monat($beginn),

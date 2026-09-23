@@ -100,8 +100,12 @@ it('kennt kein Feld fuer Interessen', function (): void {
 
     expect(array_keys($regeln))->not->toContain('interessen')
         ->and(array_keys($regeln))->not->toContain('interests')
+        // Die Liste ist abschliessend: ein neues Feld faellt hier auf, bevor
+        // es unbemerkt Richtung Meta geht. `name` und `gruppenname` kamen am
+        // 23.09.2026 dazu und sind gegen den Katalog geprueft.
         ->and(array_keys($regeln))->toBe([
             'ziel', 'tagesbudget', 'beginn', 'ende', 'standort', 'umkreis', 'altervon', 'alterbis', 'geschlecht',
+            'name', 'gruppenname',
         ]);
 });
 
@@ -136,7 +140,23 @@ it('laesst eine Laufzeit nicht rueckwaerts laufen', function (): void {
 |--------------------------------------------------------------------------
 */
 
-it('erzeugt den Kampagnennamen, statt ihn entgegenzunehmen', function (): void {
+/*
+|--------------------------------------------------------------------------
+| Den Namen waehlt die Praxis -- bis auf eine Ausnahme
+|--------------------------------------------------------------------------
+|
+| Bis zum 23.09.2026 erzeugte das Produkt den Namen vollstaendig. Das war zu
+| streng: "Anfragen sammeln · Oktober 2026 · Hamburg" unterscheidet drei
+| Kampagnen desselben Monats nicht.
+|
+| Was bleibt, ist die Ausnahme mit dem eigentlichen Grund (Regel 2): Diese
+| Namen liegen bei Meta offen und frieren als attribution_snapshot am Termin
+| ein. Eine Katalogbezeichnung darin setzt einen Behandlungsnamen neben einen
+| Kontakt -- abgelehnt wird am Feld, nicht in der Warteschlange.
+|
+*/
+
+it('uebernimmt einen selbst gewaehlten Kampagnennamen', function (): void {
     $aufbau = new Werbeaufbau;
     $standort = werbestandort();
 
@@ -144,16 +164,93 @@ it('erzeugt den Kampagnennamen, statt ihn entgegenzunehmen', function (): void {
 
     actingAs(Werbeaufbau::leitung($aufbau->organisation))
         ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, [
-            'name' => 'Botox Herbst — mein Name',
+            'name' => 'Herbstaktion Eimsbüttel',
         ]))
+        ->assertRedirect();
+
+    expect((string) AdCampaign::query()->first()?->name)->toContain('Herbstaktion Eimsbüttel');
+});
+
+it('erzeugt den Namen weiterhin, wenn keiner angegeben ist', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort))
         ->assertRedirect();
 
     $name = (string) AdCampaign::query()->first()?->name;
 
     expect($name)->toContain('Anfragen sammeln')
         ->and($name)->toContain('Oktober 2026')
-        ->and($name)->toContain('Hamburg')
-        ->and($name)->not->toContain('mein Name');
+        ->and($name)->toContain('Hamburg');
+});
+
+it('weist einen Kampagnennamen mit Katalogbezeichnung am Feld zurueck', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Treatment::factory()->create(['name' => 'Botox', 'is_active' => true]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, [
+            'name' => 'Botox Herbst',
+        ]))
+        ->assertSessionHasErrors('name');
+
+    expect(AdCampaign::query()->count())->toBe(0);
+});
+
+it('uebernimmt einen selbst gewaehlten Namen fuer die Anzeigengruppe', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, [
+            'gruppenname' => 'Frauen 30 bis 55',
+        ]))
+        ->assertRedirect();
+
+    expect((string) AdSet::query()->first()?->name)->toContain('Frauen 30 bis 55');
+});
+
+it('weist auch den Gruppennamen mit Katalogbezeichnung zurueck', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Treatment::factory()->create(['name' => 'Hyaluron', 'is_active' => true]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, [
+            'gruppenname' => 'Hyaluron Zielgruppe',
+        ]))
+        ->assertSessionHasErrors('gruppenname');
+});
+
+it('traegt das Merkmal auch in einem selbst gewaehlten Namen', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, [
+            'name' => 'Herbstaktion Eimsbüttel',
+        ]));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    // Ohne das Merkmal legte ein wiederholter Auftrag eine zweite Kampagne
+    // mit zweitem Budget an -- Metas API kennt keinen Idempotenzschluessel.
+    expect(Kampagnenname::merkmalAus((string) $kampagne->name))->toBe($kampagne->client_token);
 });
 
 it('setzt keine Katalogbezeichnung in den Namen', function (): void {

@@ -86,6 +86,7 @@ const props = defineProps<{
         hoechstalter: number;
         mindestbudget: number;
         umkreis: { min: number; max: number };
+        namenslaenge: number;
     };
     standorte: { uuid: string; name: string; ort: string | null }[];
     auswahl: { konten: { kennung: string; name: string | null; waehrung: string | null; nutzbar: boolean }[] } | null;
@@ -158,10 +159,12 @@ const neu = useForm({
     beginn: new Date().toISOString().slice(0, 10),
     ende: '',
     standort: props.standorte[0]?.uuid ?? '',
-    umkreis: 15,
+    umkreis: 20,
     altervon: props.vorgaben.mindestalter,
     alterbis: props.vorgaben.hoechstalter,
     geschlecht: '',
+    name: '',
+    gruppenname: '',
 });
 
 const inCent = (euro: string): number => Math.round(parseFloat(euro.replace(',', '.')) * 100 || 0);
@@ -534,6 +537,34 @@ const gestoerteUebertragung = computed<Kampagne[]>(() => props.kampagnen.filter(
             breit
             @absenden="anlegen"
         >
+            <!-- 0 · Wie Sie sie wiedererkennen -->
+            <section class="space-y-3">
+                <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Name</p>
+
+                <div class="grid items-start gap-4 sm:grid-cols-2">
+                    <div class="grid gap-2">
+                        <Label for="kampagnenname">Kampagne</Label>
+                        <Input id="kampagnenname" v-model="neu.name" :maxlength="vorgaben.namenslaenge" placeholder="Wird sonst erzeugt" />
+                        <InputError :message="neu.errors.name" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="gruppenname">Anzeigengruppe</Label>
+                        <Input id="gruppenname" v-model="neu.gruppenname" :maxlength="vorgaben.namenslaenge" placeholder="Wird sonst erzeugt" />
+                        <InputError :message="neu.errors.gruppenname" />
+                    </div>
+                </div>
+
+                <!--
+                    Der Grund gehört ans Feld, nicht in eine Fehlermeldung
+                    nach dem Absenden: Diese Namen liegen bei Meta offen.
+                -->
+                <p class="text-xs text-muted-foreground">
+                    Beides freiwillig — ohne Angabe erzeugen wir den Namen aus Ziel, Monat und Ort. Eine Behandlung darf darin nicht vorkommen: Der
+                    Name liegt bei Meta offen und steht später neben einem Kontakt.
+                </p>
+            </section>
+
             <!-- 1 · Was und wofür -->
             <section class="space-y-3">
                 <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Ziel und Budget</p>

@@ -47,7 +47,7 @@ final class Kampagnenverwaltung
         $kampagne->external_id = 'lokal-'.$merkmal;
         $kampagne->client_token = $merkmal;
         $kampagne->managed_by_us = true;
-        $kampagne->name = Kampagnenname::fuer($plan->ziel, $plan->beginn, $standort, $merkmal);
+        $kampagne->name = Kampagnenname::fuer($plan->ziel, $plan->beginn, $standort, $merkmal, $plan->name);
         $kampagne->objective = $plan->ziel;
         $kampagne->status = 'PAUSED';
         $kampagne->effective_status = 'PAUSED';
@@ -66,7 +66,7 @@ final class Kampagnenverwaltung
         $gruppe->external_id = 'lokal-'.$merkmal;
         $gruppe->client_token = $merkmal;
         $gruppe->managed_by_us = true;
-        $gruppe->name = 'Zielgruppe ['.$merkmal.']';
+        $gruppe->name = Kampagnenname::fuerGruppe($merkmal, $plan->gruppenname);
         $gruppe->status = 'PAUSED';
         $gruppe->effective_status = 'PAUSED';
         $gruppe->location_id = $standort?->getKey();

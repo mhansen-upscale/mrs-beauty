@@ -88,6 +88,7 @@ final class WerbekontoController extends Controller
                 'hoechstalter' => (int) config('mrs.ads.max_age'),
                 'mindestbudget' => Kampagnenplan::mindestbudget(AdAccount::query()->first()),
                 'umkreis' => (array) config('mrs.ads.radius_km'),
+                'namenslaenge' => (int) config('mrs.ads.name_max'),
             ],
 
             'standorte' => Location::query()
@@ -353,6 +354,8 @@ final class WerbekontoController extends Controller
             altervon: (int) $daten['altervon'],
             alterbis: (int) $daten['alterbis'],
             geschlecht: isset($daten['geschlecht']) && is_string($daten['geschlecht']) ? $daten['geschlecht'] : null,
+            name: isset($daten['name']) && is_string($daten['name']) ? $daten['name'] : null,
+            gruppenname: isset($daten['gruppenname']) && is_string($daten['gruppenname']) ? $daten['gruppenname'] : null,
         ));
 
         KampagneUebertragen::dispatch((string) $organisation->uuid, (string) $kampagne->uuid);

@@ -47,10 +47,30 @@ benennen — eine Praxis, die für eine Behandlung wirbt, sagt, wofür sie wirbt
 Verboten ist jedes Feld, das an einer Person, einem Ereignis, einer Zielgruppe
 oder einer Konversion hängt.
 
-**Kampagnennamen bleiben neutral**, und zwar aus einem Grund im eigenen Haus:
-sie sind Werbe-Metadaten, liegen unverschlüsselt und werden beim Termin als
+**Kampagnen- und Anzeigengruppennamen wählt die Praxis selbst** — mit einer
+Ausnahme: Sie dürfen keine Katalogbezeichnung tragen (gelockert am 23.09.2026,
+vorher erzeugte das Produkt sie vollständig).
+
+Der Grund für die Ausnahme ist unverändert und liegt im eigenen Haus: Diese
+Namen sind Werbe-Metadaten, liegen bei Meta offen und werden beim Termin als
 `attribution_snapshot` eingefroren (D13). Eine Kampagne „Botox Herbst" setzt
 damit einen Behandlungsnamen in ein offenes Feld neben einen Kontakt.
+
+Was fällt, ist nur die Bevormundung: „Herbstaktion Eimsbüttel" sagt nichts über
+eine Person und unterscheidet drei Kampagnen desselben Monats, was
+„Anfragen sammeln · Oktober 2026 · Hamburg" nicht tut. Geprüft wird beim
+Speichern gegen den aktiven Katalog (`App\Werbung\Namenspruefung`), abgelehnt
+wird am Feld — nicht erst in der Warteschlange.
+
+**Das Merkmal im Namen bleibt.** `[abcdefghij]` ist kein Schmuck, sondern der
+Ersatz für den Idempotenzschlüssel, den Metas Marketing-API nicht hat: Ein
+Auftrag, dessen Antwort verlorenging, findet seine Kampagne daran wieder,
+statt eine zweite mit zweitem Budget anzulegen. Es hängt an jeden Namen hinten
+an, auch an einen selbst gewählten.
+
+**Fremde Namen ändern wir weiterhin nicht.** Eine aus Metas Bestand gelesene
+Kampagne kann „Botox Herbst" heißen; die Praxis hat sie so benannt, bevor sie
+uns kannte. Sie wird gekennzeichnet, nicht umbenannt (Entscheidung C9).
 
 **Ausführbar abgesichert.** Ein Test unter `tests/Feature/Meta` lädt alle
 aktiven Katalognamen und prüft jeden ausgehenden Payload dagegen — Ereignisse,
