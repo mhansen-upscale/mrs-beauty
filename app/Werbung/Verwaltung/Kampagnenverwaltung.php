@@ -202,6 +202,14 @@ final class Kampagnenverwaltung
                 ],
                 'age_min' => $gruppe->age_min,
                 'age_max' => $gruppe->age_max,
+
+                // **Metas Zielgruppenerweiterung aus.** Advantage Audience
+                // liefert ueber die eingestellte Zielgruppe hinaus aus --
+                // auch ueber die Altersuntergrenze. Bei aesthetischen
+                // Behandlungen ist die keine Empfehlung, sondern eine
+                // Grenze (Regel 6 und WP-30). Meta verlangt die Angabe
+                // ausdruecklich: ohne sie legt es keine Gruppe mehr an.
+                'targeting_automation' => ['advantage_audience' => 0],
             ] + ($gruppe->genders === null ? [] : [
                 'genders' => [$gruppe->genders === 'weiblich' ? 2 : 1],
             ])),

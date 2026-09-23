@@ -386,6 +386,42 @@ it('zieht beim erneuten Verbinden liegengebliebene Aenderungen nach', function (
 |
 */
 
+it('schaltet Metas Zielgruppenerweiterung ausdruecklich ab', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()
+            ->push(Werbeaufbau::seite([]))
+            ->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(['id' => 'gruppe-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    // **Null, nicht eins.** Advantage Audience erweitert die Zielgruppe ueber
+    // das hinaus, was die Praxis eingestellt hat -- auch die Altersuntergrenze.
+    // Bei aesthetischen Behandlungen ist genau die keine Empfehlung, sondern
+    // eine Grenze. Meta verlangt die Angabe seit 2026 ausdruecklich.
+    Http::assertSent(function ($anfrage): bool {
+        if (! str_ends_with((string) $anfrage->url(), '/adsets')) {
+            return false;
+        }
+
+        $ziel = json_decode((string) $anfrage->data()['targeting'], true);
+
+        return is_array($ziel) && ($ziel['targeting_automation']['advantage_audience'] ?? null) === 0;
+    });
+});
+
 it('weist einen Umkreis unterhalb von Metas Untergrenze am Feld zurueck', function (): void {
     $aufbau = new Werbeaufbau;
     $standort = werbestandort();
