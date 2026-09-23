@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Enums\SyncState;
 use App\Models\AdAccount;
 use App\Models\AdCampaign;
 use App\Models\Organization;
@@ -13,6 +14,7 @@ use App\Werbung\Werbefehler;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Throwable;
 
 /**
  * Traegt eine Kampagne oder eine Aenderung daran zu Meta.
@@ -42,6 +44,39 @@ final class KampagneUebertragen implements ShouldBeUnique, ShouldQueue
     public function uniqueId(): string
     {
         return $this->organisation.':'.$this->kampagne;
+    }
+
+    /**
+     * Der letzte Versuch ist auch gescheitert.
+     *
+     * **Ohne diese Stelle bleibt kampagne fuer immer auf "wartet".** Die
+     * Warteschlange legt den Auftrag nach dem dritten Versuch ab, und
+     * niemand kommt je zurueck -- in der Oberflaeche dreht sich etwas, das
+     * laengst aufgegeben wurde. Aufgefallen am 23.09.2026, nach zwanzig
+     * Minuten Drehkreis.
+     *
+     * Der zuletzt vermerkte Grund bleibt stehen: er sagt, woran es lag.
+     */
+    public function failed(Throwable $grund): void
+    {
+        $organisation = Organization::query()->whereUuid($this->organisation)->first();
+
+        if (! $organisation instanceof Organization) {
+            return;
+        }
+
+        app(TenantContext::class)->runAs($organisation, function (): void {
+            $kampagne = AdCampaign::query()->whereUuid($this->kampagne)->first();
+
+            if (! $kampagne instanceof AdCampaign) {
+                return;
+            }
+
+            $kampagne->sync_state = SyncState::Failed;
+            $kampagne->sync_error = 'Die Übertragung ist mehrfach gescheitert. '
+                .($kampagne->sync_error ?? 'Bitte erneut versuchen.');
+            $kampagne->save();
+        });
     }
 
     public function handle(TenantContext $mandant, Kampagnenverwaltung $verwaltung): void

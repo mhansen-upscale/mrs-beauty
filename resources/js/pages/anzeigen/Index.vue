@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, Image as Bild, ChevronDown, Loader2, Megaphone, Plus, RefreshCw, Sparkles } from 'lucide-vue-next';
+import { AlertTriangle, Image as Bild, ChevronDown, Clock, Loader2, Megaphone, Plus, RefreshCw, Sparkles } from 'lucide-vue-next';
 import { computed, onUnmounted, ref, watch } from 'vue';
 
 interface Befund {
@@ -392,8 +392,8 @@ onUnmounted(haltAn);
                             :class="vorschlag.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-muted-foreground'"
                         >
                             <AlertTriangle v-if="vorschlag.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
-                            <Loader2 v-else class="size-3 shrink-0 animate-spin" />
-                            {{ vorschlag.uebertragung.zustand === 'failed' ? 'Nicht übertragen' : 'Wird übertragen' }}
+                            <Clock v-else class="size-3 shrink-0" />
+                            {{ vorschlag.uebertragung.zustand === 'failed' ? 'Nicht übertragen' : 'Wartet' }}
                         </span>
                     </span>
                 </button>
@@ -559,7 +559,7 @@ onUnmounted(haltAn);
                                 :class="gewaehlt.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-foreground'"
                             >
                                 <AlertTriangle v-if="gewaehlt.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
-                                <Loader2 v-else class="size-3 shrink-0 animate-spin" />
+                                <Clock v-else class="size-3 shrink-0" />
                                 {{
                                     gewaehlt.uebertragung.zustand === 'failed'
                                         ? 'Diese Anzeige ist nicht bei Meta angekommen.'
@@ -570,7 +570,7 @@ onUnmounted(haltAn);
                                 {{ gewaehlt.uebertragung.fehler }}
                             </p>
                             <p v-else-if="gewaehlt.uebertragung.zustand !== 'failed'" class="text-muted-foreground">
-                                Sie geht hinaus, sobald ihre Kampagne bei Meta steht.
+                                Sie geht hinaus, sobald ihre Kampagne bei Meta steht. Passiert länger nichts, stoßen Sie sie hier selbst an.
                             </p>
                             <Button
                                 type="button"

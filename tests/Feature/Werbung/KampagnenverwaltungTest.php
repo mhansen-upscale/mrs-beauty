@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Queue;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\travelTo;
 
+use RuntimeException;
 use Tests\Feature\Werbung\Werbeaufbau;
 
 /*
@@ -631,6 +632,30 @@ it('meldet eine Kampagne ohne Anzeigengruppe als Fehler, nicht als Erfolg', func
     alsMandant($aufbau->organisation);
 
     expect(AdCampaign::query()->first()?->sync_state)->toBe(SyncState::Failed);
+});
+
+it('gibt bei der Kampagne nach dem letzten Versuch auf', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->failed(new RuntimeException('Zeitüberschreitung'));
+
+    alsMandant($aufbau->organisation);
+
+    $frisch = AdCampaign::query()->first();
+
+    // Sonst bliebe sie auf "wartet" stehen, obwohl niemand mehr etwas
+    // versucht -- und der Wiederanlauf stellte sie bei jedem Verbinden
+    // erneut ein, mit demselben Ausgang.
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        ->and($frisch?->sync_error)->toContain('mehrfach');
 });
 
 it('zeigt eine fachliche Ablehnung im Klartext', function (): void {

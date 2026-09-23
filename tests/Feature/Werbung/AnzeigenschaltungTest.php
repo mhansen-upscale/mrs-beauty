@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Queue;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\travelTo;
 
+use RuntimeException;
 use Tests\Feature\Werbung\Anzeigenaufbau;
 use Tests\Feature\Werbung\Werbeaufbau;
 
@@ -291,6 +292,28 @@ it('haelt eine wartende Anzeige als wartend fest, nicht als abgelehnt', function
     expect($frisch?->sync_state)->toBe(SyncState::Pending)
         // Der Grund bleibt trotzdem sichtbar: er sagt, worauf gewartet wird.
         ->and($frisch?->sync_error)->toContain('Kampagne');
+});
+
+it('gibt nach dem letzten Versuch auf, statt ewig zu warten', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    $anzeige->sync_state = SyncState::Pending;
+    $anzeige->sync_error = 'Die Kampagne steht noch nicht bei Meta.';
+    $anzeige->save();
+
+    // Was die Warteschlange tut, wenn der dritte Versuch ebenfalls scheitert.
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->failed(new RuntimeException('Zeitüberschreitung'));
+
+    $frisch = $anzeige->fresh();
+
+    // Ohne das bliebe die Anzeige auf "wartet" stehen -- und drehte sich in
+    // der Oberflaeche, obwohl niemand mehr etwas versucht.
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        ->and($frisch?->sync_error)->toContain('mehrfach');
 });
 
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {

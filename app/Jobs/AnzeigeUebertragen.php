@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Enums\ConnectionStatus;
+use App\Enums\SyncState;
 use App\Models\Ad;
 use App\Models\AdAccount;
 use App\Models\Organization;
@@ -14,6 +15,7 @@ use App\Werbung\Werbefehler;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Throwable;
 
 /**
  * Traegt eine geplante Anzeige zu Meta.
@@ -40,6 +42,39 @@ final class AnzeigeUebertragen implements ShouldBeUnique, ShouldQueue
     public function uniqueId(): string
     {
         return $this->anzeige;
+    }
+
+    /**
+     * Der letzte Versuch ist auch gescheitert.
+     *
+     * **Ohne diese Stelle bleibt anzeige fuer immer auf "wartet".** Die
+     * Warteschlange legt den Auftrag nach dem dritten Versuch ab, und
+     * niemand kommt je zurueck -- in der Oberflaeche dreht sich etwas, das
+     * laengst aufgegeben wurde. Aufgefallen am 23.09.2026, nach zwanzig
+     * Minuten Drehkreis.
+     *
+     * Der zuletzt vermerkte Grund bleibt stehen: er sagt, woran es lag.
+     */
+    public function failed(Throwable $grund): void
+    {
+        $organisation = Organization::query()->whereUuid($this->organisation)->first();
+
+        if (! $organisation instanceof Organization) {
+            return;
+        }
+
+        app(TenantContext::class)->runAs($organisation, function (): void {
+            $anzeige = Ad::query()->whereUuid($this->anzeige)->first();
+
+            if (! $anzeige instanceof Ad) {
+                return;
+            }
+
+            $anzeige->sync_state = SyncState::Failed;
+            $anzeige->sync_error = 'Die Übertragung ist mehrfach gescheitert. '
+                .($anzeige->sync_error ?? 'Bitte erneut versuchen.');
+            $anzeige->save();
+        });
     }
 
     public function handle(TenantContext $mandant, Anzeigenschaltung $schaltung): void
