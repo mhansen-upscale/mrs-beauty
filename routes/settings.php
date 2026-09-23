@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Audit\ImpersonationController;
 use App\Http\Controllers\Settings\AgentController;
+use App\Http\Controllers\Settings\EinfuehrungController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PostfachController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -30,6 +31,11 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Die Einfuehrung gehoert zur Person, nicht zur Praxis -- deshalb hier
+    // und ohne can:. Sie schreibt nur beim ersten Mal (WP ohne Nummer:
+    // "Onboarding einer neuen Praxis" steht in docs/produkt.md offen).
+    Route::post('settings/einfuehrung', [EinfuehrungController::class, 'gesehen'])->name('einfuehrung.gesehen');
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('settings/password', [PasswordController::class, 'update'])->name('password.update');

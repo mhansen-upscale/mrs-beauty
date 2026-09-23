@@ -78,6 +78,10 @@ export interface SharedData extends PageProps {
     // jedem Seitenaufruf sichtbar von auf nach zu springt.
     sidebar_open: boolean;
 
+    // Ob die Einführung noch aussteht. Aus demselben Grund serverseitig:
+    // ein Overlay, das erst nach dem Mount entscheidet, blitzt auf.
+    einfuehrung_faellig: boolean;
+
     // Solange eine Impersonation läuft, ist sie in jeder Antwort erkennbar.
     impersonation: ImpersonationState | null;
 

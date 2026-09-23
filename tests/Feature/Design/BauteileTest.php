@@ -566,3 +566,54 @@ it('erkennt den unbenannten Symbolknopf, wenn es ihn gibt', function (): void {
     expect($rumpf('<Button size="sm"><Trash2 /></Button>'))->toBe('')
         ->and($rumpf('<Button size="sm"><Trash2 />Loeschen</Button>'))->toBe('Loeschen');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Kein Menuepunkt ohne Erklaerung
+|--------------------------------------------------------------------------
+|
+| Die Einfuehrung laeuft ueber die Punkte, die die Seitenleiste tatsaechlich
+| rendert -- und nimmt genau die mit, zu denen ein Satz hinterlegt ist. Wer
+| einen Menuepunkt ergaenzt und den Satz vergisst, merkt nichts: die Fuehrung
+| ueberspringt ihn stillschweigend.
+|
+| Deshalb hier und nicht als Absatz in einem Dokument.
+|
+*/
+
+/**
+ * Adressen, die in der Seitenleiste stehen, aber keinen Einfuehrungstext
+ * haben.
+ *
+ * @return list<string>
+ */
+function menuepunkteOhneEinfuehrung(): array
+{
+    $menue = (string) file_get_contents(resource_path('js/components/AppSidebar.vue'));
+    $texte = (string) file_get_contents(resource_path('js/composables/useEinfuehrung.ts'));
+
+    preg_match_all("/href: '([^']+)'/", $menue, $imMenue);
+    preg_match_all("/^\s*'([^']+)':/m", $texte, $erklaert);
+
+    $vorhanden = $erklaert[1];
+
+    return array_values(array_unique(array_filter(
+        $imMenue[1],
+        fn (string $adresse): bool => ! in_array($adresse, $vorhanden, true),
+    )));
+}
+
+it('erklaert jeden Menuepunkt in der Einfuehrung', function (): void {
+    $fehlend = menuepunkteOhneEinfuehrung();
+
+    expect($fehlend)->toBeEmpty(
+        "Diese Menuepunkte ueberspringt die Fuehrung stillschweigend:\n".implode("\n", $fehlend)
+    );
+});
+
+it('findet ueberhaupt Menuepunkte', function (): void {
+    // Ohne diese Zusicherung koennte die Pruefung oben leer durchlaufen.
+    $menue = (string) file_get_contents(resource_path('js/components/AppSidebar.vue'));
+
+    expect(preg_match_all("/href: '([^']+)'/", $menue))->toBeGreaterThanOrEqual(15);
+});

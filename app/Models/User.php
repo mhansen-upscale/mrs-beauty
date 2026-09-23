@@ -47,6 +47,7 @@ use Illuminate\Notifications\Notifiable;
  * @property string $email
  * @property Role|null $role
  * @property CarbonImmutable|null $deactivated_at
+ * @property CarbonImmutable|null $einfuehrung_gesehen_at
  * @property CarbonImmutable|null $email_verified_at
  */
 class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
@@ -95,6 +96,7 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
         return [
             'email_verified_at' => 'immutable_datetime',
             'deactivated_at' => 'immutable_datetime',
+            'einfuehrung_gesehen_at' => 'immutable_datetime',
             'role' => Role::class,
             'is_super_admin' => 'boolean',
             'password' => 'hashed',
@@ -170,6 +172,23 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
     public function auditableValues(): array
     {
         return ['role', 'deactivated_at', 'is_super_admin'];
+    }
+
+    /**
+     * Steht die Einfuehrung noch aus?
+     *
+     * **Ueber getAttributes(), nicht ueber den Zugriff.** Eine gerade erst
+     * angelegte Person traegt die Spalte noch nicht im Modell -- beim
+     * Einfuegen wird sie nicht gesetzt, und `Model::shouldBeStrict()` wirft
+     * ausserhalb der Produktion auf einen Zugriff darauf.
+     *
+     * Das ist kein Testartefakt: die Registrierung meldet die neue Inhaberin
+     * unmittelbar an (RegisteredUserController) und rendert das Dashboard --
+     * mit genau diesem Modell.
+     */
+    public function einfuehrungStehtAus(): bool
+    {
+        return ($this->getAttributes()['einfuehrung_gesehen_at'] ?? null) === null;
     }
 
     public function isSuperAdmin(): bool

@@ -117,6 +117,15 @@ class HandleInertiaRequests extends Middleware
             // Zustand ohnehin in dieses Cookie.
             'sidebar_open' => $request->cookie('sidebar:state') !== 'false',
 
+            // **Die Einfuehrung startet einmal von selbst.** Serverseitig
+            // mitgegeben aus demselben Grund wie der Zustand der
+            // Seitenleiste: ein Overlay, das erst nach onMounted
+            // entscheidet, ob es erscheint, blitzt bei jedem Aufruf auf.
+            //
+            // Der instanceof-Waechter ist Pflicht -- share() laeuft auch auf
+            // der oeffentlichen Buchungsseite, die keinen Benutzer hat.
+            'einfuehrung_faellig' => $benutzer instanceof User && $benutzer->einfuehrungStehtAus(),
+
             'organization' => $organisation === null ? null : [
                 'uuid' => $organisation->uuid,
                 'name' => $organisation->name,

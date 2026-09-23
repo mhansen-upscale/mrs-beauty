@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import UserInfo from '@/components/UserInfo.vue';
 import { DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { useEinfuehrung } from '@/composables/useEinfuehrung';
 import type { User } from '@/types';
 import { Link } from '@inertiajs/vue3';
-import { LogOut, Settings } from 'lucide-vue-next';
+import { Compass, LogOut, Settings } from 'lucide-vue-next';
 
 interface Props {
     user: User;
 }
 
 defineProps<Props>();
+
+const einfuehrung = useEinfuehrung();
 </script>
 
 <template>
@@ -25,6 +28,12 @@ defineProps<Props>();
                 <Settings class="mr-2 h-4 w-4" />
                 Einstellungen
             </Link>
+        </DropdownMenuItem>
+
+        <!-- Wer sie übersprungen hat, findet sie hier wieder. -->
+        <DropdownMenuItem @select="einfuehrung.anfordern()">
+            <Compass class="mr-2 h-4 w-4" />
+            Einführung
         </DropdownMenuItem>
     </DropdownMenuGroup>
     <DropdownMenuSeparator />

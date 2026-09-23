@@ -2,6 +2,7 @@
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { useEinfuehrung } from '@/composables/useEinfuehrung';
 import { type NavGroup, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
@@ -26,10 +27,11 @@ import {
     TrendingUp,
     Users,
 } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import AppLogo from './AppLogo.vue';
 
 const page = usePage<SharedData>();
+const einfuehrung = useEinfuehrung();
 
 /**
  * Ausgeblendet ist nicht geschützt — die Zugangskontrolle steht in den Gates
@@ -137,6 +139,13 @@ const gruppen = computed<NavGroup[]>(() =>
         },
     ].filter((gruppe) => gruppe.items.length > 0),
 );
+
+/**
+ * Die Führung läuft über dieselben Punkte, die hier stehen — nicht über eine
+ * eigene Liste. Sonst zeigt sie beim Empfang auf dreizehn Bereiche, die es
+ * dort nicht gibt.
+ */
+watch(gruppen, (aktuelle) => einfuehrung.merkeMenue(aktuelle), { immediate: true });
 </script>
 
 <template>
