@@ -173,6 +173,22 @@ final class Anzeigenschaltung
             return;
         }
 
+        // **Wartend ist nicht abgelehnt.** Ein wiederholbarer Fehlschlag --
+        // ein Rate Limit, eine unerreichbare Gegenstelle, eine
+        // Anzeigengruppe, die noch nicht bei Meta steht -- sagt "spaeter
+        // nochmal", nicht "nein". Als `Failed` gefuehrt waere er rot in der
+        // Oberflaeche und, schlimmer, vom Wiederanlauf ausgenommen: der
+        // sucht `Pending`.
+        //
+        // Der Grund bleibt trotzdem stehen. Er sagt, worauf gewartet wird.
+        if ($fehler->einordnung->wiederholen) {
+            $anzeige->sync_state = SyncState::Pending;
+            $anzeige->sync_error = $fehler->einordnung->klartext ?? self::klartext($fehler->einordnung->kurzgrund);
+            $anzeige->save();
+
+            return;
+        }
+
         $anzeige->sync_state = SyncState::Failed;
         $anzeige->sync_error = $fehler->einordnung->klartext ?? self::klartext($fehler->einordnung->kurzgrund);
         $anzeige->save();

@@ -389,6 +389,22 @@ final class Kampagnenverwaltung
             return;
         }
 
+        // **Wartend ist nicht abgelehnt.** Ein wiederholbarer Fehlschlag --
+        // ein Rate Limit, eine unerreichbare Gegenstelle, eine
+        // Anzeigengruppe, die noch nicht bei Meta steht -- sagt "spaeter
+        // nochmal", nicht "nein". Als `Failed` gefuehrt waere er rot in der
+        // Oberflaeche und, schlimmer, vom Wiederanlauf ausgenommen: der
+        // sucht `Pending`.
+        //
+        // Der Grund bleibt trotzdem stehen. Er sagt, worauf gewartet wird.
+        if ($fehler->einordnung->wiederholen) {
+            $kampagne->sync_state = SyncState::Pending;
+            $kampagne->sync_error = $fehler->einordnung->klartext ?? self::klartext($fehler->einordnung->kurzgrund);
+            $kampagne->save();
+
+            return;
+        }
+
         $kampagne->sync_state = SyncState::Failed;
         $kampagne->sync_error = $fehler->einordnung->klartext ?? self::klartext($fehler->einordnung->kurzgrund);
         $kampagne->save();

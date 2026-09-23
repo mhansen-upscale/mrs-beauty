@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use App\Werbung\Verwaltung\Kampagnenname;
+use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Crypt;
@@ -241,6 +242,76 @@ it('laesst eine Anzeige bei fehlender Berechtigung offen', function (): void {
 | Wiederholungslogik sonst vermeidet.
 |
 */
+
+/*
+|--------------------------------------------------------------------------
+| Wartend ist nicht abgelehnt
+|--------------------------------------------------------------------------
+|
+| `vermerkeFehler` unterschied nur danach, ob ein Fehler den *Verbindungs*-
+| zustand setzt. Alles andere galt als abgelehnt -- auch `adset_not_synced`,
+| `rate_limit`, `temporary` und `unreachable`, die ausdruecklich als
+| wiederholbar eingeordnet sind.
+|
+| Zwei Folgen, beide am 23.09.2026 aufgefallen: Die Oberflaeche meldete rot
+| "Diese Anzeige ist nicht bei Meta angekommen", obwohl die Anzeige nur auf
+| ihre Kampagne wartete. Und der Wiederanlauf beim Verbinden sucht `Pending`
+| -- er zog genau die Faelle **nicht** nach, die dafuer gedacht waren.
+|
+*/
+
+it('haelt eine wartende Anzeige als wartend fest, nicht als abgelehnt', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Die Anzeigengruppe steht noch nicht bei Meta -- wiederholbar.
+    $aufbau->gruppe->external_id = 'lokal-abcdefghij';
+    $aufbau->gruppe->save();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+    ]);
+
+    // Der Auftrag wirft bei einem wiederholbaren Fehler erneut, damit die
+    // Warteschlange es noch einmal versucht. Der Vermerk steht trotzdem.
+    try {
+        app(AnzeigeUebertragen::class, [
+            'organisation' => (string) $aufbau->werbung->organisation->uuid,
+            'anzeige' => (string) $anzeige->uuid,
+        ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+    } catch (Werbefehler $erwartet) {
+        expect($erwartet->einordnung->kurzgrund)->toBe('adset_not_synced');
+    }
+
+    $frisch = $anzeige->fresh();
+
+    // Wartend -- sonst zieht der Wiederanlauf sie nie nach.
+    expect($frisch?->sync_state)->toBe(SyncState::Pending)
+        // Der Grund bleibt trotzdem sichtbar: er sagt, worauf gewartet wird.
+        ->and($frisch?->sync_error)->toContain('Kampagne');
+});
+
+it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*' => Http::response([
+            'error' => ['message' => 'Das Bild ist zu klein für dieses Format.', 'code' => 100],
+        ], 400),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    expect($anzeige->fresh()?->sync_state)->toBe(SyncState::Failed);
+});
 
 it('zeigt eine gescheiterte Uebertragung an der Anzeige', function (): void {
     $aufbau = new Anzeigenaufbau;
