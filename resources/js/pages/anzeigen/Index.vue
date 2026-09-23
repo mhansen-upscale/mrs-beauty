@@ -543,16 +543,34 @@ onUnmounted(haltAn);
                             </div>
                         </div>
 
+                        <!--
+                            **Auch im Wartezustand bedienbar.** Eine Anzeige
+                            wartet auf ihre Kampagne — geht die nie hinaus,
+                            wartet sie für immer, und „das System zieht schon
+                            nach" hilft dann niemandem.
+                        -->
                         <div
-                            v-if="gewaehlt.uebertragung?.zustand === 'failed'"
-                            class="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs"
+                            v-if="gewaehlt.uebertragung"
+                            class="space-y-2 rounded-md border p-2 text-xs"
+                            :class="gewaehlt.uebertragung.zustand === 'failed' ? 'border-destructive/40 bg-destructive/5' : ''"
                         >
-                            <p class="flex items-center gap-1.5 font-medium text-destructive">
-                                <AlertTriangle class="size-3 shrink-0" />
-                                Diese Anzeige ist nicht bei Meta angekommen.
+                            <p
+                                class="flex items-center gap-1.5 font-medium"
+                                :class="gewaehlt.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-foreground'"
+                            >
+                                <AlertTriangle v-if="gewaehlt.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
+                                <Loader2 v-else class="size-3 shrink-0 animate-spin" />
+                                {{
+                                    gewaehlt.uebertragung.zustand === 'failed'
+                                        ? 'Diese Anzeige ist nicht bei Meta angekommen.'
+                                        : 'Diese Anzeige ist noch nicht bei Meta.'
+                                }}
                             </p>
                             <p v-if="gewaehlt.uebertragung.fehler" class="text-muted-foreground">
                                 {{ gewaehlt.uebertragung.fehler }}
+                            </p>
+                            <p v-else-if="gewaehlt.uebertragung.zustand !== 'failed'" class="text-muted-foreground">
+                                Sie geht hinaus, sobald ihre Kampagne bei Meta steht.
                             </p>
                             <Button
                                 type="button"
@@ -562,7 +580,7 @@ onUnmounted(haltAn);
                                 @click="erneutUebertragen(gewaehlt.uebertragung.anzeige)"
                             >
                                 <RefreshCw />
-                                Erneut übertragen
+                                {{ gewaehlt.uebertragung.zustand === 'failed' ? 'Erneut übertragen' : 'Jetzt übertragen' }}
                             </Button>
                         </div>
 

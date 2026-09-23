@@ -314,6 +314,24 @@ it('stellt eine gescheiterte Anzeige auf Verlangen erneut ein', function (): voi
         ->and($frisch?->sync_error)->toBeNull();
 });
 
+it('stellt auch eine wartende Anzeige auf Verlangen erneut ein', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Wartend heisst nicht: es passiert schon etwas. Geht die Kampagne nie
+    // hinaus, wartet die Anzeige fuer immer -- und dann muss ein Mensch sie
+    // anstossen koennen, ohne das ganze Werbekonto neu zu verbinden.
+    expect($anzeige->sync_state)->toBe(SyncState::Pending);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->post(route('anzeigen.erneut', ['anzeige' => $anzeige->uuid]))
+        ->assertSessionHas('erfolg');
+
+    Queue::assertPushed(AnzeigeUebertragen::class);
+});
+
 it('laesst niemanden ohne campaigns.manage erneut uebertragen', function (): void {
     $aufbau = new Anzeigenaufbau;
     $anzeige = $aufbau->geplanteAnzeige();
