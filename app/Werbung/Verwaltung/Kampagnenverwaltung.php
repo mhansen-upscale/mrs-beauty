@@ -14,6 +14,7 @@ use App\Werbung\Meta\Graphleser;
 use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Kampagnen anlegen und aendern -- lokal, mit Auftrag.
@@ -177,9 +178,26 @@ final class Kampagnenverwaltung
             ));
         }
 
-        // Steht sie schon bei Meta, ist nichts zu tun.
+        // Steht sie schon bei Meta, ist meist nichts zu tun -- ausser sie
+        // taugt nicht.
         if (! str_starts_with($gruppe->external_id, 'lokal-')) {
-            return;
+            if ($this->traegtBeworbenesObjekt($kampagne, $gruppe, $token)) {
+                return;
+            }
+
+            // **Eine Gruppe ohne beworbenes Objekt ist nicht zu retten.**
+            // Meta nimmt es nachtraeglich nicht an ("kann in den meisten
+            // Faellen nicht veraendert werden") und lehnt jede Anzeige darin
+            // ab. Die alte bleibt pausiert bei Meta stehen -- wir loeschen
+            // dort nichts (C9) --, und wir legen daneben eine neue an.
+            Log::warning('Anzeigengruppe ohne beworbenes Objekt wird ersetzt.', [
+                'gruppe' => $gruppe->external_id,
+                'kampagne' => $kampagne->external_id,
+            ]);
+
+            $gruppe->external_id = 'lokal-'.(string) $gruppe->client_token;
+            $gruppe->sync_state = SyncState::Pending;
+            $gruppe->save();
         }
 
         $standort = $gruppe->location_id === null
@@ -202,6 +220,12 @@ final class Kampagnenverwaltung
             'campaign_id' => $kampagne->external_id,
             'status' => 'PAUSED',
             'billing_event' => 'IMPRESSIONS',
+
+            // **Das beworbene Objekt, wo Metas Ziel es verlangt.** Welche
+            // Ziele das sind, steht in config/mrs.php mit der Messung als
+            // Fundstelle. Es muss hier stehen: nachtraeglich nimmt Meta es
+            // nicht an.
+            ...$this->beworbenesObjekt($kampagne, $konto),
             // Die Zuordnung steht in config/mrs.php, mit der Messung als
             // Fundstelle -- nicht jede Kombination laesst Meta zu.
             'optimization_goal' => (string) config(
@@ -449,6 +473,79 @@ final class Kampagnenverwaltung
             // Protokoll, wo er hingehoert.
             default => 'Die Übertragung ist fehlgeschlagen. Wir versuchen es erneut.',
         };
+    }
+
+    /**
+     * Entfernt eine Kampagne bei Meta -- samt allem darunter.
+     *
+     * **Meta raeumt selbst auf**: mit der Kampagne gehen ihre
+     * Anzeigengruppen und Anzeigen. Wir schicken trotzdem nur einen Aufruf
+     * und keine Kette -- weniger Aufrufe, weniger halbe Zustaende.
+     *
+     * Was nie bei Meta ankam (`lokal-`), hat dort auch nichts zu entfernen.
+     */
+    public function entferneBeiMeta(AdCampaign $kampagne, AdAccount $konto): void
+    {
+        if ($kampagne->external_id === '' || str_starts_with($kampagne->external_id, 'lokal-')) {
+            return;
+        }
+
+        $this->schreiber->entferne((string) $konto->access_token, $kampagne->external_id);
+    }
+
+    /**
+     * Braucht dieses Kampagnenziel die Seite als beworbenes Objekt?
+     */
+    private static function brauchtSeite(?string $ziel): bool
+    {
+        return in_array((string) $ziel, (array) config('mrs.ads.promoted_page_objectives'), true);
+    }
+
+    /**
+     * Das beworbene Objekt fuer die Anzeigengruppe -- oder nichts.
+     *
+     * @return array<string, string>
+     */
+    private function beworbenesObjekt(AdCampaign $kampagne, AdAccount $konto): array
+    {
+        if (! self::brauchtSeite($kampagne->objective)) {
+            return [];
+        }
+
+        $seite = $konto->page_external_id;
+
+        if ($seite === null || $seite === '') {
+            // Dieselbe Auskunft wie beim Creative, nur frueher: ohne Seite
+            // entsteht hier schon keine brauchbare Gruppe, und eine
+            // unbrauchbare laesst sich spaeter nicht mehr reparieren.
+            throw new Werbefehler(new Fehlereinordnung(
+                'no_page',
+                wiederholen: false,
+                zustand: null,
+                klartext: 'Für dieses Kampagnenziel braucht die Anzeigengruppe Ihre Facebook-Seite. '
+                    .'Bitte hinterlegen Sie sie beim Werbekonto.',
+            ));
+        }
+
+        return ['promoted_object' => (string) json_encode(['page_id' => $seite])];
+    }
+
+    /**
+     * Traegt eine bestehende Gruppe das beworbene Objekt, das ihr Ziel
+     * verlangt?
+     *
+     * Gefragt wird nur, wo es darauf ankommt -- sonst waere es ein
+     * zusaetzlicher Lesezugriff bei jeder Uebertragung.
+     */
+    private function traegtBeworbenesObjekt(AdCampaign $kampagne, AdSet $gruppe, string $token): bool
+    {
+        if (! self::brauchtSeite($kampagne->objective)) {
+            return true;
+        }
+
+        $antwort = $this->leser->knoten($token, $gruppe->external_id, ['fields' => 'promoted_object']);
+
+        return data_get($antwort, 'promoted_object.page_id') !== null;
     }
 
     /**

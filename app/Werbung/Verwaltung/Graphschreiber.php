@@ -117,6 +117,43 @@ final class Graphschreiber
     }
 
     /**
+     * Entfernt einen Knoten bei Meta.
+     *
+     * **Meta loescht nicht wirklich.** Ein entfernter Knoten wird auf
+     * `DELETED` gesetzt und verschwindet aus der Oberflaeche; die Zahlen
+     * bleiben im Konto. Das ist gut so -- ausgegebenes Geld soll nicht
+     * verschwinden, nur weil jemand aufraeumt.
+     */
+    public function entferne(string $token, string $kennung): void
+    {
+        $adresse = rtrim((string) config('mrs.meta.graph_url'), '/')
+            .'/'.(string) config('mrs.meta.api_version')
+            .'/'.ltrim($kennung, '/');
+
+        try {
+            $antwort = Http::withToken($token)->acceptJson()->timeout(30)->delete($adresse);
+        } catch (ConnectionException) {
+            throw new Werbefehler(new Fehlereinordnung('unreachable', wiederholen: true, zustand: null));
+        }
+
+        $fehler = (array) $antwort->json();
+
+        if ($antwort->failed() || data_get($fehler, 'error') !== null) {
+            Log::warning('Meta hat ein Entfernen abgelehnt.', [
+                'kennung' => $kennung,
+                'status' => $antwort->status(),
+                'code' => data_get($fehler, 'error.code'),
+                'subcode' => data_get($fehler, 'error.error_subcode'),
+                'meldung' => data_get($fehler, 'error.message'),
+                'klartext' => data_get($fehler, 'error.error_user_msg'),
+                'fbtrace_id' => data_get($fehler, 'error.fbtrace_id'),
+            ]);
+
+            throw new Werbefehler(Fehlereinordnung::ausMetaAntwort($antwort->status(), $fehler));
+        }
+    }
+
+    /**
      * @param  array<string, mixed>  $daten
      * @return array<string, mixed>
      */

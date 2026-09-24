@@ -13,7 +13,7 @@ import { useNachladen } from '@/composables/useNachladen';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Loader2, Megaphone, Pause, Pencil, Play, Plus, RefreshCw, ShieldAlert } from 'lucide-vue-next';
+import { AlertTriangle, Loader2, Megaphone, Pause, Pencil, Play, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Kampagne extends Record<string, unknown> {
@@ -243,6 +243,28 @@ const umschalten = (zeile: Kampagne) =>
         { zustand: zeile.zustand === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' },
         { preserveScroll: true },
     );
+
+/*
+ * **Löschen heißt hier: bei Meta und bei uns.**
+ *
+ * Deshalb ein eigener Schritt mit Namen: eine Kampagne, die man aus Versehen
+ * entfernt, holt kein Zurück wieder. Nur eigene Kampagnen — eine aus Metas
+ * Bestand übernommene gehört der Praxis (C9).
+ */
+const loeschenOffen = ref(false);
+const zumLoeschen = ref<Kampagne | null>(null);
+const loeschen = useForm({});
+
+const oeffneLoeschen = (zeile: Kampagne) => {
+    zumLoeschen.value = zeile;
+    loeschenOffen.value = true;
+};
+
+const loescheEndgueltig = () =>
+    loeschen.delete(route('werbung.kampagne.loeschen', { kampagne: zumLoeschen.value?.uuid }), {
+        preserveScroll: true,
+        onSuccess: () => (loeschenOffen.value = false),
+    });
 
 const gestoerteUebertragung = computed<Kampagne[]>(() => props.kampagnen.filter((k) => k.uebertragung === 'failed'));
 
@@ -545,6 +567,14 @@ useNachladen(laeuft, ['kampagnen']);
                             beschriftung="Budget und Zielgruppe bearbeiten"
                             @click="oeffneBearbeiten(zeile)"
                         />
+
+                        <AktionsButton
+                            v-if="zeile.eigene"
+                            :icon="Trash2"
+                            beschriftung="Kampagne löschen"
+                            variant="ghost"
+                            @click="oeffneLoeschen(zeile)"
+                        />
                     </template>
                 </DataTable>
 
@@ -844,6 +874,19 @@ useNachladen(laeuft, ['kampagnen']);
 
             <p class="rounded-md border p-2 text-xs text-muted-foreground">
                 Die Änderung geht in die Warteschlange — die Zeile zeigt sie als <strong>wird übertragen</strong>, bis Meta sie bestätigt hat.
+            </p>
+        </FormularDialog>
+        <FormularDialog
+            v-model:offen="loeschenOffen"
+            titel="Kampagne löschen"
+            :beschreibung="`„${zumLoeschen?.name ?? zumLoeschen?.kennung}“ wird bei Meta entfernt und verschwindet hier. Das lässt sich nicht rückgängig machen.`"
+            :laeuft="loeschen.processing"
+            absende-text="Endgültig löschen"
+            @absenden="loescheEndgueltig"
+        >
+            <p class="text-sm text-muted-foreground">
+                Mit der Kampagne gehen ihre Anzeigengruppe und ihre Anzeigen. Ihre Anzeigenentwürfe bleiben erhalten — Sie können sie danach in einer
+                neuen Kampagne schalten.
             </p>
         </FormularDialog>
     </AppLayout>

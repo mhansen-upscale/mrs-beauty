@@ -684,6 +684,29 @@ return [
             'OUTCOME_AWARENESS' => 'REACH',
         ],
 
+        // **Ziele, deren Anzeigengruppe die Facebook-Seite als beworbenes
+        // Objekt braucht.**
+        //
+        // Am 24.09.2026 am eigenen Konto gemessen. Der Befund ist unbequem:
+        // `validate_only` auf `/adsets` laesst eine Gruppe **ohne**
+        // `promoted_object` durch -- auch bei LEAD_GENERATION. Meta
+        // beanstandet es erst, wenn eine Anzeige hineinsoll:
+        //
+        //   "Deine Kampagne muss eine Anzeigengruppe mit einem
+        //    ausgewaehlten, zu bewerbendem Objekt ... enthalten."
+        //
+        // Und dann ist es zu spaet: ein nachtraegliches Setzen lehnt Meta ab
+        // ("Das hervorgehobene Objekt kann in den meisten Faellen nicht
+        // veraendert werden"). Die Gruppe muss neu angelegt werden.
+        //
+        // Deshalb steht es hier und nicht in einer Pruefung: was beim
+        // Anlegen fehlt, kostet die ganze Gruppe.
+        //
+        // OUTCOME_TRAFFIC ist gemessen und braucht es nicht.
+        // OUTCOME_AWARENESS ist **ungeprueft** -- dort ist noch keine
+        // Kampagne gelaufen.
+        'promoted_page_objectives' => ['OUTCOME_LEADS'],
+
         // **Laenge eines selbst gewaehlten Namens.** Meta laesst mehr zu,
         // aber ein Name, der in keine Spalte passt, hilft niemandem -- und
         // das Merkmal haengt hinten noch an (Regel 2, gelockert 23.09.2026).

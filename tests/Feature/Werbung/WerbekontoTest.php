@@ -826,7 +826,8 @@ it('nimmt als Seiten-ID nur Ziffern an', function (): void {
         ->patch(route('werbung.seite', ['werbekonto' => $aufbau->konto->uuid]), ['seite' => 'meine-praxis'])
         ->assertSessionHasErrors('seite');
 
-    expect($aufbau->konto->fresh()?->page_external_id)->toBeNull();
+    // Unveraendert: eine abgelehnte Eingabe loescht nichts.
+    expect($aufbau->konto->fresh()?->page_external_id)->toBe('778899');
 });
 
 it('laesst die Facebook-Seite wieder loeschen', function (): void {
@@ -859,7 +860,7 @@ it('laesst niemanden ohne campaigns.manage die Facebook-Seite setzen', function 
         ->patch(route('werbung.seite', ['werbekonto' => $aufbau->konto->uuid]), ['seite' => '102938475610293'])
         ->assertForbidden();
 
-    expect($aufbau->konto->fresh()?->page_external_id)->toBeNull();
+    expect($aufbau->konto->fresh()?->page_external_id)->toBe('778899');
 });
 
 it('laesst niemanden ohne campaigns.manage an die Werbung', function (): void {

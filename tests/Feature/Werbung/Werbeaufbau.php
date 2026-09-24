@@ -36,6 +36,11 @@ final class Werbeaufbau
         $konto->currency = 'EUR';
         $konto->timezone = 'Europe/Berlin';
         $konto->business_external_id = '998877';
+
+        // Ein verbundenes Konto hat eine Seite -- ohne sie entsteht fuer
+        // Ziele wie OUTCOME_LEADS keine brauchbare Anzeigengruppe. Wer das
+        // Gegenteil pruefen will, setzt sie im Testfall auf null.
+        $konto->page_external_id = '778899';
         $konto->status = ConnectionStatus::Active;
         $konto->access_token = 'systembenutzer-token';
         $konto->token_expires_at = $tokenAblauf;

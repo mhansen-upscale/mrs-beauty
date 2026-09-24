@@ -8,12 +8,14 @@ use App\Enums\Ability;
 use App\Enums\SyncState;
 use App\Http\Controllers\Controller;
 use App\Jobs\AnzeigeUebertragen;
+use App\Jobs\KampagneLoeschen;
 use App\Jobs\KampagneUebertragen;
 use App\Jobs\WerbestrukturAbgleichen;
 use App\Jobs\WerbezahlenAbgleichen;
 use App\Models\Ad;
 use App\Models\AdAccount;
 use App\Models\AdCampaign;
+use App\Models\AdInsight;
 use App\Models\AdSet;
 use App\Models\Location;
 use App\Models\Organization;
@@ -462,6 +464,44 @@ final class WerbekontoController extends Controller
         return is_int($zeitpunkt)
             && CarbonImmutable::createFromTimestamp($zeitpunkt)
                 ->greaterThan(CarbonImmutable::now()->subMinutes(self::STATE_MINUTEN));
+    }
+
+    /**
+     * Loescht eine selbst angelegte Kampagne -- bei Meta und bei uns.
+     *
+     * **Nur eigene** (C9): eine aus Metas Bestand uebernommene Kampagne
+     * gehoert der Praxis und wird dort entfernt, nicht hier.
+     *
+     * **Und nur, was nie ausgeliefert hat.** Zahlen haengen an der Kennung
+     * der Kampagne; ist die Zeile fort, stehen Ausgaben ohne Herkunft in der
+     * Auswertung. Was gelaufen ist, wird pausiert, nicht geloescht.
+     */
+    public function kampagneLoeschen(AdCampaign $kampagne, TenantContext $mandant): RedirectResponse
+    {
+        Gate::authorize(Ability::ManageCampaigns->value);
+
+        $organisation = $mandant->current();
+
+        if (! $organisation instanceof Organization) {
+            abort(404);
+        }
+
+        if (! $kampagne->managed_by_us) {
+            return $this->zurueck('Diese Kampagne haben wir nicht angelegt. Bitte entfernen Sie sie im Werbeanzeigenmanager.');
+        }
+
+        if (AdInsight::query()->where('external_id', $kampagne->external_id)->exists()) {
+            return $this->zurueck(
+                'Diese Kampagne hat bereits ausgeliefert. Löschen würde ihre Zahlen von ihrer Herkunft trennen — bitte pausieren Sie sie stattdessen.'
+            );
+        }
+
+        // Lokal sofort als verschwunden markieren waere falsch: geloescht
+        // wird sie, nicht vermisst. Bis der Auftrag durch ist, steht sie
+        // weiter da -- mit ihrem Zustand daneben.
+        KampagneLoeschen::dispatch((string) $organisation->uuid, (string) $kampagne->uuid);
+
+        return redirect()->route('werbung.index')->with('erfolg', 'Die Kampagne wird entfernt.');
     }
 
     private function zurueck(string $meldung): RedirectResponse

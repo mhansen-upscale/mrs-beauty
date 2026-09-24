@@ -48,4 +48,9 @@ Route::middleware(['auth', 'verified', 'can:campaigns.manage'])->group(function 
 
     Route::patch('werbung/kampagnen/{kampagne}', [WerbekontoController::class, 'kampagneAendern'])
         ->name('werbung.kampagne.aendern');
+
+    // Loeschen heisst hier: bei Meta und bei uns. Der Auftrag macht beides,
+    // in dieser Reihenfolge.
+    Route::delete('werbung/kampagnen/{kampagne}', [WerbekontoController::class, 'kampagneLoeschen'])
+        ->name('werbung.kampagne.loeschen');
 });

@@ -3,9 +3,12 @@
 declare(strict_types=1);
 
 use App\Enums\ConnectionStatus;
+use App\Enums\InsightLevel;
 use App\Enums\SyncState;
+use App\Jobs\KampagneLoeschen;
 use App\Jobs\KampagneUebertragen;
 use App\Models\AdCampaign;
+use App\Models\AdInsight;
 use App\Models\AdSet;
 use App\Models\Location;
 use App\Models\Treatment;
@@ -445,6 +448,234 @@ it('laesst eine Kampagne mit der richtigen Gebotsstrategie unangetastet', functi
     // Kein Schreibzugriff auf die Kampagne: was stimmt, wird nicht angefasst.
     Http::assertNotSent(fn ($anfrage): bool => $anfrage->method() === 'POST'
         && str_ends_with((string) $anfrage->url(), '/camp-gut'));
+});
+
+it('gibt der Anzeigengruppe bei Anfragen das beworbene Objekt mit', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_LEADS']));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()->push(Werbeaufbau::seite([]))->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(['id' => 'gruppe-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    // Ohne beworbenes Objekt legt Meta die Gruppe zwar an, lehnt aber jede
+    // Anzeige darin ab -- und nachruesten laesst es sich nicht.
+    Http::assertSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adsets')
+        && ($anfrage->data()['promoted_object'] ?? null) === '{"page_id":"778899"}');
+});
+
+it('laesst das beworbene Objekt weg, wo Meta es nicht verlangt', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_TRAFFIC']));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()->push(Werbeaufbau::seite([]))->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(['id' => 'gruppe-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    // Am 24.09.2026 gemessen: Traffic braucht es nicht. Mitzuschicken, was
+    // nicht verlangt ist, aendert die Auslieferung.
+    Http::assertSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adsets')
+        && ! isset($anfrage->data()['promoted_object']));
+});
+
+it('ersetzt eine Anzeigengruppe ohne beworbenes Objekt', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_LEADS']));
+
+    // **Die Kampagne ist lokal und wird ueber das Merkmal wiedergefunden.**
+    // Nur auf diesem Weg laeuft die Gruppenpruefung -- eine Kampagne, deren
+    // Kennung schon steht, nimmt den Aenderungspfad.
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    $gruppe = AdSet::query()->firstOrFail();
+    $gruppe->external_id = 'gruppe-alt';
+    $gruppe->save();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::response(Werbeaufbau::seite([
+            ['id' => 'kampagne-1', 'name' => (string) $kampagne->name, 'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP'],
+        ])),
+        // Die alte Gruppe traegt keines -- und nachruesten lehnt Meta ab.
+        'graph.test/*/gruppe-alt*' => Http::response(['id' => 'gruppe-alt']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+        'graph.test/*/adsets*' => Http::response(['id' => 'gruppe-neu']),
+        'graph.test/*' => Http::response(['success' => true]),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    expect(AdSet::query()->first()?->external_id)->toBe('gruppe-neu');
+});
+
+it('laesst eine taugliche Anzeigengruppe unangetastet', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_LEADS']));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    $gruppe = AdSet::query()->firstOrFail();
+    $gruppe->external_id = 'gruppe-alt';
+    $gruppe->save();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::response(Werbeaufbau::seite([
+            ['id' => 'kampagne-1', 'name' => (string) $kampagne->name, 'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP'],
+        ])),
+        'graph.test/*/gruppe-alt*' => Http::response(['id' => 'gruppe-alt', 'promoted_object' => ['page_id' => '778899']]),
+        'graph.test/*' => Http::response(['success' => true]),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    expect(AdSet::query()->first()?->external_id)->toBe('gruppe-alt');
+    Http::assertNotSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adsets') && $anfrage->method() === 'POST');
+});
+
+it('sagt es, wenn fuer dieses Ziel die Facebook-Seite fehlt', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    $aufbau->konto->page_external_id = null;
+    $aufbau->konto->save();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort, ['ziel' => 'OUTCOME_LEADS']));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::sequence()->push(Werbeaufbau::seite([]))->push(['id' => 'kampagne-1']),
+        'graph.test/*/search*' => Http::response(['data' => [['key' => '560419', 'name' => 'Hamburg']]]),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    // Frueher faellt der Fehler nicht auf -- spaeter ist die Gruppe angelegt
+    // und nicht mehr zu reparieren.
+    expect((string) AdCampaign::query()->first()?->sync_error)->toContain('Facebook-Seite');
+});
+
+it('loescht eine eigene Kampagne bei Meta und bei uns', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+    $kampagne->external_id = 'camp-1';
+    $kampagne->save();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->delete(route('werbung.kampagne.loeschen', ['kampagne' => $kampagne->uuid]))
+        ->assertRedirect(route('werbung.index'));
+
+    Queue::assertPushed(KampagneLoeschen::class);
+
+    Http::fake(['graph.test/*' => Http::response(['success' => true])]);
+
+    (new KampagneLoeschen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    alsMandant($aufbau->organisation);
+
+    // Erst bei Meta, dann bei uns -- andersherum bliebe dort eine Kampagne
+    // stehen, die niemand mehr sieht.
+    Http::assertSent(fn ($anfrage): bool => $anfrage->method() === 'DELETE'
+        && str_ends_with((string) $anfrage->url(), '/camp-1'));
+
+    expect(AdCampaign::query()->count())->toBe(0)
+        ->and(AdSet::query()->count())->toBe(0);
+});
+
+it('loescht keine fremde Kampagne', function (): void {
+    $aufbau = new Werbeaufbau;
+    alsMandant($aufbau->organisation);
+
+    $fremd = new AdCampaign;
+    $fremd->ad_account_id = $aufbau->konto->getKey();
+    $fremd->external_id = 'fremd-1';
+    $fremd->name = 'TOFU_LEADS_CBO';
+    $fremd->managed_by_us = false;
+    $fremd->save();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->delete(route('werbung.kampagne.loeschen', ['kampagne' => $fremd->uuid]))
+        ->assertSessionHas('fehler', fn (string $m): bool => str_contains($m, 'nicht angelegt'));
+
+    alsMandant($aufbau->organisation);
+
+    expect(AdCampaign::query()->count())->toBe(1);
+});
+
+it('loescht keine Kampagne, die schon ausgeliefert hat', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+    $kampagne->external_id = 'camp-1';
+    $kampagne->save();
+
+    $zahl = new AdInsight;
+    $zahl->setAttribute('ad_account_id', $aufbau->konto->getKey());
+    $zahl->external_id = 'camp-1';
+    $zahl->level = InsightLevel::Campaign;
+    $zahl->stat_date = CarbonImmutable::parse('2026-09-20');
+    $zahl->spend_minor = 1234;
+    $zahl->save();
+
+    // Zahlen haengen an der Kennung. Ist die Zeile fort, stehen Ausgaben
+    // ohne Herkunft in der Auswertung.
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->delete(route('werbung.kampagne.loeschen', ['kampagne' => $kampagne->uuid]))
+        ->assertSessionHas('fehler', fn (string $m): bool => str_contains($m, 'ausgeliefert'));
+
+    Queue::assertNotPushed(KampagneLoeschen::class);
 });
 
 it('wiederholt ein Rate-Limit beim Uebertragen', function (): void {
