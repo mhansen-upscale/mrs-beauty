@@ -117,20 +117,31 @@ final class Graphleser
      */
     private function hole(string $token, string $adresse, array $anfrage): array
     {
-        $antwort = Http::withToken($token)
-            ->acceptJson()
-            ->timeout(30)
-            ->retry(2, 200, function (Throwable $ausnahme): bool {
-                if ($ausnahme instanceof ConnectionException) {
-                    return true;
-                }
+        try {
+            $antwort = Http::withToken($token)
+                ->acceptJson()
+                ->timeout(30)
+                ->retry(2, 200, function (Throwable $ausnahme): bool {
+                    if ($ausnahme instanceof ConnectionException) {
+                        return true;
+                    }
 
-                // 4xx nicht wiederholen: ein ungueltiges Token und eine
-                // fehlende Berechtigung werden durch Warten nicht besser.
-                return $ausnahme instanceof RequestException
-                    && $ausnahme->response->serverError();
-            }, throw: false)
-            ->get($adresse, $anfrage);
+                    // 4xx nicht wiederholen: ein ungueltiges Token und eine
+                    // fehlende Berechtigung werden durch Warten nicht besser.
+                    return $ausnahme instanceof RequestException
+                        && $ausnahme->response->serverError();
+                }, throw: false)
+                ->get($adresse, $anfrage);
+        } catch (ConnectionException) {
+            // **Auch nach zwei Wiederholungen kann die Verbindung stehen
+            // bleiben.** `throw: false` bezieht sich auf die Antwort, nicht
+            // auf einen Verbindungsabbruch -- der flog bis zum 24.09.2026
+            // roh aus dem Auftrag heraus. Fuer den Auftrag war das kein
+            // Werbefehler, also lief `vermerkeFehler` nie, und die Praxis
+            // las am Ende "Die Ursache liegt bei uns" ueber einen Ausfall
+            // bei Meta. Der Schreiber macht es seit je richtig.
+            throw new Werbefehler(new Fehlereinordnung('unreachable', wiederholen: true, zustand: null));
+        }
 
         if ($antwort->failed()) {
             throw new Werbefehler(

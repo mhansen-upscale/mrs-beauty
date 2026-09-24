@@ -16,11 +16,13 @@ use App\Werbung\Verwaltung\Anzeigenschaltung;
 use App\Werbung\Verwaltung\Kampagnenname;
 use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\travelTo;
@@ -431,6 +433,93 @@ it('laesst den vermerkten Grund vor dem Fehler des letzten Versuchs stehen', fun
 
     expect((string) $anzeige->fresh()?->sync_error)
         ->toContain('Die Anzeigengruppe steht noch nicht bei Meta.');
+});
+
+it('sagt es, wenn die Grafik nicht mehr im Speicher liegt', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Der Datensatz steht, die Datei ist fort -- auf einem Server ohne
+    // dauerhafte Platte der Normalfall, nicht die Ausnahme.
+    $anhang = $anzeige->vorschlag()->first()?->bild();
+    Storage::disk((string) config('mrs.attachments.disk', 'local'))->delete((string) $anhang?->path);
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $frisch = $anzeige->fresh();
+
+    // Kein "die Ursache liegt bei uns": hier gibt es einen naechsten Schritt.
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        ->and((string) $frisch?->sync_error)->toContain('Grafik')
+        ->and((string) $frisch?->sync_error)->toContain('neu');
+});
+
+it('behandelt einen Verbindungsabbruch beim Lesen als Ausfall bei Meta', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Der Auftrag sieht zuerst nach, ob die Anzeige schon dort steht -- und
+    // genau dieser Lesezugriff flog frueher roh aus dem Auftrag heraus.
+    Http::fake(fn () => throw new ConnectionException('Connection timed out'));
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+})->throws(Werbefehler::class);
+
+it('haelt auch eine lange Ablehnung fest, statt daran zu zerbrechen', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Metas echte Antwort vom 24.09.2026: ueber 255 Zeichen, mit Hilfelink.
+    // Die Spalte fasste 255 -- das Festhalten des Fehlers warf selbst einen
+    // Fehler, der Grund war fort, und der Auftrag scheiterte an etwas
+    // anderem als dem eigentlichen Problem.
+    $lang = 'Ein Business-Admin muss unsere Richtlinie gegen Diskriminierung lesen und akzeptieren, '
+        .'bevor du Werbung schalten kannst. Diese ist in den Unternehmenseinstellungen unter '
+        .'„Systemnutzer“ zu finden.Link zum Hilfebereich: '
+        .'https://www.facebook.com/business/help/338925176776440';
+
+    expect(mb_strlen($lang))->toBeGreaterThan(255);
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*' => Http::response([
+            'error' => ['message' => 'Invalid parameter', 'error_user_msg' => $lang, 'code' => 100],
+        ], 400),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $frisch = $anzeige->fresh();
+
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        ->and((string) $frisch?->sync_error)->toBe($lang);
+});
+
+it('kappt einen masslosen Vermerk, statt ihn wegzuwerfen', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Auch eine breitere Spalte hat ein Ende. Wichtiger als der Text ist,
+    // dass das Speichern nicht wirft: sonst faellt der Auftrag genau dort um,
+    // wo er den Grund festhalten wollte.
+    $anzeige->sync_error = str_repeat('A', 5000);
+    $anzeige->save();
+
+    expect(mb_strlen((string) $anzeige->fresh()?->sync_error))->toBeLessThanOrEqual(1000);
 });
 
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {

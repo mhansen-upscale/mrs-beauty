@@ -25,6 +25,15 @@ use Illuminate\Support\Facades\DB;
  */
 final class Kampagnenverwaltung
 {
+    /**
+     * Die einzige Gebotsstrategie, die dieses Produkt setzt.
+     *
+     * Jede andere verlangt an jeder Anzeigengruppe ein `bid_amount` -- einen
+     * Gebotswert, den eine Praxis nicht sinnvoll beziffern kann und den das
+     * Produkt deshalb nirgends erhebt.
+     */
+    private const GEBOTSSTRATEGIE = 'LOWEST_COST_WITHOUT_CAP';
+
     public function __construct(
         private readonly Graphschreiber $schreiber,
         private readonly Graphleser $leser,
@@ -98,9 +107,13 @@ final class Kampagnenverwaltung
             return;
         }
 
-        $vorhanden = $this->sucheKennung($konto, $token, $kampagne->client_token);
+        $vorhanden = $this->sucheKampagne($konto, $token, $kampagne->client_token);
 
-        $kennung = $vorhanden ?? $this->schreiber->lege($token, $konto->external_id.'/campaigns', [
+        if ($vorhanden !== null) {
+            $this->richteGebotsstrategie($token, $vorhanden['kennung'], $vorhanden['gebotsstrategie']);
+        }
+
+        $kennung = $vorhanden['kennung'] ?? $this->schreiber->lege($token, $konto->external_id.'/campaigns', [
             'name' => (string) $kampagne->name,
             'objective' => (string) $kampagne->objective,
 
@@ -116,7 +129,7 @@ final class Kampagnenverwaltung
             // `bid_amount` verlangt -- einen Wert, den dieses Produkt
             // nirgends erhebt und eine Praxis nicht sinnvoll setzen kann.
             // Jede Gruppe scheiterte daran, auch mit gueltigem Umkreis.
-            'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP',
+            'bid_strategy' => self::GEBOTSSTRATEGIE,
         ]);
 
         // Die Kennung sofort sichern: ein zweiter Lauf soll keine zweite
@@ -440,22 +453,62 @@ final class Kampagnenverwaltung
 
     /**
      * Sucht eine Kampagne ueber das Merkmal in ihrem Namen.
+     *
+     * **Die Gebotsstrategie kommt mit.** Gefunden heisst nicht richtig: eine
+     * Kampagne, die vor dem 23.09.2026 entstand, traegt bei Meta noch die
+     * Strategie, die Meta damals von sich aus waehlte.
+     *
+     * @return array{kennung: string, gebotsstrategie: string|null}|null
      */
-    private function sucheKennung(AdAccount $konto, string $token, string $merkmal): ?string
+    private function sucheKampagne(AdAccount $konto, string $token, string $merkmal): ?array
     {
         $zeilen = $this->leser->sammle($token, $konto->external_id.'/campaigns', [
-            'fields' => 'id,name',
+            'fields' => 'id,name,bid_strategy',
         ]);
 
         foreach ($zeilen as $zeile) {
-            if (Kampagnenname::merkmalAus(is_string($zeile['name'] ?? null) ? $zeile['name'] : null) === $merkmal) {
-                $kennung = $zeile['id'] ?? null;
-
-                return is_string($kennung) && $kennung !== '' ? $kennung : null;
+            if (Kampagnenname::merkmalAus(is_string($zeile['name'] ?? null) ? $zeile['name'] : null) !== $merkmal) {
+                continue;
             }
+
+            $kennung = $zeile['id'] ?? null;
+
+            if (! is_string($kennung) || $kennung === '') {
+                return null;
+            }
+
+            $strategie = $zeile['bid_strategy'] ?? null;
+
+            return [
+                'kennung' => $kennung,
+                'gebotsstrategie' => is_string($strategie) ? $strategie : null,
+            ];
         }
 
         return null;
+    }
+
+    /**
+     * Rueckt die Gebotsstrategie einer wiedergefundenen Kampagne gerade.
+     *
+     * **Sonst erbt jede neue Anzeigengruppe den alten Stand.** Am 24.09.2026
+     * stand die Kampagne bei Meta, die Gruppe entstand nicht, und Meta
+     * verlangte ein `bid_amount` -- einen Gebotswert, den dieses Produkt
+     * nirgends erhebt. Die Ursache lag nicht an der Gruppe, sondern eine
+     * Ebene darueber, und das Anlegen der Kampagne, das die Strategie setzt,
+     * lief nie wieder: sie war ja schon da.
+     *
+     * Angefasst wird nur, was wir selbst angelegt haben -- gefunden wird
+     * ueber unser eigenes Merkmal im Namen. Eine fremde Kampagne erreicht
+     * diese Stelle nicht (C9).
+     */
+    private function richteGebotsstrategie(string $token, string $kennung, ?string $vorhandene): void
+    {
+        if ($vorhandene === self::GEBOTSSTRATEGIE) {
+            return;
+        }
+
+        $this->schreiber->aendere($token, $kennung, ['bid_strategy' => self::GEBOTSSTRATEGIE]);
     }
 
     /**

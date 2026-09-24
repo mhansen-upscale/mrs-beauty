@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Werbung\Verwaltung;
 
+use App\Datenschutz\Anhangabgelehnt;
 use App\Datenschutz\Anhangspeicher;
 use App\Enums\SyncState;
 use App\Models\Ad;
@@ -214,8 +215,23 @@ final class Anzeigenschaltung
             ));
         }
 
+        // **Der Datensatz kann da sein und die Datei fort.** Dann wirft der
+        // Anhangspeicher, nicht Meta -- und der Auftrag lief bis zum
+        // 24.09.2026 in den Standardfall: "Die Ursache liegt bei uns". Das
+        // stimmt zwar, hilft aber nicht. Hier kann die Praxis etwas tun.
+        try {
+            $rohinhalt = $this->anhaenge->rohinhalt($anhang);
+        } catch (Anhangabgelehnt) {
+            throw new Werbefehler(new Fehlereinordnung(
+                'no_image_file',
+                wiederholen: false,
+                zustand: null,
+                klartext: 'Die Grafik dieser Anzeige liegt nicht mehr im Speicher. Bitte erzeugen Sie sie neu.',
+            ));
+        }
+
         $antwort = $this->schreiber->legeRoh($token, $konto->external_id.'/adimages', [
-            'bytes' => base64_encode($this->anhaenge->rohinhalt($anhang)),
+            'bytes' => base64_encode($rohinhalt),
         ]);
 
         $bilder = data_get($antwort, 'images');

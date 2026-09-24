@@ -364,7 +364,7 @@ it('legt bei einem zweiten Lauf keine zweite Kampagne an', function (): void {
     // an. Das Nachsehen findet die Kampagne ueber das Merkmal im Namen.
     Http::fake([
         'graph.test/*/campaigns*' => Http::response(Werbeaufbau::seite([
-            ['id' => 'camp-schon-da', 'name' => $name],
+            ['id' => 'camp-schon-da', 'name' => $name, 'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP'],
         ])),
         'graph.test/*/search*' => Http::response(Werbeaufbau::seite([['key' => '2696']])),
         'graph.test/*/adsets*' => Http::response(['id' => 'adset-1']),
@@ -380,6 +380,71 @@ it('legt bei einem zweiten Lauf keine zweite Kampagne an', function (): void {
 
     // Und kein POST auf /campaigns: gefunden statt angelegt.
     Http::assertNotSent(fn ($anfrage): bool => $anfrage->method() === 'POST' && str_contains($anfrage->url(), '/campaigns'));
+});
+
+it('rueckt die Gebotsstrategie einer wiedergefundenen Kampagne gerade', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+    $name = (string) $kampagne->name;
+
+    // Eine Kampagne aus der Zeit vor dem 23.09.2026: sie steht bei Meta, aber
+    // mit der Strategie, die Meta damals selbst waehlte. Das Anlegen, das
+    // unsere Strategie setzt, laeuft nie wieder -- sie ist ja schon da.
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::response(Werbeaufbau::seite([
+            ['id' => 'camp-alt', 'name' => $name, 'bid_strategy' => 'LOWEST_COST_WITH_BID_CAP'],
+        ])),
+        'graph.test/*/search*' => Http::response(Werbeaufbau::seite([['key' => '2696']])),
+        'graph.test/*/adsets*' => Http::response(['id' => 'adset-1']),
+        // Das Geraderuecken schreibt auf die Kampagnenkennung selbst.
+        'graph.test/*' => Http::response(['success' => true]),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    // Ohne das Geraderuecken erbt die neue Gruppe die alte Strategie -- und
+    // Meta verlangt ein bid_amount, das dieses Produkt nirgends erhebt.
+    Http::assertSent(fn ($anfrage): bool => $anfrage->method() === 'POST'
+        && str_ends_with((string) $anfrage->url(), '/camp-alt')
+        && ($anfrage->data()['bid_strategy'] ?? null) === 'LOWEST_COST_WITHOUT_CAP');
+
+    alsMandant($aufbau->organisation);
+
+    expect(AdCampaign::query()->first()?->sync_state)->toBe(SyncState::Synced);
+});
+
+it('laesst eine Kampagne mit der richtigen Gebotsstrategie unangetastet', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+    $name = (string) $kampagne->name;
+
+    Http::fake([
+        'graph.test/*/campaigns*' => Http::response(Werbeaufbau::seite([
+            ['id' => 'camp-gut', 'name' => $name, 'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP'],
+        ])),
+        'graph.test/*/search*' => Http::response(Werbeaufbau::seite([['key' => '2696']])),
+        'graph.test/*/adsets*' => Http::response(['id' => 'adset-1']),
+    ]);
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->handle(app(TenantContext::class), app(Kampagnenverwaltung::class));
+
+    // Kein Schreibzugriff auf die Kampagne: was stimmt, wird nicht angefasst.
+    Http::assertNotSent(fn ($anfrage): bool => $anfrage->method() === 'POST'
+        && str_ends_with((string) $anfrage->url(), '/camp-gut'));
 });
 
 it('wiederholt ein Rate-Limit beim Uebertragen', function (): void {
