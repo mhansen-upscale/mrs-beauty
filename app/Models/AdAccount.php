@@ -12,6 +12,7 @@ use App\Models\Concerns\MasksPersonalData;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * Das Werbekonto einer Praxis.
@@ -45,6 +46,15 @@ class AdAccount extends TenantModel implements HasPersonalData
 {
     use Auditable;
     use MasksPersonalData;
+
+    /**
+     * Wie lang ein Ausfallgrund hoechstens wird.
+     *
+     * Metas laengster bisher gesehener Satz -- die Sicherheitspruefung -- hat
+     * 260 Zeichen. Tausend sind mehr als genug und wenig genug fuer einen
+     * Hinweiskasten.
+     */
+    private const GRUND_MAX = 1000;
 
     protected $guarded = ['id'];
 
@@ -110,7 +120,13 @@ class AdAccount extends TenantModel implements HasPersonalData
     public function meldeAusfall(ConnectionStatus $zustand, string $grund): void
     {
         $this->status = $zustand;
-        $this->last_error = $grund;
+
+        // **Der Vermerk darf die Zeile nicht sprengen.** Die Spalte ist
+        // `text`, die Grenze steht hier -- wie bei sync_error in
+        // GehoertZurWerbestruktur. Das Festhalten eines Ausfalls darf nie
+        // selbst fehlschlagen: sonst ist mit dem Auftrag auch der Grund fort
+        // (24.09.2026, zweimal am selben Tag).
+        $this->last_error = Str::limit($grund, self::GRUND_MAX - 2, ' …');
         $this->failed_at = CarbonImmutable::now();
         $this->save();
     }

@@ -608,6 +608,47 @@ it('erkennt einen Fehler im Rumpf auch bei HTTP 200', function (): void {
         ->and((string) $konto?->last_error)->not->toContain('action_required');
 });
 
+it('haelt auch einen langen Ausfallgrund fest, statt daran zu zerbrechen', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Metas echter Satz zur Sicherheitspruefung, 260 Zeichen. Die Spalte
+    // fasste 64 -- das Festhalten des Ausfalls warf selbst, und mit dem
+    // Auftrag war der Grund fort.
+    $lang = 'Wir glauben, dass jemand versucht hat, ohne Erlaubnis auf dein Konto zuzugreifen. '
+        .'Zu deinem Schutz kannst du keine Werbeanzeigen erstellen oder ändern, bis du dein Konto '
+        .'im Werbeanzeigenmanager authentifiziert hast. Deine bestehenden Werbeanzeigen werden '
+        .'weiterhin normal geschaltet.';
+
+    expect(mb_strlen($lang))->toBeGreaterThan(64);
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['error' => [
+            'message' => 'This request requires the user to take a pending action',
+            'code' => 31,
+            'error_user_msg' => $lang,
+        ]], 200),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    expect((string) $aufbau->werbung->konto->fresh()?->last_error)->toBe($lang);
+});
+
+it('kappt einen masslosen Ausfallgrund, statt ihn wegzuwerfen', function (): void {
+    $aufbau = new Werbeaufbau;
+
+    $aufbau->konto->meldeAusfall(ConnectionStatus::Degraded, str_repeat('A', 5000));
+
+    expect(mb_strlen((string) $aufbau->konto->fresh()?->last_error))->toBeLessThanOrEqual(1000);
+});
+
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {
     $aufbau = new Anzeigenaufbau;
     $anzeige = $aufbau->geplanteAnzeige();
