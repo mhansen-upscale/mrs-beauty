@@ -8,6 +8,7 @@ use App\Enums\SyncState;
 use App\Models\AdAccount;
 use App\Models\AdCampaign;
 use App\Models\Organization;
+use App\Support\Abbruchvermerk;
 use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Kampagnenverwaltung;
 use App\Werbung\Werbefehler;
@@ -55,7 +56,8 @@ final class KampagneUebertragen implements ShouldBeUnique, ShouldQueue
      * laengst aufgegeben wurde. Aufgefallen am 23.09.2026, nach zwanzig
      * Minuten Drehkreis.
      *
-     * Der zuletzt vermerkte Grund bleibt stehen: er sagt, woran es lag.
+     * Der zuletzt vermerkte Grund hat Vorrang: er kennt die Stelle. Fehlt er,
+     * traegt der Fehler selbst den Grund -- siehe Abbruchvermerk.
      */
     public function failed(Throwable $grund): void
     {
@@ -65,7 +67,7 @@ final class KampagneUebertragen implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        app(TenantContext::class)->runAs($organisation, function (): void {
+        app(TenantContext::class)->runAs($organisation, function () use ($grund): void {
             $kampagne = AdCampaign::query()->whereUuid($this->kampagne)->first();
 
             if (! $kampagne instanceof AdCampaign) {
@@ -73,8 +75,12 @@ final class KampagneUebertragen implements ShouldBeUnique, ShouldQueue
             }
 
             $kampagne->sync_state = SyncState::Failed;
-            $kampagne->sync_error = 'Nach mehreren Versuchen aufgegeben. Zuletzt: '
-                .($kampagne->sync_error ?? 'kein Grund vermerkt.');
+            $kampagne->sync_error = Abbruchvermerk::satz(
+                $grund,
+                $kampagne->sync_error,
+                'Kampagne übertragen',
+                $this->kampagne,
+            );
             $kampagne->save();
         });
     }

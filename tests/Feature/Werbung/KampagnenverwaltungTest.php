@@ -737,6 +737,33 @@ it('gibt bei der Kampagne nach dem letzten Versuch auf', function (): void {
         ->and($frisch?->sync_error)->toContain('aufgegeben');
 });
 
+it('nennt auch bei der Kampagne den Grund, statt keinen zu haben', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+
+    // Frisch angelegt: nichts vermerkt. Genau hier stand bis zum 24.09.2026
+    // "kein Grund vermerkt." -- ein Satz ohne Auskunft.
+    expect($kampagne->sync_error)->toBeNull();
+
+    (new KampagneUebertragen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->failed(new RuntimeException('Undefined array key "targeting"'));
+
+    alsMandant($aufbau->organisation);
+
+    $fehler = (string) AdCampaign::query()->first()?->sync_error;
+
+    expect($fehler)->toContain('aufgegeben')
+        ->and($fehler)->not->toContain('kein Grund vermerkt')
+        ->and($fehler)->not->toContain('RuntimeException')
+        ->and($fehler)->toContain('bei uns');
+});
+
 it('zeigt eine fachliche Ablehnung im Klartext', function (): void {
     $aufbau = new Werbeaufbau;
     $standort = werbestandort();

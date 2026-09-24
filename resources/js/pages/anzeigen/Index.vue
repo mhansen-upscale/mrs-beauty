@@ -9,11 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useNachladen } from '@/composables/useNachladen';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, Image as Bild, ChevronDown, Clock, Loader2, Megaphone, Plus, RefreshCw, Sparkles } from 'lucide-vue-next';
-import { computed, onUnmounted, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 interface Befund {
     code: string;
@@ -49,7 +50,13 @@ interface Vorschlag {
     laeuftIn: string[];
 
     /** Haengt die Uebertragung zu Meta? `null`, solange alles durch ist. */
-    uebertragung: { anzeige: string; zustand: string; fehler: string | null } | null;
+    uebertragung: Uebertragung | null;
+}
+
+interface Uebertragung {
+    anzeige: string;
+    zustand: string;
+    fehler: string | null;
 }
 
 interface Kampagne {
@@ -72,6 +79,40 @@ const props = defineProps<{
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Anzeigen', href: '/anzeigen' }];
 
 const wochentext = (iso: string): string => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: 'short' });
+
+/**
+ * **Unterwegs heisst: in der Warteschlange, ohne vermerkten Grund.**
+ *
+ * Eine Anzeige, die auf ihre Anzeigengruppe wartet, steht ebenfalls auf
+ * `pending` — nur traegt sie den Grund dafuer bei sich und kann so den ganzen
+ * Tag liegen. Ein Rad, das sich dabei dreht, verspricht etwas, das nicht
+ * eintritt (so gesehen am 23.09.2026).
+ */
+const unterwegs = (u: Uebertragung | null): boolean => u !== null && u.zustand === 'pending' && u.fehler === null;
+
+const meldungZurUebertragung = (u: Uebertragung | null): string => {
+    if (u === null) {
+        return '';
+    }
+
+    if (u.zustand === 'failed') {
+        return 'Diese Anzeige ist nicht bei Meta angekommen.';
+    }
+
+    return unterwegs(u) ? 'Diese Anzeige geht gerade zu Meta.' : 'Diese Anzeige ist noch nicht bei Meta.';
+};
+
+const uebertragungstext = (u: Uebertragung | null): string => {
+    if (u === null) {
+        return '';
+    }
+
+    if (u.zustand === 'failed') {
+        return 'Nicht übertragen';
+    }
+
+    return unterwegs(u) ? 'Wird übertragen' : 'Wartet';
+};
 
 /*
 | **Ein Raster, keine Wochenblöcke.**
@@ -205,35 +246,15 @@ const bildGrund = computed(() => {
 });
 
 /**
- * Solange eine Grafik entsteht, lädt die Seite sich selbst nach.
+ * Solange eine Grafik entsteht oder eine Anzeige zu Meta unterwegs ist, lädt
+ * die Seite sich selbst nach.
  *
  * Sonst müsste jemand raten, wann er neu lädt — und das Warten in den
  * Anfragezyklus zurückzuholen, war genau der Fehler davor.
  */
-const laeuft = computed(() => props.vorschlaege.some((v) => v.bildLaeuft));
+const laeuft = computed<boolean>(() => props.vorschlaege.some((v) => v.bildLaeuft || unterwegs(v.uebertragung)));
 
-let takt: ReturnType<typeof setInterval> | null = null;
-
-const haltAn = () => {
-    if (takt !== null) {
-        clearInterval(takt);
-        takt = null;
-    }
-};
-
-watch(
-    laeuft,
-    (jetzt) => {
-        haltAn();
-
-        if (jetzt) {
-            takt = setInterval(() => router.reload({ only: ['vorschlaege'] }), 5000);
-        }
-    },
-    { immediate: true },
-);
-
-onUnmounted(haltAn);
+useNachladen(laeuft, ['vorschlaege']);
 </script>
 
 <template>
@@ -392,8 +413,9 @@ onUnmounted(haltAn);
                             :class="vorschlag.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-muted-foreground'"
                         >
                             <AlertTriangle v-if="vorschlag.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
+                            <Loader2 v-else-if="unterwegs(vorschlag.uebertragung)" class="size-3 shrink-0 animate-spin" />
                             <Clock v-else class="size-3 shrink-0" />
-                            {{ vorschlag.uebertragung.zustand === 'failed' ? 'Nicht übertragen' : 'Wartet' }}
+                            {{ uebertragungstext(vorschlag.uebertragung) }}
                         </span>
                     </span>
                 </button>
@@ -559,27 +581,37 @@ onUnmounted(haltAn);
                                 :class="gewaehlt.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-foreground'"
                             >
                                 <AlertTriangle v-if="gewaehlt.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
+                                <Loader2 v-else-if="unterwegs(gewaehlt.uebertragung)" class="size-3 shrink-0 animate-spin" />
                                 <Clock v-else class="size-3 shrink-0" />
-                                {{
-                                    gewaehlt.uebertragung.zustand === 'failed'
-                                        ? 'Diese Anzeige ist nicht bei Meta angekommen.'
-                                        : 'Diese Anzeige ist noch nicht bei Meta.'
-                                }}
+                                {{ meldungZurUebertragung(gewaehlt.uebertragung) }}
                             </p>
                             <p v-if="gewaehlt.uebertragung.fehler" class="text-muted-foreground">
                                 {{ gewaehlt.uebertragung.fehler }}
                             </p>
-                            <p v-else-if="gewaehlt.uebertragung.zustand !== 'failed'" class="text-muted-foreground">
-                                Sie geht hinaus, sobald ihre Kampagne bei Meta steht. Passiert länger nichts, stoßen Sie sie hier selbst an.
+
+                            <!--
+                                Der Satz nimmt den Griff zum Neuladen ab: die
+                                Seite holt den Zustand von selbst nach.
+                            -->
+                            <p v-else-if="unterwegs(gewaehlt.uebertragung)" class="text-muted-foreground">
+                                Das dauert meist ein paar Sekunden. Sie müssen nichts tun — der Zustand hier oben aktualisiert sich von selbst.
                             </p>
+
+                            <!--
+                                Angestossen wird nur, was gerade nicht laeuft.
+                                Sonst legte ein zweiter Klick einen zweiten
+                                Auftrag auf dieselbe Anzeige.
+                            -->
                             <Button
+                                v-if="!unterwegs(gewaehlt.uebertragung)"
                                 type="button"
                                 size="sm"
                                 variant="outline"
                                 :disabled="erneut.processing"
                                 @click="erneutUebertragen(gewaehlt.uebertragung.anzeige)"
                             >
-                                <RefreshCw />
+                                <Loader2 v-if="erneut.processing" class="animate-spin" />
+                                <RefreshCw v-else />
                                 {{ gewaehlt.uebertragung.zustand === 'failed' ? 'Erneut übertragen' : 'Jetzt übertragen' }}
                             </Button>
                         </div>

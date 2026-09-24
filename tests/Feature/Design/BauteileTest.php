@@ -617,3 +617,79 @@ it('findet ueberhaupt Menuepunkte', function (): void {
 
     expect(preg_match_all("/href: '([^']+)'/", $menue))->toBeGreaterThanOrEqual(15);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Wer einen Warteschlangenzustand zeigt, laedt ihn auch nach
+|--------------------------------------------------------------------------
+|
+| Jeder schreibende Zugriff auf Meta laeuft ueber eine Queue (Regel 4). Die
+| Antwort auf den Klick sagt deshalb nur, dass der Auftrag angenommen wurde.
+| Wer den Zustand danach anzeigt und nicht nachlaedt, zeigt ihn fuer immer
+| falsch: die Kampagne steht laengst bei Meta, die Seite sagt weiter
+| "Wird uebertragen" -- bis jemand den Browser neu laedt.
+|
+| Gemeldet am 24.09.2026. Vorher stand das Nachladen nur auf der
+| Anzeigenseite, und auch dort nur fuer entstehende Grafiken.
+|
+*/
+
+/**
+ * Seiten, die einen Uebertragungszustand zeigen, ohne ihn nachzuladen.
+ *
+ * @return list<string>
+ */
+function seitenOhneNachladen(): array
+{
+    $verstoesse = [];
+
+    foreach (vueDateien() as $pfad) {
+        $inhalt = (string) file_get_contents($pfad);
+
+        // Nur Seiten, die den Zustand einer Uebertragung auswerten -- ein
+        // 'pending' am Terminstatus ist etwas anderes.
+        if (! str_contains($inhalt, "'pending'") || ! str_contains(strtolower($inhalt), 'uebertragung')) {
+            continue;
+        }
+
+        if (! str_contains($inhalt, 'useNachladen')) {
+            $verstoesse[] = str_replace(base_path().'/', '', $pfad);
+        }
+    }
+
+    return $verstoesse;
+}
+
+it('laedt jeden gezeigten Uebertragungszustand nach', function (): void {
+    $verstoesse = seitenOhneNachladen();
+
+    expect($verstoesse)->toBeEmpty(
+        "Diese Seiten zeigen einen Warteschlangenzustand, der nur beim Neuladen des Browsers weiterspringt:\n"
+        .implode("\n", $verstoesse)
+    );
+});
+
+it('findet ueberhaupt Seiten mit einem Uebertragungszustand', function (): void {
+    // Ohne diese Zusicherung koennte die Pruefung oben leer durchlaufen.
+    $gefunden = 0;
+
+    foreach (vueDateien() as $pfad) {
+        $inhalt = (string) file_get_contents($pfad);
+
+        if (str_contains($inhalt, "'pending'") && str_contains(strtolower($inhalt), 'uebertragung')) {
+            $gefunden++;
+        }
+    }
+
+    expect($gefunden)->toBeGreaterThanOrEqual(2);
+});
+
+it('erkennt die Seite ohne Nachladen, wenn es sie gibt', function (): void {
+    // Die Gegenprobe: das Muster trennt den Uebertragungszustand vom
+    // Terminstatus, der ebenfalls 'pending' kennt.
+    $traegtZustand = fn (string $inhalt): bool => str_contains($inhalt, "'pending'")
+        && str_contains(strtolower($inhalt), 'uebertragung');
+
+    expect($traegtZustand("zeile.uebertragung === 'pending'"))->toBeTrue()
+        ->and($traegtZustand("termin.status === 'pending'"))->toBeFalse();
+});

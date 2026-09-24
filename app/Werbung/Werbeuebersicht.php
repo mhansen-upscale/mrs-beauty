@@ -105,7 +105,12 @@ final class Werbeuebersicht
             'altervon' => $gruppe->age_min,
             'alterbis' => $gruppe->age_max,
             'geschlecht' => $gruppe->genders,
+
+            // **Der Grund gehoert dazu.** Eine wartende Gruppe mit vermerktem
+            // Grund haengt an etwas anderem; eine ohne ist gerade unterwegs.
+            // Die Oberflaeche dreht nur bei der zweiten ein Rad.
             'uebertragung' => $gruppe->sync_state->value,
+            'uebertragungFehler' => $gruppe->sync_error,
         ];
     }
 

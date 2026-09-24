@@ -10,6 +10,7 @@ use App\Models\Ad;
 use App\Models\AdSet;
 use App\Models\Treatment;
 use App\Models\User;
+use App\Support\Fehlereinordnung;
 use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use App\Werbung\Verwaltung\Kampagnenname;
@@ -362,6 +363,74 @@ it('gibt nach dem letzten Versuch auf, statt ewig zu warten', function (): void 
     // der Oberflaeche, obwohl niemand mehr etwas versucht.
     expect($frisch?->sync_state)->toBe(SyncState::Failed)
         ->and($frisch?->sync_error)->toContain('aufgegeben');
+});
+
+it('nennt beim Aufgeben den Grund, statt keinen zu haben', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Kein vermerkter Grund -- genau der Fall, der bis zum 24.09.2026
+    // "kein Grund vermerkt." ergab: ein Fehlschlag, der nie durch
+    // vermerkeFehler lief.
+    expect($anzeige->fresh()?->sync_error)->toBeNull();
+
+    $meldungen = [];
+    Log::listen(function (MessageLogged $eintrag) use (&$meldungen): void {
+        $meldungen[] = $eintrag->message;
+    });
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->failed(new RuntimeException('Undefined array key "adset_id"'));
+
+    $fehler = (string) $anzeige->fresh()?->sync_error;
+
+    expect($fehler)->toContain('aufgegeben')
+        ->and($fehler)->not->toContain('kein Grund vermerkt')
+        // Ein Klassenname und eine Entwicklermeldung helfen der Praxis nicht.
+        ->and($fehler)->not->toContain('RuntimeException')
+        ->and($fehler)->not->toContain('Undefined array key')
+        // Wo die Praxis nichts tun kann, sagen wir das -- und halten das
+        // Technische im Protokoll fest.
+        ->and($fehler)->toContain('bei uns')
+        ->and($meldungen)->toContain('Auftrag endgueltig gescheitert');
+});
+
+it('nimmt beim Aufgeben den Klartext des Fehlers, wenn nichts vermerkt ist', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->failed(new Werbefehler(new Fehlereinordnung(
+        'rejected',
+        wiederholen: false,
+        zustand: null,
+        klartext: 'Das Bild ist zu klein für dieses Format.',
+    )));
+
+    expect((string) $anzeige->fresh()?->sync_error)
+        ->toContain('Das Bild ist zu klein für dieses Format.');
+});
+
+it('laesst den vermerkten Grund vor dem Fehler des letzten Versuchs stehen', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Der beim Versuch vermerkte Grund kennt die Stelle -- eine
+    // Zeitueberschreitung der Warteschlange sagt nur, dass Schluss ist.
+    $anzeige->sync_error = 'Die Anzeigengruppe steht noch nicht bei Meta.';
+    $anzeige->save();
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->failed(new RuntimeException('Zeitüberschreitung'));
+
+    expect((string) $anzeige->fresh()?->sync_error)
+        ->toContain('Die Anzeigengruppe steht noch nicht bei Meta.');
 });
 
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {

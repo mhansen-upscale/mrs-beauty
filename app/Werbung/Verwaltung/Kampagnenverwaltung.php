@@ -428,7 +428,13 @@ final class Kampagnenverwaltung
             'no_id' => 'Meta hat die Kampagne angelegt, aber keine Kennung zurückgegeben. Der nächste Versuch findet sie wieder.',
             'unreachable' => 'Meta war nicht erreichbar. Wir versuchen es erneut.',
             'rate_limit' => 'Meta hat zu viele Anfragen gemeldet. Wir versuchen es später erneut.',
-            default => 'Die Übertragung ist fehlgeschlagen ('.$kurzgrund.').',
+            'temporary' => 'Meta war vorübergehend nicht erreichbar. Wir versuchen es erneut.',
+
+            // **Kein Kurzgrund im Satz.** Er ging bis zum 24.09.2026 in
+            // Klammern mit hinaus -- "fehlgeschlagen (temporary)" ist fuer
+            // die Praxis dasselbe wie gar keine Auskunft. Er steht im
+            // Protokoll, wo er hingehoert.
+            default => 'Die Übertragung ist fehlgeschlagen. Wir versuchen es erneut.',
         };
     }
 

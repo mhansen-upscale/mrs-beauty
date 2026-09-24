@@ -9,6 +9,7 @@ use App\Enums\SyncState;
 use App\Models\Ad;
 use App\Models\AdAccount;
 use App\Models\Organization;
+use App\Support\Abbruchvermerk;
 use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use App\Werbung\Werbefehler;
@@ -53,7 +54,8 @@ final class AnzeigeUebertragen implements ShouldBeUnique, ShouldQueue
      * laengst aufgegeben wurde. Aufgefallen am 23.09.2026, nach zwanzig
      * Minuten Drehkreis.
      *
-     * Der zuletzt vermerkte Grund bleibt stehen: er sagt, woran es lag.
+     * Der zuletzt vermerkte Grund hat Vorrang: er kennt die Stelle. Fehlt er,
+     * traegt der Fehler selbst den Grund -- siehe Abbruchvermerk.
      */
     public function failed(Throwable $grund): void
     {
@@ -63,7 +65,7 @@ final class AnzeigeUebertragen implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        app(TenantContext::class)->runAs($organisation, function (): void {
+        app(TenantContext::class)->runAs($organisation, function () use ($grund): void {
             $anzeige = Ad::query()->whereUuid($this->anzeige)->first();
 
             if (! $anzeige instanceof Ad) {
@@ -71,8 +73,12 @@ final class AnzeigeUebertragen implements ShouldBeUnique, ShouldQueue
             }
 
             $anzeige->sync_state = SyncState::Failed;
-            $anzeige->sync_error = 'Nach mehreren Versuchen aufgegeben. Zuletzt: '
-                .($anzeige->sync_error ?? 'kein Grund vermerkt.');
+            $anzeige->sync_error = Abbruchvermerk::satz(
+                $grund,
+                $anzeige->sync_error,
+                'Anzeige übertragen',
+                $this->anzeige,
+            );
             $anzeige->save();
         });
     }

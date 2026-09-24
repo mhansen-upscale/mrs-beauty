@@ -9,10 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useNachladen } from '@/composables/useNachladen';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Megaphone, Pause, Pencil, Play, Plus, RefreshCw, ShieldAlert } from 'lucide-vue-next';
+import { AlertTriangle, Loader2, Megaphone, Pause, Pencil, Play, Plus, RefreshCw, ShieldAlert } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Kampagne extends Record<string, unknown> {
@@ -43,6 +44,7 @@ interface Zielgruppe {
     alterbis: number | null;
     geschlecht: string | null;
     uebertragung: string;
+    uebertragungFehler: string | null;
 }
 
 interface Kennzahlen {
@@ -243,6 +245,33 @@ const umschalten = (zeile: Kampagne) =>
     );
 
 const gestoerteUebertragung = computed<Kampagne[]>(() => props.kampagnen.filter((k) => k.uebertragung === 'failed'));
+
+/**
+ * **Unterwegs heisst: in der Warteschlange, ohne vermerkten Grund.**
+ *
+ * Eine Aenderung, die auf etwas anderes wartet, steht ebenfalls auf
+ * `pending` — nur traegt sie den Grund dafuer bei sich. Ein Rad, das sich
+ * dabei dreht, verspricht etwas, das nicht eintritt.
+ */
+const unterwegs = (zustand: string | undefined, grund: string | null | undefined): boolean => zustand === 'pending' && !grund;
+
+/**
+ * **Die Anzeigengruppe zaehlt mit.** Eine Kampagne kann bei Meta stehen,
+ * waehrend ihre Gruppe noch unterwegs ist — genau das war am 23.09.2026 der
+ * Fall, und die Spalte zeigte dazu einen Strich.
+ */
+const uebertraegtGerade = (zeile: Kampagne): boolean =>
+    unterwegs(zeile.uebertragung, zeile.uebertragungFehler) || unterwegs(zeile.zielgruppe?.uebertragung, zeile.zielgruppe?.uebertragungFehler);
+
+/**
+ * Solange etwas zu Meta unterwegs ist, laedt die Seite sich selbst nach.
+ *
+ * Ein Auftrag laeuft ueber die Warteschlange (Regel 4); ohne das Nachladen
+ * saehe man das Ergebnis erst beim naechsten Neuladen im Browser.
+ */
+const laeuft = computed<boolean>(() => props.kampagnen.some(uebertraegtGerade));
+
+useNachladen(laeuft, ['kampagnen']);
 </script>
 
 <template>
@@ -493,6 +522,10 @@ const gestoerteUebertragung = computed<Kampagne[]>(() => props.kampagnen.filter(
                         <Badge v-if="zeile.uebertragung === 'failed'" variant="destructive">{{ zeile.uebertragungText }}</Badge>
                         <Badge v-else-if="zeile.uebertragung === 'pending' && konto.zustand !== 'active'" variant="secondary">
                             Wartet auf die Verbindung
+                        </Badge>
+                        <Badge v-else-if="uebertraegtGerade(zeile)" variant="secondary">
+                            <Loader2 class="mr-1 size-3 animate-spin" />
+                            Wird übertragen
                         </Badge>
                         <Badge v-else-if="zeile.uebertragung === 'pending'" variant="secondary">{{ zeile.uebertragungText }}</Badge>
                         <span v-else class="text-muted-foreground">—</span>

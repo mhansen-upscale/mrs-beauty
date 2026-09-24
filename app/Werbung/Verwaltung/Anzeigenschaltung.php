@@ -343,6 +343,15 @@ final class Anzeigenschaltung
             'permission_denied' => 'Für das Anlegen von Anzeigen fehlt die Berechtigung des Werbekontos.',
             'no_image_hash' => 'Meta hat die Grafik angenommen, aber keine Kennung dafür geliefert.',
             'no_id' => 'Meta hat die Anzeige angenommen, aber keine Kennung geliefert.',
+
+            // **Warten ist keine Ablehnung.** Beides fiel bis zum 24.09.2026
+            // in den Standardfall -- eine Anzeige, die auf ein Rate Limit
+            // wartete, meldete der Praxis, Meta habe sie abgelehnt, und
+            // schickte sie damit auf die Suche nach einem Fehler, den es
+            // nicht gab.
+            'rate_limit' => 'Meta hat zu viele Anfragen gemeldet. Wir versuchen es später erneut.',
+            'temporary' => 'Meta war vorübergehend nicht erreichbar. Wir versuchen es erneut.',
+
             default => 'Meta hat die Anzeige abgelehnt. Bitte prüfen Sie Kampagne und Grafik.',
         };
     }
