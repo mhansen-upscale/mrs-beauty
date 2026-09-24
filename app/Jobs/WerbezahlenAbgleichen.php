@@ -63,7 +63,7 @@ final class WerbezahlenAbgleichen implements ShouldBeUnique, ShouldQueue
                 // Der Zustand gehoert ans Werbekonto, damit die Praxis ihn
                 // sieht (Regel 4).
                 if ($fehler->einordnung->zustand !== null) {
-                    $konto->meldeAusfall($fehler->einordnung->zustand, $fehler->einordnung->kurzgrund);
+                    $konto->meldeAusfall($fehler->einordnung->zustand, $fehler->einordnung->grund());
                 }
 
                 if ($fehler->einordnung->wiederholen) {

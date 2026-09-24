@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\ConnectionStatus;
 use App\Enums\Role;
 use App\Enums\SyncState;
 use App\Enums\Vorschlagsstatus;
@@ -569,6 +570,42 @@ it('zeigt Metas Antwort, wenn eine Kennung fehlt', function (): void {
 
     expect($fehler)->toContain('die Anzeige')
         ->and($fehler)->toContain('success');
+});
+
+it('erkennt einen Fehler im Rumpf auch bei HTTP 200', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // **Metas Antwort vom 24.09.2026**: Statuszeile 200, `error` im Rumpf.
+    // Code 31 heisst, dass die Person, der das Konto gehoert, bei Meta noch
+    // etwas bestaetigen muss. Wer nur den Status prueft, laesst das durch
+    // und stolpert eine Zeile spaeter ueber die fehlende Kennung -- der
+    // Grund stand die ganze Zeit daneben.
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['error' => [
+            'message' => 'This request requires the user to take a pending action',
+            'code' => 31,
+            'error_subcode' => 3858385,
+            'error_user_msg' => 'Bitte authentifiziere dein Konto.',
+        ]], 200),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $konto = $aufbau->werbung->konto->fresh();
+
+    // Der Zustand gehoert ans Werbekonto: eine Sicherheitspruefung bei Meta
+    // blockiert jede Anzeige, nicht diese eine.
+    expect($konto?->status)->toBe(ConnectionStatus::Degraded)
+        // Und im Klartext, nicht als Kurzgrund -- der Kasten zeigt ihn roh.
+        ->and((string) $konto?->last_error)->toContain('authentifiziere')
+        ->and((string) $konto?->last_error)->not->toContain('action_required');
 });
 
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {

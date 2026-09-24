@@ -36,6 +36,18 @@ final class Fehlereinordnung
     ) {}
 
     /**
+     * Was am Werbekonto steht, wenn die Verbindung gestoert ist.
+     *
+     * **Metas Satz, wenn es einen gibt** -- die Oberflaeche kennt nur eine
+     * Handvoll Kurzgruende und zeigt alles andere unveraendert an. Ein
+     * `action_required` im Hinweiskasten waere ein Code fuer die Praxis.
+     */
+    public function grund(): string
+    {
+        return $this->klartext ?? $this->kurzgrund;
+    }
+
+    /**
      * Ordnet eine **Meta**-Antwort ein.
      *
      * Die Zuordnung folgt der Tabelle des Leitfadens. Meta liefert den
@@ -59,6 +71,18 @@ final class Fehlereinordnung
         // Rate Limit: zurueckweichen und erneut versuchen.
         if ($status === 429 || in_array($code, [4, 17, 32, 613], true)) {
             return new self('rate_limit', wiederholen: true, zustand: null);
+        }
+
+        // **Meta verlangt eine Handlung der Person, der das Konto gehoert**
+        // -- eine Sicherheitspruefung etwa. Das loest niemand ausser ihr:
+        // nicht wiederholen, und die Verbindung als gestoert fuehren, damit
+        // der Hinweis im Produkt steht (Regel 4) und nicht an einer
+        // einzelnen Anzeige haengt.
+        //
+        // Gesehen am 24.09.2026, mit HTTP 200 und `error` im Rumpf:
+        // "This request requires the user to take a pending action".
+        if ($code === 31) {
+            return new self('action_required', wiederholen: false, zustand: ConnectionStatus::Degraded, klartext: $meldung);
         }
 
         // Token ungueltig oder abgelaufen -- keine Wiederholung.

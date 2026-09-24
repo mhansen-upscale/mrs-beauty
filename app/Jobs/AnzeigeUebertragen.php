@@ -110,6 +110,15 @@ final class AnzeigeUebertragen implements ShouldBeUnique, ShouldQueue
                     ? $schaltung->uebertrage($anzeige, $konto)
                     : $schaltung->uebertrageAenderung($anzeige, $konto);
             } catch (Werbefehler $fehler) {
+                // **Der Zustand der Verbindung gehoert ans Werbekonto**, wie
+                // bei der Kampagne. Eine Sicherheitspruefung bei Meta
+                // blockiert jede Anzeige -- als Vermerk an einer einzelnen
+                // gelesen, sucht die Praxis den Fehler bei dieser Anzeige
+                // (Regel 4, gesehen am 24.09.2026).
+                if ($fehler->einordnung->zustand !== null) {
+                    $konto->meldeAusfall($fehler->einordnung->zustand, $fehler->einordnung->grund());
+                }
+
                 $schaltung->vermerkeFehler($anzeige, $fehler);
 
                 if ($fehler->einordnung->wiederholen) {

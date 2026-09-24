@@ -116,7 +116,7 @@ final class KampagneUebertragen implements ShouldBeUnique, ShouldQueue
                 // fachliche Grund an die Kampagne -- die Praxis kann nur den
                 // zweiten beheben.
                 if ($fehler->einordnung->zustand !== null) {
-                    $konto->meldeAusfall($fehler->einordnung->zustand, $fehler->einordnung->kurzgrund);
+                    $konto->meldeAusfall($fehler->einordnung->zustand, $fehler->einordnung->grund());
                 }
 
                 $verwaltung->vermerkeFehler($kampagne, $fehler);

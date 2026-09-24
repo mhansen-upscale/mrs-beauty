@@ -139,8 +139,15 @@ final class Graphschreiber
             throw new Werbefehler(new Fehlereinordnung('unreachable', wiederholen: true, zustand: null));
         }
 
-        if ($antwort->failed()) {
-            $fehler = (array) $antwort->json();
+        $fehler = (array) $antwort->json();
+
+        // **Meta antwortet nicht immer mit einem Fehlerstatus.** Am
+        // 24.09.2026 kam eine Sicherheitspruefung (Code 31) mit HTTP 200
+        // zurueck -- der Rumpf trug `error`, die Statuszeile sagte "in
+        // Ordnung". Wer nur auf den Status sieht, laesst die Antwort
+        // durchlaufen und stolpert eine Zeile spaeter ueber die fehlende
+        // Kennung. Der Grund stand die ganze Zeit daneben.
+        if ($antwort->failed() || data_get($fehler, 'error') !== null) {
 
             // **Die ganze Antwort ins Protokoll.** An die Praxis geht ein
             // lesbarer Satz; `error_subcode` und `fbtrace_id` sind aber das

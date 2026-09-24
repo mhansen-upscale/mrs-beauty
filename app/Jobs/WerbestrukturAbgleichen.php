@@ -71,7 +71,7 @@ final class WerbestrukturAbgleichen implements ShouldBeUnique, ShouldQueue
                 // Der Zustand gehoert ans Werbekonto, damit die Praxis ihn
                 // sieht (Regel 4) -- ein Eintrag im Log allein waere still.
                 if ($fehler->einordnung->zustand !== null) {
-                    $konto->meldeAusfall($fehler->einordnung->zustand, $fehler->einordnung->kurzgrund);
+                    $konto->meldeAusfall($fehler->einordnung->zustand, $fehler->einordnung->grund());
                 }
 
                 // Nur wiederholen, was sich durch Wiederholen bessert.

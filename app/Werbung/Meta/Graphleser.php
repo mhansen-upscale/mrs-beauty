@@ -144,8 +144,11 @@ final class Graphleser
             throw new Werbefehler(new Fehlereinordnung('unreachable', wiederholen: true, zustand: null));
         }
 
-        if ($antwort->failed()) {
-            $fehler = (array) $antwort->json();
+        $fehler = (array) $antwort->json();
+
+        // Ein `error` im Rumpf ist ein Fehler, auch wenn die Statuszeile
+        // "in Ordnung" sagt -- siehe Graphschreiber.
+        if ($antwort->failed() || data_get($fehler, 'error') !== null) {
 
             // **Die andere Haelfte des Paares.** Der Graphschreiber haelt
             // eine abgelehnte Antwort seit je vollstaendig fest, der Leser
