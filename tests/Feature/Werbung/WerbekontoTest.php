@@ -241,16 +241,104 @@ it('fragt debug_token mit dem App-Token, nicht mit dem Zugang', function (): voi
 
     Http::fake([
         'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
-        'graph.test/*/debug_token*' => Http::response(['data' => ['granular_scopes' => []]]),
+        'graph.test/*/debug_token*' => Http::response(['data' => [
+            'granular_scopes' => [['scope' => 'ads_read', 'target_ids' => ['1']]],
+        ]]),
+        'graph.test/*/act_1*' => Http::response(['id' => 'act_1', 'account_status' => 1]),
     ]);
 
-    expect(app(Kontenauswahl::class)->verfuegbare('systemnutzer-token'))->toBe([]);
+    app(Kontenauswahl::class)->verfuegbare('systemnutzer-token');
 
     // Der Zugang steht in `input_token`, gefragt wird als App -- andersherum
     // beantwortet Meta die Frage nicht.
     Http::assertSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'debug_token')
         && str_contains((string) $anfrage->url(), 'input_token=systemnutzer-token')
         && str_contains((string) $anfrage->header('Authorization')[0], '|'));
+});
+
+it('findet die Konten ueber die Zuweisung des Systemnutzers', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    // Meta fuellt je nach Konfiguration mal `granular_scopes`, mal nur die
+    // Zuweisung am Systemnutzer. Traegt die erste Stelle nicht, gilt die
+    // zweite -- sonst steht ein korrekt ausgewaehltes Werbekonto da und
+    // niemand findet es.
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/debug_token*' => Http::response(['data' => [
+            'type' => 'SYSTEM_USER',
+            'profile_id' => '4711',
+            'is_valid' => true,
+            'scopes' => ['ads_management'],
+            'granular_scopes' => [],
+        ]]),
+        'graph.test/*/4711/assigned_ad_accounts*' => Http::response(Werbeaufbau::seite([[
+            'id' => 'act_1',
+            'name' => 'Praxis Werbung',
+            'currency' => 'EUR',
+            'account_status' => 1,
+        ]])),
+    ]);
+
+    $konten = app(Kontenauswahl::class)->verfuegbare('systemnutzer-token');
+
+    expect($konten)->toHaveCount(1)
+        ->and($konten[0]->kennung)->toBe('act_1');
+});
+
+it('traegt Metas Auskunft in die Meldung, wenn kein Weg traegt', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/debug_token*' => Http::response(['data' => [
+            'type' => 'SYSTEM_USER',
+            'profile_id' => '4711',
+            'scopes' => ['ads_management'],
+            'granular_scopes' => [],
+        ]]),
+        'graph.test/*/4711/assigned_ad_accounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+    ]);
+
+    try {
+        app(Kontenauswahl::class)->verfuegbare('systemnutzer-token');
+        expect(false)->toBeTrue('Es haette ein Werbefehler kommen muessen.');
+    } catch (Werbefehler $fehler) {
+        // Ohne die Auskunft in der Meldung braucht jede weitere Runde den
+        // Log-Stream -- und genau daran hing es drei Runden lang.
+        expect((string) $fehler->einordnung->klartext)->toContain('SYSTEM_USER')
+            ->and((string) $fehler->einordnung->klartext)->toContain('4711');
+    }
+});
+
+it('sagt, wenn Meta zum Zugang kein Werbekonto nennt', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    // Der Zugang steht, die Freigaben stehen -- nur ist im Anmeldedialog
+    // kein Werbekonto angehakt worden. "Kein Werbekonto freigegeben" allein
+    // schickt niemanden dorthin.
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/debug_token*' => Http::response(['data' => [
+            'type' => 'SYSTEM_USER',
+            'profile_id' => '4711',
+            'is_valid' => true,
+            'scopes' => ['ads_read', 'ads_management'],
+            'granular_scopes' => [['scope' => 'pages_show_list', 'target_ids' => ['77']]],
+        ]]),
+        'graph.test/*/4711/assigned_ad_accounts*' => Http::response(Werbeaufbau::seite([])),
+    ]);
+
+    try {
+        app(Kontenauswahl::class)->verfuegbare('systemnutzer-token');
+        expect(false)->toBeTrue('Es haette ein Werbefehler kommen muessen.');
+    } catch (Werbefehler $fehler) {
+        expect((string) $fehler->einordnung->klartext)->toContain('kein Werbekonto zugeordnet')
+            ->and((string) $fehler->einordnung->klartext)->toContain('ads_management')
+            // Eine Seitenfreigabe ist kein Werbekonto -- aber sie steht in
+            // der Auskunft, damit sichtbar ist, was Meta stattdessen nennt.
+            ->and((string) $fehler->einordnung->klartext)->toContain('pages_show_list');
+    }
 });
 
 it('fragt die Freigaben nicht ab, wenn die erste Kante antwortet', function (): void {

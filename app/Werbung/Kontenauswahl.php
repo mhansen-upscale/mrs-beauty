@@ -6,6 +6,7 @@ namespace App\Werbung;
 
 use App\Enums\ConnectionStatus;
 use App\Models\AdAccount;
+use App\Support\Fehlereinordnung;
 use App\Werbung\Meta\Graphleser;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
@@ -69,15 +70,30 @@ final class Kontenauswahl
     }
 
     /**
-     * Die Werbekonten aus den Freigaben des Tokens.
+     * Die Werbekonten eines Systemnutzer-Tokens.
+     *
+     * **Zwei dokumentierte Stellen, und Meta fuellt je nach Konfiguration
+     * mal die eine, mal die andere.** Deshalb beide, in dieser Reihenfolge:
+     *
+     * 1. `granular_scopes` aus `debug_token` -- die Objekte, fuer die eine
+     *    Freigabe gilt. Bei `ads_management` sind das die Werbekonten.
+     * 2. `{systemnutzer}/assigned_ad_accounts` -- die dem Systemnutzer
+     *    zugewiesenen Konten. Die Kennung des Systemnutzers steht in
+     *    derselben Auskunft.
+     *
+     * Traegt keine davon, endet es mit Metas eigener Auskunft im Klartext --
+     * nicht mit "kein Werbekonto freigegeben". Am 24.09.2026 war genau das
+     * der Satz, der drei Runden lang nichts sagte.
      *
      * @return list<Werbekontoangabe>
      */
     private function ausFreigaben(string $token): array
     {
+        $auskunft = $this->tokenauskunft($token);
+
         $konten = [];
 
-        foreach ($this->freigegebeneKennungen($token) as $kennung) {
+        foreach ($this->ausZielen($auskunft) as $kennung) {
             $angabe = $this->leseKonto($token, $kennung);
 
             if ($angabe instanceof Werbekontoangabe) {
@@ -85,19 +101,34 @@ final class Kontenauswahl
             }
         }
 
-        return $konten;
+        if ($konten !== []) {
+            return $konten;
+        }
+
+        $konten = $this->ausZuweisung($token, $auskunft);
+
+        if ($konten !== []) {
+            return $konten;
+        }
+
+        throw new Werbefehler(new Fehlereinordnung(
+            'no_asset',
+            wiederholen: false,
+            zustand: null,
+            klartext: $this->ohneWerbekonto($auskunft),
+        ));
     }
 
     /**
-     * Fragt Meta, wofuer dieses Token freigegeben ist.
+     * Fragt Meta, wofuer dieses Token gilt.
      *
      * **Gefragt wird mit dem App-Token**, nicht mit dem Zugang selbst:
      * `debug_token` beantwortet nur, wer die App ist, Fragen ueber ein
      * fremdes Token.
      *
-     * @return list<string>
+     * @return array<string, mixed>
      */
-    private function freigegebeneKennungen(string $token): array
+    private function tokenauskunft(string $token): array
     {
         $antwort = $this->leser->knoten(
             (string) config('mrs.meta.app_id').'|'.(string) config('mrs.meta.app_secret'),
@@ -105,27 +136,33 @@ final class Kontenauswahl
             ['input_token' => $token],
         );
 
-        $fein = data_get($antwort, 'data.granular_scopes');
-
-        // **Ins Protokoll, ohne das Token.** Wenn auch dieser Weg einmal
-        // nicht traegt, ist die Art des Tokens die erste Frage -- und die
-        // steht hier, nicht im Zugang.
+        // **Ins Protokoll, ohne das Token.** Wenn kein Weg traegt, ist diese
+        // Auskunft die erste Frage -- und sie steht hier, nicht im Zugang.
         Log::info('Metas Auskunft zum Zugang.', [
             'art' => data_get($antwort, 'data.type'),
             'app' => data_get($antwort, 'data.app_id'),
             'profil' => data_get($antwort, 'data.profile_id'),
+            'nutzer' => data_get($antwort, 'data.user_id'),
             'gueltig' => data_get($antwort, 'data.is_valid'),
             'freigaben' => data_get($antwort, 'data.scopes'),
-            'objekte' => $fein,
+            'objekte' => data_get($antwort, 'data.granular_scopes'),
         ]);
 
-        if (! is_array($fein)) {
-            return [];
-        }
+        return $antwort;
+    }
 
+    /**
+     * Werbekonto-Kennungen aus den Objekten der Freigaben.
+     *
+     * @param  array<string, mixed>  $auskunft
+     * @return list<string>
+     */
+    private function ausZielen(array $auskunft): array
+    {
         $kennungen = [];
+        $fein = data_get($auskunft, 'data.granular_scopes');
 
-        foreach ($fein as $eintrag) {
+        foreach (is_array($fein) ? $fein : [] as $eintrag) {
             if (! in_array(data_get($eintrag, 'scope'), self::WERBEFREIGABEN, true)) {
                 continue;
             }
@@ -137,8 +174,8 @@ final class Kontenauswahl
                     continue;
                 }
 
-                // Meta nennt die Ziele mal mit, mal ohne `act_`. Die
-                // Kennung eines Werbekontos traegt es immer.
+                // Meta nennt die Ziele mal mit, mal ohne `act_`. Die Kennung
+                // eines Werbekontos traegt es immer.
                 $kennungen[] = str_starts_with((string) $ziel, 'act_')
                     ? (string) $ziel
                     : 'act_'.(string) $ziel;
@@ -146,6 +183,59 @@ final class Kontenauswahl
         }
 
         return array_values(array_unique($kennungen));
+    }
+
+    /**
+     * Die dem Systemnutzer zugewiesenen Werbekonten.
+     *
+     * @param  array<string, mixed>  $auskunft
+     * @return list<Werbekontoangabe>
+     */
+    private function ausZuweisung(string $token, array $auskunft): array
+    {
+        $kennung = data_get($auskunft, 'data.profile_id') ?? data_get($auskunft, 'data.user_id');
+
+        if ((! is_string($kennung) && ! is_int($kennung)) || (string) $kennung === '' || (string) $kennung === '0') {
+            return [];
+        }
+
+        try {
+            return $this->leseKante($token, (string) $kennung.'/assigned_ad_accounts');
+        } catch (Werbefehler $fehler) {
+            // Auch dieser Weg kann ins Leere gehen -- dann zaehlt die
+            // Auskunft, nicht die Abfuhr auf einen Versuch.
+            if (! in_array($fehler->einordnung->kurzgrund, ['permission_missing', 'rejected'], true)) {
+                throw $fehler;
+            }
+
+            return [];
+        }
+    }
+
+    /**
+     * Was dasteht, wenn Meta zum Zugang kein Werbekonto nennt.
+     *
+     * @param  array<string, mixed>  $antwort
+     */
+    private function ohneWerbekonto(array $antwort): string
+    {
+        $freigaben = data_get($antwort, 'data.scopes');
+        $freigaben = is_array($freigaben)
+            ? implode(', ', array_map(strval(...), $freigaben))
+            : '';
+
+        // **Metas Auskunft gehoert in die Meldung, nicht nur ins Log.** Wer
+        // hier steht, kommt sonst fuer jede Runde nicht weiter, ohne den
+        // Log-Stream zu durchsuchen -- und die Auskunft ist genau das, was
+        // die naechste Frage beantwortet.
+        return 'Meta hat diesem Zugang kein Werbekonto zugeordnet.'
+            .($freigaben === '' ? ' Meta meldet dazu keine Freigaben.' : ' Erteilt sind: '.$freigaben.'.')
+            .' Metas Auskunft: '.(string) json_encode([
+                'art' => data_get($antwort, 'data.type'),
+                'profil' => data_get($antwort, 'data.profile_id'),
+                'nutzer' => data_get($antwort, 'data.user_id'),
+                'objekte' => data_get($antwort, 'data.granular_scopes'),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     /** Ein einzelnes Werbekonto, ueber seine Kennung. */
