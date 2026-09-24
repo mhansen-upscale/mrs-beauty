@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useNachladen } from '@/composables/useNachladen';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, Image as Bild, ChevronDown, Clock, Loader2, Megaphone, Plus, RefreshCw, Sparkles } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -72,6 +72,7 @@ const props = defineProps<{
     bildmodell: boolean;
     bilderRest: number;
     kampagnen: Kampagne[];
+    werbekonto: { gestoert: boolean; grund: string | null };
     warteschlangeSteht: boolean;
     laengen: { ueberschrift: number; text: number; beschreibung: number; handlungsaufruf: number; motiv: number };
 }>();
@@ -88,7 +89,7 @@ const wochentext = (iso: string): string => new Date(iso).toLocaleDateString('de
  * Tag liegen. Ein Rad, das sich dabei dreht, verspricht etwas, das nicht
  * eintritt (so gesehen am 23.09.2026).
  */
-const unterwegs = (u: Uebertragung | null): boolean => u !== null && u.zustand === 'pending' && u.fehler === null;
+const unterwegs = (u: Uebertragung | null): boolean => u !== null && u.zustand === 'pending' && u.fehler === null && !props.werbekonto.gestoert;
 
 const meldungZurUebertragung = (u: Uebertragung | null): string => {
     if (u === null) {
@@ -97,6 +98,10 @@ const meldungZurUebertragung = (u: Uebertragung | null): string => {
 
     if (u.zustand === 'failed') {
         return 'Diese Anzeige ist nicht bei Meta angekommen.';
+    }
+
+    if (props.werbekonto.gestoert) {
+        return 'Diese Anzeige wartet auf die Verbindung zu Meta.';
     }
 
     return unterwegs(u) ? 'Diese Anzeige geht gerade zu Meta.' : 'Diese Anzeige ist noch nicht bei Meta.';
@@ -109,6 +114,10 @@ const uebertragungstext = (u: Uebertragung | null): string => {
 
     if (u.zustand === 'failed') {
         return 'Nicht übertragen';
+    }
+
+    if (props.werbekonto.gestoert) {
+        return 'Wartet auf die Verbindung';
     }
 
     return unterwegs(u) ? 'Wird übertragen' : 'Wartet';
@@ -585,7 +594,17 @@ useNachladen(laeuft, ['vorschlaege']);
                                 <Clock v-else class="size-3 shrink-0" />
                                 {{ meldungZurUebertragung(gewaehlt.uebertragung) }}
                             </p>
-                            <p v-if="gewaehlt.uebertragung.fehler" class="text-muted-foreground">
+                            <!--
+                                **Der Grund liegt am Werbekonto, nicht an
+                                dieser Anzeige.** Er steht trotzdem hier: wer
+                                die Anzeige offen hat, sucht hier und nicht
+                                zwei Seiten weiter.
+                            -->
+                            <p v-if="werbekonto.gestoert && gewaehlt.uebertragung.zustand !== 'failed'" class="text-muted-foreground">
+                                {{ werbekonto.grund ?? 'Die Verbindung zu Meta ist gestört.' }}
+                                <Link href="/werbung" class="underline underline-offset-4">Zur Verbindung</Link>
+                            </p>
+                            <p v-else-if="gewaehlt.uebertragung.fehler" class="text-muted-foreground">
                                 {{ gewaehlt.uebertragung.fehler }}
                             </p>
 

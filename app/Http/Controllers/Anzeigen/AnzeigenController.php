@@ -12,6 +12,7 @@ use App\Anzeigen\Vorschlagslauf;
 use App\Datenschutz\Anhangspeicher;
 use App\Enums\Ability;
 use App\Enums\Ampel;
+use App\Enums\ConnectionStatus;
 use App\Enums\SyncState;
 use App\Enums\Vorschlagsstatus;
 use App\Http\Controllers\Controller;
@@ -19,6 +20,7 @@ use App\Jobs\AnzeigenbildErzeugen;
 use App\Jobs\AnzeigeUebertragen;
 use App\Marke\Markenprofil;
 use App\Models\Ad;
+use App\Models\AdAccount;
 use App\Models\AdCampaign;
 use App\Models\AdSet;
 use App\Models\AdSuggestion;
@@ -187,6 +189,12 @@ final class AnzeigenController extends Controller
                 ])
                 ->values(),
 
+            // **Eine gestoerte Verbindung erklaert jede wartende Anzeige.**
+            // Ohne diese Angabe dreht sich hier ein Rad, waehrend bei Meta
+            // eine Kontosperre liegt -- und niemand sucht dort, wo es steht
+            // (24.09.2026).
+            'werbekonto' => $this->werbekonto(),
+
             'warteschlangeSteht' => $steht && $vorschlaege->contains(
                 fn (AdSuggestion $v): bool => $v->bild() === null
                     && $v->image_requested_at !== null
@@ -204,6 +212,21 @@ final class AnzeigenController extends Controller
             'bildmodell' => $this->bilder->angebunden(),
             'bilderRest' => $this->kontingente->rest()['bilder'] ?? 0,
         ]);
+    }
+
+    /**
+     * Der Zustand der Meta-Verbindung -- knapp, fuer den Hinweis.
+     *
+     * @return array{gestoert: bool, grund: string|null}
+     */
+    private function werbekonto(): array
+    {
+        $konto = AdAccount::query()->whereNull('disconnected_at')->first();
+
+        return [
+            'gestoert' => ! $konto instanceof AdAccount || $konto->status !== ConnectionStatus::Active,
+            'grund' => $konto?->last_error,
+        ];
     }
 
     /**

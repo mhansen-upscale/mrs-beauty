@@ -649,6 +649,34 @@ it('kappt einen masslosen Ausfallgrund, statt ihn wegzuwerfen', function (): voi
     expect(mb_strlen((string) $aufbau->konto->fresh()?->last_error))->toBeLessThanOrEqual(1000);
 });
 
+it('sagt der Anzeigenseite, dass die Verbindung gestoert ist', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $aufbau->geplanteAnzeige();
+
+    $aufbau->werbung->konto->meldeAusfall(
+        ConnectionStatus::Degraded,
+        'Bitte authentifiziere dein Konto im Werbeanzeigenmanager.'
+    );
+
+    // Ohne diese Angabe dreht sich an der Anzeige ein Rad, waehrend bei Meta
+    // eine Kontosperre liegt -- und niemand sucht dort, wo es steht.
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite
+            ->where('werbekonto.gestoert', true)
+            ->where('werbekonto.grund', 'Bitte authentifiziere dein Konto im Werbeanzeigenmanager.')
+        );
+});
+
+it('meldet die Verbindung als in Ordnung, solange sie es ist', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $aufbau->geplanteAnzeige();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite->where('werbekonto.gestoert', false));
+});
+
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {
     $aufbau = new Anzeigenaufbau;
     $anzeige = $aufbau->geplanteAnzeige();
