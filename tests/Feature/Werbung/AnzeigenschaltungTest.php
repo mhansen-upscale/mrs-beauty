@@ -522,6 +522,55 @@ it('kappt einen masslosen Vermerk, statt ihn wegzuwerfen', function (): void {
     expect(mb_strlen((string) $anzeige->fresh()?->sync_error))->toBeLessThanOrEqual(1000);
 });
 
+it('nimmt eine Kennung auch als Zahl an', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Metas Kennungen sind Zahlen und kommen mal als Zeichenkette, mal als
+    // Zahl. Ein `is_string`-Test allein erklaerte eine geglueckte Anlage zum
+    // Fehlschlag -- und die Praxis las "keine Kennung geliefert".
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['id' => 120249945031570331]),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $frisch = $anzeige->fresh();
+
+    expect($frisch?->external_id)->toBe('120249945031570331')
+        ->and($frisch?->sync_state)->toBe(SyncState::Synced);
+});
+
+it('zeigt Metas Antwort, wenn eine Kennung fehlt', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // "Keine Kennung geliefert" allein sagt nicht, was Meta stattdessen
+    // geschickt hat -- und genau daran haengt, ob der Auftrag ankam.
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['success' => true]),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $fehler = (string) $anzeige->fresh()?->sync_error;
+
+    expect($fehler)->toContain('die Anzeige')
+        ->and($fehler)->toContain('success');
+});
+
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {
     $aufbau = new Anzeigenaufbau;
     $anzeige = $aufbau->geplanteAnzeige();

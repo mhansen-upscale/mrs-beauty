@@ -69,6 +69,36 @@ geht deshalb erst den einen Weg und bei einer Abfuhr den anderen. Nur bei
 einer Abfuhr: ein totes Token oder ein Rate Limit wird auf dem zweiten Weg
 nicht besser, und ein zweiter Aufruf verdeckte den eigentlichen Grund.
 
+### Ein Systemnutzer bekommt keine Berechtigung im Standardzugriff
+
+**Die Login-Konfiguration sagt, was *angefragt* wird — nicht, was *erteilt*
+wird.** Meta lässt still weg, was es nicht vergeben darf, und stellt ein
+gültiges Token über den Rest aus. Fehlermeldung: keine.
+
+Der Hinweis steht in Metas eigener Oberfläche über der Berechtigungsliste:
+
+> Berechtigungen im Standardzugriff werden nur von **Personen mit Rollen in
+> dieser App** angefordert.
+
+Ein **Systemnutzer hat keine Rolle in der App** — er lebt im
+Business-Portfolio. Solange `ads_read` und `ads_management` nur Standardzugriff
+haben, bekommt ein Systemnutzer-Token sie nie, egal was in der Konfiguration
+steht.
+
+Am 24.09.2026 sah das so aus: angefragt waren `ads_management`, `ads_read`,
+`business_management`, `pages_show_list`, `pages_read_engagement`; erteilt
+wurden `pages_show_list`, `pages_read_engagement`, `public_profile`. Genau die
+drei Werberechte fehlten — die drei, die noch keinen erweiterten Zugriff haben.
+
+| Wann | Was geht |
+|---|---|
+| ohne erweiterten Zugriff | nur Nutzertoken, und nur für Personen mit Rolle in der App |
+| mit erweitertem Zugriff | auch Systemnutzer-Token, also der Weg für den Betrieb (B1) |
+
+**Damit ist App Review keine Formalität am Ende, sondern die Voraussetzung für
+die Token-Art, die im Betrieb überhaupt tragfähig ist.**
+
+
 
 ## Werbekonten
 

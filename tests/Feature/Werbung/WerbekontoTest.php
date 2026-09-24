@@ -311,6 +311,39 @@ it('traegt Metas Auskunft in die Meldung, wenn kein Weg traegt', function (): vo
     }
 });
 
+it('unterscheidet ein Token ohne Werberechte von einem ohne Werbekonto', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    // Metas echte Auskunft vom 24.09.2026: Login-Konfiguration fragt
+    // ads_read, ads_management und business_management an -- erteilt wurde
+    // keines davon. Ein Systemnutzer hat keine Rolle in der App, und
+    // Berechtigungen im Standardzugriff vergibt Meta nur an Personen mit
+    // einer solchen Rolle. Am Werbekonto liegt es dann nicht.
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/debug_token*' => Http::response(['data' => [
+            'type' => 'SYSTEM_USER',
+            'profile_id' => null,
+            'user_id' => '122101963977485662',
+            'scopes' => ['pages_show_list', 'pages_read_engagement', 'public_profile'],
+            'granular_scopes' => [['scope' => 'pages_show_list']],
+        ]]),
+        'graph.test/*/122101963977485662/assigned_ad_accounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+    ]);
+
+    try {
+        app(Kontenauswahl::class)->verfuegbare('systemnutzer-token');
+        expect(false)->toBeTrue('Es haette ein Werbefehler kommen muessen.');
+    } catch (Werbefehler $fehler) {
+        $meldung = (string) $fehler->einordnung->klartext;
+
+        expect($meldung)->toContain('keine Werberechte')
+            ->and($meldung)->toContain('Standardzugriff')
+            // Nicht der andere Befund: es fehlt nicht die Zuweisung.
+            ->and($meldung)->not->toContain('kein Werbekonto zugeordnet');
+    }
+});
+
 it('sagt, wenn Meta zum Zugang kein Werbekonto nennt', function (): void {
     alsMandant(organisation('Demo-Praxis'));
 

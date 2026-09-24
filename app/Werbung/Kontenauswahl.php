@@ -215,26 +215,41 @@ final class Kontenauswahl
     /**
      * Was dasteht, wenn Meta zum Zugang kein Werbekonto nennt.
      *
-     * @param  array<string, mixed>  $antwort
+     * **Zwei verschiedene Befunde, die gleich aussehen.** Entweder traegt
+     * das Token Werberechte und trotzdem kein Konto -- dann fehlt die
+     * Zuweisung. Oder es traegt gar keine Werberechte: dann hat Meta sie
+     * beim Anmelden weggelassen, und am Werbekonto liegt es nicht.
+     *
+     * @param  array<string, mixed>  $auskunft
      */
-    private function ohneWerbekonto(array $antwort): string
+    private function ohneWerbekonto(array $auskunft): string
     {
-        $freigaben = data_get($antwort, 'data.scopes');
-        $freigaben = is_array($freigaben)
-            ? implode(', ', array_map(strval(...), $freigaben))
-            : '';
+        $erteilt = data_get($auskunft, 'data.scopes');
+        $erteilt = array_map(strval(...), is_array($erteilt) ? $erteilt : []);
 
-        // **Metas Auskunft gehoert in die Meldung, nicht nur ins Log.** Wer
-        // hier steht, kommt sonst fuer jede Runde nicht weiter, ohne den
-        // Log-Stream zu durchsuchen -- und die Auskunft ist genau das, was
-        // die naechste Frage beantwortet.
-        return 'Meta hat diesem Zugang kein Werbekonto zugeordnet.'
-            .($freigaben === '' ? ' Meta meldet dazu keine Freigaben.' : ' Erteilt sind: '.$freigaben.'.')
+        $satz = array_intersect($erteilt, self::WERBEFREIGABEN) === []
+            // **Der Fall vom 24.09.2026.** Ein Systemnutzer hat keine Rolle
+            // in der App -- und Berechtigungen im Standardzugriff vergibt
+            // Meta nur an Personen mit einer solchen Rolle. Die
+            // Login-Konfiguration fragt sie an, Meta laesst sie still weg,
+            // und heraus kommt ein gueltiges Token ohne Werberechte.
+            ? 'Dieser Zugang hat überhaupt keine Werberechte bekommen. '
+                .'Bei einem Systemnutzer-Token vergibt Meta Berechtigungen im Standardzugriff nicht — '
+                .'dafür braucht die App erweiterten Zugriff auf „ads_read" und „ads_management" (App Review), '
+                .'oder die Login-Konfiguration muss ein Nutzer-Zugriffstoken ausstellen.'
+            : 'Meta hat diesem Zugang kein Werbekonto zugeordnet.';
+
+        return $satz
+            .($erteilt === [] ? ' Meta meldet dazu keine Freigaben.' : ' Erteilt sind: '.implode(', ', $erteilt).'.')
+
+            // **Metas Auskunft gehoert in die Meldung, nicht nur ins Log.**
+            // Wer hier steht, kommt sonst fuer jede Runde nicht weiter, ohne
+            // den Log-Stream zu durchsuchen.
             .' Metas Auskunft: '.(string) json_encode([
-                'art' => data_get($antwort, 'data.type'),
-                'profil' => data_get($antwort, 'data.profile_id'),
-                'nutzer' => data_get($antwort, 'data.user_id'),
-                'objekte' => data_get($antwort, 'data.granular_scopes'),
+                'art' => data_get($auskunft, 'data.type'),
+                'profil' => data_get($auskunft, 'data.profile_id'),
+                'nutzer' => data_get($auskunft, 'data.user_id'),
+                'objekte' => data_get($auskunft, 'data.granular_scopes'),
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 

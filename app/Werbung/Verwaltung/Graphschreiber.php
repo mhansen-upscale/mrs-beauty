@@ -37,13 +37,55 @@ final class Graphschreiber
 
         $kennung = data_get($antwort, 'id');
 
-        if (! is_string($kennung) || $kennung === '') {
-            // Angelegt, aber ohne Kennung: der naechste Lauf findet den
-            // Knoten ueber das Merkmal wieder. Nicht wiederholen.
-            throw new Werbefehler(new Fehlereinordnung('no_id', wiederholen: false, zustand: null));
+        // **Metas Kennungen sind Zahlen, kommen aber mal als Zeichenkette
+        // und mal als Zahl.** Ein `is_string`-Test allein erklaerte eine
+        // geglueckte Anlage zum Fehlschlag.
+        if (is_int($kennung) || (is_string($kennung) && $kennung !== '')) {
+            return (string) $kennung;
         }
 
-        return $kennung;
+        // **Was Meta stattdessen geschickt hat, gehoert festgehalten.** Bis
+        // zum 24.09.2026 warf diese Stelle blind -- und "keine Kennung
+        // geliefert" sagt nicht, ob der Auftrag ankam, ob ein Feld fehlte
+        // oder ob die Antwort ganz anders aussah als erwartet.
+        Log::warning('Meta hat einen Knoten ohne Kennung bestaetigt.', [
+            'pfad' => $pfad,
+            'antwort' => $antwort,
+        ]);
+
+        // Angelegt, aber ohne Kennung: der naechste Lauf findet den Knoten
+        // ueber das Merkmal wieder. Nicht wiederholen.
+        throw new Werbefehler(new Fehlereinordnung(
+            'no_id',
+            wiederholen: false,
+            zustand: null,
+            klartext: 'Meta hat '.self::bezeichnung($pfad).' angenommen, aber keine Kennung geliefert.'
+                .' Metas Antwort: '.self::kurz($antwort),
+        ));
+    }
+
+    /** Was an diesem Pfad angelegt wird -- fuer die Meldung. */
+    private static function bezeichnung(string $pfad): string
+    {
+        return match (true) {
+            str_ends_with($pfad, '/ads') => 'die Anzeige',
+            str_ends_with($pfad, '/adsets') => 'die Anzeigengruppe',
+            str_ends_with($pfad, '/campaigns') => 'die Kampagne',
+            str_ends_with($pfad, '/adcreatives') => 'das Anzeigenmotiv',
+            default => 'den Auftrag',
+        };
+    }
+
+    /**
+     * Metas Antwort, kurz genug fuer eine Meldung.
+     *
+     * @param  array<string, mixed>  $antwort
+     */
+    private static function kurz(array $antwort): string
+    {
+        $text = (string) json_encode($antwort, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+        return mb_strlen($text) <= 300 ? $text : mb_substr($text, 0, 300).' …';
     }
 
     /**
