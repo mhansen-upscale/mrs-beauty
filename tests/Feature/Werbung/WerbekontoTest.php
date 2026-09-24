@@ -118,6 +118,30 @@ it('nennt beim gescheiterten Rueckweg Metas Grund', function (): void {
         ->assertSessionHas('fehler', fn (string $meldung): bool => str_contains($meldung, 'Invalid OAuth redirect URI.'));
 });
 
+it('unterscheidet den Codetausch vom Lesen der Werbekonten', function (): void {
+    $organisation = alsMandant(organisation('Demo-Praxis'));
+
+    // Die Anmeldung glueckt, das Lesen der Konten nicht. Frueher ergaben
+    // beide denselben Satz -- und schickten damit zur falschen Stelle.
+    Http::fake([
+        'graph.test/*/oauth/access_token*' => Http::response(['access_token' => 'geheim-1']),
+        'graph.test/*/me/adaccounts*' => Http::response(
+            Werbeaufbau::fehler(100, 0, 'The user has not granted ads_management.'),
+            400
+        ),
+    ]);
+
+    $state = Crypt::encryptString((string) json_encode([
+        'organisation' => (string) $organisation->uuid,
+        'zeitpunkt' => CarbonImmutable::now()->getTimestamp(),
+    ]));
+
+    actingAs(Werbeaufbau::leitung($organisation))
+        ->get(route('werbung.rueckkehr', ['code' => 'code-1', 'state' => $state]))
+        ->assertSessionHas('fehler', fn (string $meldung): bool => str_contains($meldung, 'Werbekonten')
+            && str_contains($meldung, 'ads_management'));
+});
+
 it('bleibt beim allgemeinen Satz, wenn Meta keinen Grund nennt', function (): void {
     $organisation = alsMandant(organisation('Demo-Praxis'));
 

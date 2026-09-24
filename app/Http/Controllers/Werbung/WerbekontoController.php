@@ -153,20 +153,27 @@ final class WerbekontoController extends Controller
             return $this->zurueck('Der Rückweg konnte nicht zugeordnet werden. Bitte erneut versuchen.');
         }
 
+        // **Zwei Schritte, zwei Meldungen.** Beide lagen bis zum 24.09.2026
+        // in einem `catch` und ergaben denselben Satz -- dabei liegt beim
+        // Codetausch ein Problem der Anmeldung (Rueckadresse, App-Secret,
+        // verbrauchter Code) und beim Lesen eines der Freigaben. Wer das
+        // nicht unterscheidet, sucht an der falschen Stelle.
         try {
             $token = $this->zugang->tausche($code);
+        } catch (Werbefehler $fehler) {
+            return $this->zurueck($this->mitGrund(
+                'Meta hat den Zugang nicht bestätigt',
+                $fehler,
+            ));
+        }
+
+        try {
             $konten = $this->konten->verfuegbare($token->zugang);
         } catch (Werbefehler $fehler) {
-            // **Metas Grund, wenn es einen nennt.** Der Satz allein --
-            // "nicht bestaetigt, bitte erneut versuchen" -- schickt jemanden
-            // in denselben Versuch mit demselben Ausgang. Ob die Rueckadresse
-            // fehlt, der Code verbraucht ist oder eine Freigabe aussteht,
-            // entscheidet, was als Naechstes zu tun ist.
-            $grund = $fehler->einordnung->klartext;
-
-            return $this->zurueck($grund === null
-                ? 'Meta hat den Zugang nicht bestätigt. Bitte erneut versuchen.'
-                : 'Meta hat den Zugang nicht bestätigt: '.$grund);
+            return $this->zurueck($this->mitGrund(
+                'Meta hat die Werbekonten nicht herausgegeben',
+                $fehler,
+            ));
         }
 
         if ($konten === []) {
@@ -460,5 +467,20 @@ final class WerbekontoController extends Controller
     private function zurueck(string $meldung): RedirectResponse
     {
         return redirect()->route('werbung.index')->with('fehler', $meldung);
+    }
+
+    /**
+     * Haengt Metas Grund an, wenn es einen nennt.
+     *
+     * Nennt es keinen, bleibt es beim allgemeinen Satz -- ein erfundener
+     * waere schlechter. Der technische Teil steht im Protokoll.
+     */
+    private function mitGrund(string $satz, Werbefehler $fehler): string
+    {
+        $grund = $fehler->einordnung->klartext;
+
+        return $grund === null
+            ? $satz.'. Bitte erneut versuchen.'
+            : $satz.': '.$grund;
     }
 }
