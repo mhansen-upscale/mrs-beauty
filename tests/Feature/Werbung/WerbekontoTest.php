@@ -19,6 +19,7 @@ use App\Werbung\Strukturabgleich;
 use App\Werbung\Verwaltung\Standortaufloesung;
 use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -90,6 +91,50 @@ it('legt aus dem Rueckweg eine Verbindung an, ohne das Token preiszugeben', func
         ->and(DB::table('ad_accounts')->value('access_token'))->not->toBe('geheim-1')
         // Und nicht in einer Antwort: $hidden greift in toArray().
         ->and($konto->toArray())->not->toHaveKey('access_token');
+});
+
+it('nennt beim gescheiterten Rueckweg Metas Grund', function (): void {
+    $organisation = alsMandant(organisation('Demo-Praxis'));
+
+    // **Ein Rueckweg, der immer gleich klingt, ist keine Auskunft.** Bis zum
+    // 24.09.2026 warf der Controller die Einordnung weg und zeigte
+    // "Bitte erneut versuchen" -- was jemanden in denselben Versuch mit
+    // demselben Ausgang schickt.
+    Http::fake([
+        'graph.test/*/oauth/access_token*' => Http::response(
+            Werbeaufbau::fehler(100, 0, 'Invalid OAuth redirect URI.'),
+            400
+        ),
+    ]);
+
+    $state = Crypt::encryptString((string) json_encode([
+        'organisation' => (string) $organisation->uuid,
+        'zeitpunkt' => CarbonImmutable::now()->getTimestamp(),
+    ]));
+
+    actingAs(Werbeaufbau::leitung($organisation))
+        ->get(route('werbung.rueckkehr', ['code' => 'code-1', 'state' => $state]))
+        ->assertRedirect(route('werbung.index'))
+        ->assertSessionHas('fehler', fn (string $meldung): bool => str_contains($meldung, 'Invalid OAuth redirect URI.'));
+});
+
+it('bleibt beim allgemeinen Satz, wenn Meta keinen Grund nennt', function (): void {
+    $organisation = alsMandant(organisation('Demo-Praxis'));
+
+    // 190 ist ein totes Token -- dafuer haelt die Einordnung keinen Klartext
+    // bereit, und ein erfundener waere schlechter als der allgemeine Satz.
+    Http::fake([
+        'graph.test/*/oauth/access_token*' => Http::response(Werbeaufbau::fehler(190), 401),
+    ]);
+
+    $state = Crypt::encryptString((string) json_encode([
+        'organisation' => (string) $organisation->uuid,
+        'zeitpunkt' => CarbonImmutable::now()->getTimestamp(),
+    ]));
+
+    actingAs(Werbeaufbau::leitung($organisation))
+        ->get(route('werbung.rueckkehr', ['code' => 'code-1', 'state' => $state]))
+        ->assertSessionHas('fehler', 'Meta hat den Zugang nicht bestätigt. Bitte erneut versuchen.');
 });
 
 it('waehlt bei mehreren Werbekonten, statt zu raten', function (): void {

@@ -9,6 +9,7 @@ use App\Werbung\Werbefehler;
 use App\Werbung\Werbetoken;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Die Login-Strecke fuer ein Werbekonto.
@@ -66,9 +67,27 @@ final class Werbezugang
         );
 
         if ($antwort->failed()) {
-            throw new Werbefehler(
-                Fehlereinordnung::ausMetaAntwort($antwort->status(), (array) $antwort->json())
-            );
+            $fehler = (array) $antwort->json();
+
+            // **Die ganze Antwort ins Protokoll**, wie beim Graphschreiber.
+            // Ein gescheiterter Rueckweg sah bis zum 24.09.2026 von aussen
+            // immer gleich aus: "Meta hat den Zugang nicht bestaetigt." Ob
+            // die Rueckadresse nicht passte, der Code schon verbraucht war
+            // oder das App-Secret falsch stand, liess sich nicht sagen --
+            // und jeder dieser Faelle braucht eine andere Reaktion.
+            //
+            // **Ohne `code` und ohne Token.** Beides ist ein Zugang, kein
+            // Diagnosewert.
+            Log::warning('Meta hat den Codetausch abgelehnt.', [
+                'status' => $antwort->status(),
+                'code' => data_get($fehler, 'error.code'),
+                'subcode' => data_get($fehler, 'error.error_subcode'),
+                'meldung' => data_get($fehler, 'error.message'),
+                'klartext' => data_get($fehler, 'error.error_user_msg'),
+                'fbtrace_id' => data_get($fehler, 'error.fbtrace_id'),
+            ]);
+
+            throw new Werbefehler(Fehlereinordnung::ausMetaAntwort($antwort->status(), $fehler));
         }
 
         $daten = $antwort->json();

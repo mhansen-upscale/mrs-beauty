@@ -156,8 +156,17 @@ final class WerbekontoController extends Controller
         try {
             $token = $this->zugang->tausche($code);
             $konten = $this->konten->verfuegbare($token->zugang);
-        } catch (Werbefehler) {
-            return $this->zurueck('Meta hat den Zugang nicht bestätigt. Bitte erneut versuchen.');
+        } catch (Werbefehler $fehler) {
+            // **Metas Grund, wenn es einen nennt.** Der Satz allein --
+            // "nicht bestaetigt, bitte erneut versuchen" -- schickt jemanden
+            // in denselben Versuch mit demselben Ausgang. Ob die Rueckadresse
+            // fehlt, der Code verbraucht ist oder eine Freigabe aussteht,
+            // entscheidet, was als Naechstes zu tun ist.
+            $grund = $fehler->einordnung->klartext;
+
+            return $this->zurueck($grund === null
+                ? 'Meta hat den Zugang nicht bestätigt. Bitte erneut versuchen.'
+                : 'Meta hat den Zugang nicht bestätigt: '.$grund);
         }
 
         if ($konten === []) {
