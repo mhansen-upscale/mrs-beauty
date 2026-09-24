@@ -8,6 +8,7 @@ use App\Enums\ConnectionStatus;
 use App\Models\AdAccount;
 use App\Werbung\Meta\Graphleser;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Welche Werbekonten die Praxis freigegeben hat -- und welches gilt.
@@ -21,23 +22,30 @@ final class Kontenauswahl
 {
     public function __construct(private readonly Graphleser $leser) {}
 
+    /** Nur diese Freigaben tragen Werbekonten. */
+    private const WERBEFREIGABEN = ['ads_management', 'ads_read'];
+
     /**
      * Die Werbekonten hinter diesem Token.
      *
-     * **Zwei Wege zum selben Ziel, und welcher gilt, haengt an der Art des
-     * Tokens.** Ein gewoehnliches Nutzertoken findet seine Konten unter
+     * **Zwei Arten Token, zwei Wege -- und dem Token sieht man seine Art
+     * nicht an.**
+     *
+     * Ein gewoehnliches Nutzertoken findet seine Konten unter
      * `me/adaccounts`. Ein **Systemnutzer-Token** nicht: dort ist `me` der
-     * Systemnutzer, und der traegt seine Konten unter `assigned_ad_accounts`.
-     * Meta antwortet auf die falsche Kante nicht mit einer leeren Liste,
-     * sondern mit Code 200 -- "keine Berechtigung".
+     * Systemnutzer, und den gibt es als Graph-Objekt gar nicht. Meta
+     * antwortet auf `me` zuerst mit Code 200 ("keine Berechtigung") und dann
+     * mit Code 100 ("Object with ID 'me' does not exist") -- beides sieht aus
+     * wie ein Rechteproblem und ist keines.
      *
-     * Aufgefallen am 24.09.2026: die Login-Konfiguration war vollstaendig,
-     * die Berechtigungen alle erteilt, und das Verbinden scheiterte trotzdem
-     * bei jedem Versuch. Die Konfiguration stellt Systemnutzer-Token aus --
-     * eine Zeile in Metas Oberflaeche, die den ganzen Weg umlegt.
+     * Der zweite Weg fragt deshalb nicht das Token, sondern **Meta ueber das
+     * Token**: `debug_token` nennt zu jeder erteilten Freigabe die Objekte,
+     * fuer die sie gilt. Bei `ads_management` und `ads_read` sind das genau
+     * die Werbekonten, die die Praxis im Anmeldedialog ausgewaehlt hat.
      *
-     * **Dem Token sieht man das nicht an.** Deshalb wird gefragt statt
-     * geraten: erst die eine Kante, bei einer Abfuhr die andere.
+     * Aufgefallen am 24.09.2026: Login-Konfiguration vollstaendig, alle
+     * Berechtigungen erteilt, Asset-Typ Werbekonten angefragt -- und das
+     * Verbinden scheiterte bei jedem Versuch.
      *
      * @return list<Werbekontoangabe>
      */
@@ -45,18 +53,107 @@ final class Kontenauswahl
     {
         try {
             // Hat die Kante geantwortet, ist ihre Antwort die Wahrheit --
-            // auch eine leere. Ein Nutzertoken ohne Werbekonto soll nicht
-            // in eine Fehlermeldung laufen.
-            return $this->lese($token, 'me/adaccounts');
+            // auch eine leere. Ein Nutzertoken ohne Werbekonto soll nicht in
+            // eine Fehlermeldung laufen.
+            return $this->leseKante($token, 'me/adaccounts');
         } catch (Werbefehler $fehler) {
             // Nur eine Abfuhr fuehrt weiter. Ein totes Token oder ein Rate
-            // Limit wird an der zweiten Kante nicht besser.
-            if ($fehler->einordnung->kurzgrund !== 'permission_missing') {
+            // Limit wird auf dem zweiten Weg nicht besser, und ein zweiter
+            // Aufruf verdeckte den eigentlichen Grund.
+            if (! in_array($fehler->einordnung->kurzgrund, ['permission_missing', 'rejected'], true)) {
                 throw $fehler;
             }
         }
 
-        return $this->lese($token, 'me/assigned_ad_accounts');
+        return $this->ausFreigaben($token);
+    }
+
+    /**
+     * Die Werbekonten aus den Freigaben des Tokens.
+     *
+     * @return list<Werbekontoangabe>
+     */
+    private function ausFreigaben(string $token): array
+    {
+        $konten = [];
+
+        foreach ($this->freigegebeneKennungen($token) as $kennung) {
+            $angabe = $this->leseKonto($token, $kennung);
+
+            if ($angabe instanceof Werbekontoangabe) {
+                $konten[] = $angabe;
+            }
+        }
+
+        return $konten;
+    }
+
+    /**
+     * Fragt Meta, wofuer dieses Token freigegeben ist.
+     *
+     * **Gefragt wird mit dem App-Token**, nicht mit dem Zugang selbst:
+     * `debug_token` beantwortet nur, wer die App ist, Fragen ueber ein
+     * fremdes Token.
+     *
+     * @return list<string>
+     */
+    private function freigegebeneKennungen(string $token): array
+    {
+        $antwort = $this->leser->knoten(
+            (string) config('mrs.meta.app_id').'|'.(string) config('mrs.meta.app_secret'),
+            'debug_token',
+            ['input_token' => $token],
+        );
+
+        $fein = data_get($antwort, 'data.granular_scopes');
+
+        // **Ins Protokoll, ohne das Token.** Wenn auch dieser Weg einmal
+        // nicht traegt, ist die Art des Tokens die erste Frage -- und die
+        // steht hier, nicht im Zugang.
+        Log::info('Metas Auskunft zum Zugang.', [
+            'art' => data_get($antwort, 'data.type'),
+            'app' => data_get($antwort, 'data.app_id'),
+            'profil' => data_get($antwort, 'data.profile_id'),
+            'gueltig' => data_get($antwort, 'data.is_valid'),
+            'freigaben' => data_get($antwort, 'data.scopes'),
+            'objekte' => $fein,
+        ]);
+
+        if (! is_array($fein)) {
+            return [];
+        }
+
+        $kennungen = [];
+
+        foreach ($fein as $eintrag) {
+            if (! in_array(data_get($eintrag, 'scope'), self::WERBEFREIGABEN, true)) {
+                continue;
+            }
+
+            $ziele = data_get($eintrag, 'target_ids');
+
+            foreach (is_array($ziele) ? $ziele : [] as $ziel) {
+                if (! is_string($ziel) && ! is_int($ziel)) {
+                    continue;
+                }
+
+                // Meta nennt die Ziele mal mit, mal ohne `act_`. Die
+                // Kennung eines Werbekontos traegt es immer.
+                $kennungen[] = str_starts_with((string) $ziel, 'act_')
+                    ? (string) $ziel
+                    : 'act_'.(string) $ziel;
+            }
+        }
+
+        return array_values(array_unique($kennungen));
+    }
+
+    /** Ein einzelnes Werbekonto, ueber seine Kennung. */
+    private function leseKonto(string $token, string $kennung): ?Werbekontoangabe
+    {
+        return $this->zurAngabe($this->leser->knoten($token, $kennung, [
+            'fields' => 'id,name,currency,timezone_name,account_status,business',
+        ]));
     }
 
     /**
@@ -64,7 +161,7 @@ final class Kontenauswahl
      *
      * @return list<Werbekontoangabe>
      */
-    private function lese(string $token, string $pfad): array
+    private function leseKante(string $token, string $pfad): array
     {
         $zeilen = $this->leser->sammle($token, $pfad, [
             'fields' => 'id,name,currency,timezone_name,account_status,business',
@@ -73,27 +170,41 @@ final class Kontenauswahl
         $konten = [];
 
         foreach ($zeilen as $zeile) {
-            $kennung = data_get($zeile, 'id');
+            $angabe = $this->zurAngabe($zeile);
 
-            if (! is_string($kennung) || $kennung === '') {
-                continue;
+            if ($angabe instanceof Werbekontoangabe) {
+                $konten[] = $angabe;
             }
-
-            $konten[] = new Werbekontoangabe(
-                kennung: $kennung,
-                name: $this->text(data_get($zeile, 'name')),
-                waehrung: $this->text(data_get($zeile, 'currency')),
-                zeitzone: $this->text(data_get($zeile, 'timezone_name')),
-                business: $this->text(data_get($zeile, 'business.id')),
-
-                // 1 ist ACTIVE. Alles andere reicht von "ausstehend" bis
-                // "gesperrt" -- anbieten kann man es, verbinden sollte es
-                // niemand, ohne den Hinweis gesehen zu haben.
-                nutzbar: (int) (data_get($zeile, 'account_status') ?? 0) === 1,
-            );
         }
 
         return $konten;
+    }
+
+    /**
+     * Eine Zeile aus Metas Antwort als Angabe.
+     *
+     * @param  array<string, mixed>  $zeile
+     */
+    private function zurAngabe(array $zeile): ?Werbekontoangabe
+    {
+        $kennung = data_get($zeile, 'id');
+
+        if (! is_string($kennung) || $kennung === '') {
+            return null;
+        }
+
+        return new Werbekontoangabe(
+            kennung: $kennung,
+            name: $this->text(data_get($zeile, 'name')),
+            waehrung: $this->text(data_get($zeile, 'currency')),
+            zeitzone: $this->text(data_get($zeile, 'timezone_name')),
+            business: $this->text(data_get($zeile, 'business.id')),
+
+            // 1 ist ACTIVE. Alles andere reicht von "ausstehend" bis
+            // "gesperrt" -- anbieten kann man es, verbinden sollte es
+            // niemand, ohne den Hinweis gesehen zu haben.
+            nutzbar: (int) (data_get($zeile, 'account_status') ?? 0) === 1,
+        );
     }
 
     /**

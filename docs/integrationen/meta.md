@@ -37,29 +37,37 @@ Das ist leicht zu übersehen, weil sich nichts an der App ändert und nichts am
 Code: eine einzige Umgebungsvariable verlegt die Quelle der Berechtigungen aus
 dem Repository nach Meta.
 
-### Die Art des Tokens entscheidet über die Kante
+### Die Art des Tokens entscheidet über den Weg
 
 In derselben Konfiguration steht unter **Zugriffstoken**, welche Art Token Meta
-ausstellt — und davon hängt ab, **wo** die Werbekonten stehen:
+ausstellt — und davon hängt ab, **wie** die Werbekonten zu finden sind:
 
-| Zugriffstoken | Kante |
+| Zugriffstoken | Weg |
 |---|---|
 | Nutzer-Zugriffstoken | `me/adaccounts` |
-| Systemnutzer-Zugriffstoken | `me/assigned_ad_accounts` |
+| Systemnutzer-Zugriffstoken | `debug_token` → `granular_scopes` → Konto je Kennung |
 
-Bei einem Systemnutzer-Token ist `me` der **Systemnutzer**, nicht die Person.
-Der trägt keine `adaccounts`-Kante. Meta antwortet darauf nicht mit einer
-leeren Liste, sondern mit **Code 200 — „keine Berechtigung"**, und das sieht
-aus wie eine fehlende Freigabe, obwohl in der Konfiguration alles steht.
+Bei einem Systemnutzer-Token ist `me` der **Systemnutzer** — und den gibt es
+als Graph-Objekt nicht. Meta antwortet zuerst mit **Code 200 („keine
+Berechtigung")** und, fragt man eine andere Kante an `me`, mit **Code 100
+(„Object with ID 'me' does not exist")**. Beides sieht nach einem
+Rechteproblem aus und ist keines.
+
+Der zweite Weg fragt deshalb nicht das Token, sondern **Meta über das Token**:
+`debug_token` nennt zu jeder erteilten Freigabe die Objekte, für die sie gilt.
+Bei `ads_management` und `ads_read` sind das genau die Werbekonten, die die
+Praxis im Anmeldedialog ausgewählt hat. Gefragt wird dabei **als App**
+(`app_id|app_secret`), nicht mit dem Zugang selbst — anders beantwortet Meta
+die Frage nicht.
 
 Genau das kostete am 24.09.2026 einen halben Tag: `ads_read`,
 `ads_management`, `business_management` erteilt, Asset-Typ *Werbekonten*
 angefragt, Anmeldung erfolgreich — und trotzdem „keine Berechtigung".
 
 **Dem Token sieht man seine Art nicht an.** `Kontenauswahl::verfuegbare()`
-fragt deshalb die eine Kante und bei einer Abfuhr die andere. Nur bei einer
-Abfuhr: ein totes Token oder ein Rate Limit wird an der zweiten Kante nicht
-besser, und ein zweiter Aufruf verdeckte den eigentlichen Grund.
+geht deshalb erst den einen Weg und bei einer Abfuhr den anderen. Nur bei
+einer Abfuhr: ein totes Token oder ein Rate Limit wird auf dem zweiten Weg
+nicht besser, und ein zweiter Aufruf verdeckte den eigentlichen Grund.
 
 
 ## Werbekonten

@@ -131,6 +131,11 @@ it('unterscheidet den Codetausch vom Lesen der Werbekonten', function (): void {
             Werbeaufbau::fehler(100, 0, 'The user has not granted ads_management.'),
             400
         ),
+        // Auch der zweite Weg traegt nicht: dann gilt Metas Grund.
+        'graph.test/*/debug_token*' => Http::response(
+            Werbeaufbau::fehler(100, 0, 'The user has not granted ads_management.'),
+            400
+        ),
     ]);
 
     $state = Crypt::encryptString((string) json_encode([
@@ -155,7 +160,7 @@ it('nennt eine fehlende Freigabe beim Namen, statt zum Wiederholen zu raten', fu
     Http::fake([
         'graph.test/*/oauth/access_token*' => Http::response(['access_token' => 'geheim-1']),
         'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
-        'graph.test/*/me/assigned_ad_accounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/debug_token*' => Http::response(Werbeaufbau::fehler(200), 403),
     ]);
 
     $state = Crypt::encryptString((string) json_encode([
@@ -192,31 +197,63 @@ it('haelt einen abgelehnten Lesezugriff im Protokoll fest', function (): void {
         ->and($eintraege[0]['subcode'] ?? null)->toBe(1349174);
 });
 
-it('findet die Konten eines Systemnutzer-Tokens an der anderen Kante', function (): void {
+it('findet die Konten eines Systemnutzer-Tokens ueber die Freigaben', function (): void {
     alsMandant(organisation('Demo-Praxis'));
 
-    // **Ein Systemnutzer-Token kennt `me/adaccounts` nicht.** `me` ist dort
-    // der Systemnutzer, und der traegt seine Konten unter
-    // `assigned_ad_accounts`. Meta antwortet auf die falsche Kante nicht mit
-    // einer leeren Liste, sondern mit Code 200 -- "keine Berechtigung".
+    // **Ein Systemnutzer-Token kennt `me` nicht.** Meta antwortet darauf mit
+    // Code 200 -- das sieht aus wie ein Rechteproblem und ist keines. Wofuer
+    // der Zugang gilt, sagt `debug_token`.
     Http::fake([
         'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
-        'graph.test/*/me/assigned_ad_accounts*' => Http::response(Werbeaufbau::seite([[
+        'graph.test/*/debug_token*' => Http::response(['data' => [
+            'type' => 'SYSTEM_USER',
+            'is_valid' => true,
+            'scopes' => ['ads_management', 'ads_read'],
+            'granular_scopes' => [
+                // Meta nennt die Ziele ohne `act_`.
+                ['scope' => 'ads_management', 'target_ids' => ['1']],
+                ['scope' => 'pages_show_list', 'target_ids' => ['77']],
+            ],
+        ]]),
+        'graph.test/*/act_1*' => Http::response([
             'id' => 'act_1',
             'name' => 'Praxis Werbung',
             'currency' => 'EUR',
+            'timezone_name' => 'Europe/Berlin',
             'account_status' => 1,
-        ]])),
+            'business' => ['id' => '99'],
+        ]),
     ]);
 
     $konten = app(Kontenauswahl::class)->verfuegbare('systemnutzer-token');
 
     expect($konten)->toHaveCount(1)
         ->and($konten[0]->kennung)->toBe('act_1')
+        ->and($konten[0]->business)->toBe('99')
         ->and($konten[0]->nutzbar)->toBeTrue();
+
+    // Eine Seitenfreigabe ist kein Werbekonto.
+    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'act_77'));
 });
 
-it('fragt die zweite Kante nicht, wenn die erste antwortet', function (): void {
+it('fragt debug_token mit dem App-Token, nicht mit dem Zugang', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/debug_token*' => Http::response(['data' => ['granular_scopes' => []]]),
+    ]);
+
+    expect(app(Kontenauswahl::class)->verfuegbare('systemnutzer-token'))->toBe([]);
+
+    // Der Zugang steht in `input_token`, gefragt wird als App -- andersherum
+    // beantwortet Meta die Frage nicht.
+    Http::assertSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'debug_token')
+        && str_contains((string) $anfrage->url(), 'input_token=systemnutzer-token')
+        && str_contains((string) $anfrage->header('Authorization')[0], '|'));
+});
+
+it('fragt die Freigaben nicht ab, wenn die erste Kante antwortet', function (): void {
     alsMandant(organisation('Demo-Praxis'));
 
     // Ein Nutzertoken ohne Werbekonto ist kein Fehler -- und keine leere
@@ -227,13 +264,13 @@ it('fragt die zweite Kante nicht, wenn die erste antwortet', function (): void {
 
     expect(app(Kontenauswahl::class)->verfuegbare('nutzer-token'))->toBe([]);
 
-    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'assigned_ad_accounts'));
+    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'debug_token'));
 });
 
-it('geht bei einem toten Token nicht auf die zweite Kante', function (): void {
+it('fragt bei einem toten Token die Freigaben nicht ab', function (): void {
     alsMandant(organisation('Demo-Praxis'));
 
-    // 190: das Token ist tot. An der zweiten Kante wird es nicht lebendiger,
+    // 190: das Token ist tot. Auf dem zweiten Weg wird es nicht lebendiger,
     // und ein zweiter Aufruf verdeckte nur den eigentlichen Grund.
     Http::fake([
         'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(190), 401),
@@ -241,7 +278,7 @@ it('geht bei einem toten Token nicht auf die zweite Kante', function (): void {
 
     expect(fn () => app(Kontenauswahl::class)->verfuegbare('totes-token'))->toThrow(Werbefehler::class);
 
-    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'assigned_ad_accounts'));
+    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'debug_token'));
 });
 
 it('waehlt bei mehreren Werbekonten, statt zu raten', function (): void {
