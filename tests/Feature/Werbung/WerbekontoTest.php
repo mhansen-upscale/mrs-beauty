@@ -19,9 +19,11 @@ use App\Werbung\Strukturabgleich;
 use App\Werbung\Verwaltung\Standortaufloesung;
 use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
 use function Pest\Laravel\actingAs;
@@ -142,13 +144,15 @@ it('unterscheidet den Codetausch vom Lesen der Werbekonten', function (): void {
             && str_contains($meldung, 'ads_management'));
 });
 
-it('bleibt beim allgemeinen Satz, wenn Meta keinen Grund nennt', function (): void {
+it('nennt eine fehlende Freigabe beim Namen, statt zum Wiederholen zu raten', function (): void {
     $organisation = alsMandant(organisation('Demo-Praxis'));
 
-    // 190 ist ein totes Token -- dafuer haelt die Einordnung keinen Klartext
-    // bereit, und ein erfundener waere schlechter als der allgemeine Satz.
+    // Code 200: der Zugang steht, die Werberechte fehlen. Metas Antwort
+    // traegt dafuer keinen Klartext -- und "bitte erneut versuchen" ist hier
+    // schlicht falsch, Wiederholen hilft nicht.
     Http::fake([
-        'graph.test/*/oauth/access_token*' => Http::response(Werbeaufbau::fehler(190), 401),
+        'graph.test/*/oauth/access_token*' => Http::response(['access_token' => 'geheim-1']),
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
     ]);
 
     $state = Crypt::encryptString((string) json_encode([
@@ -158,7 +162,31 @@ it('bleibt beim allgemeinen Satz, wenn Meta keinen Grund nennt', function (): vo
 
     actingAs(Werbeaufbau::leitung($organisation))
         ->get(route('werbung.rueckkehr', ['code' => 'code-1', 'state' => $state]))
-        ->assertSessionHas('fehler', 'Meta hat den Zugang nicht bestätigt. Bitte erneut versuchen.');
+        ->assertSessionHas('fehler', fn (string $meldung): bool => str_contains($meldung, 'Werbekonten')
+            && str_contains($meldung, 'ads_management')
+            && ! str_contains($meldung, 'Bitte erneut versuchen'));
+});
+
+it('haelt einen abgelehnten Lesezugriff im Protokoll fest', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    $eintraege = [];
+    Log::listen(function (MessageLogged $eintrag) use (&$eintraege): void {
+        $eintraege[] = $eintrag->context;
+    });
+
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200, 1349174, 'Permissions error'), 403),
+    ]);
+
+    expect(fn () => app(Kontenauswahl::class)->verfuegbare('token'))->toThrow(Werbefehler::class);
+
+    // Ohne Code und Subcode ist weder Metas Doku noch Metas Support zu
+    // durchsuchen -- der Schreiber haelt sie seit je fest, der Leser bis zum
+    // 24.09.2026 nicht.
+    expect($eintraege)->toHaveCount(1)
+        ->and($eintraege[0]['code'] ?? null)->toBe(200)
+        ->and($eintraege[0]['subcode'] ?? null)->toBe(1349174);
 });
 
 it('waehlt bei mehreren Werbekonten, statt zu raten', function (): void {

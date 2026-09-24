@@ -470,17 +470,38 @@ final class WerbekontoController extends Controller
     }
 
     /**
-     * Haengt Metas Grund an, wenn es einen nennt.
+     * Haengt den Grund an -- Metas eigenen, sonst unseren.
      *
-     * Nennt es keinen, bleibt es beim allgemeinen Satz -- ein erfundener
-     * waere schlechter. Der technische Teil steht im Protokoll.
+     * **Nur eine fachliche Ablehnung bringt Klartext mit** (siehe
+     * Fehlereinordnung). Ein totes Token, eine fehlende Freigabe, ein
+     * gesperrtes Konto: alles drei lief bis zum 24.09.2026 in denselben
+     * Satz "Bitte erneut versuchen" -- und genau der ist falsch, denn
+     * Wiederholen hilft bei keinem davon.
      */
     private function mitGrund(string $satz, Werbefehler $fehler): string
     {
-        $grund = $fehler->einordnung->klartext;
+        $grund = $fehler->einordnung->klartext ?? self::zumKurzgrund($fehler->einordnung->kurzgrund);
 
-        return $grund === null
-            ? $satz.'. Bitte erneut versuchen.'
-            : $satz.': '.$grund;
+        return $grund === null ? $satz.'. Bitte erneut versuchen.' : $satz.': '.$grund;
+    }
+
+    /**
+     * Was die bekannten Kurzgruende fuer den Verbindungsweg bedeuten.
+     */
+    private static function zumKurzgrund(string $kurzgrund): ?string
+    {
+        return match ($kurzgrund) {
+            // Der haeufigste Fall beim Verbinden: der Zugang steht, aber die
+            // Login-Konfiguration fragt die Werberechte nicht ab -- oder die
+            // Praxis hat sie im Dialog abgewaehlt.
+            'permission_missing' => 'Dieser Zugang darf keine Werbekonten lesen. '
+                .'In der Meta-App muss die Login-Konfiguration „ads_read" und „ads_management" anfragen, '
+                .'und im Anmeldedialog müssen beide freigegeben bleiben.',
+            'token_invalid' => 'Der Zugang ist abgelaufen oder wurde zurückgezogen. Bitte erneut anmelden.',
+            'suspended' => 'Das Werbekonto ist bei Meta gesperrt. Das lässt sich nur bei Meta klären.',
+            'rate_limit' => 'Meta hat zu viele Anfragen gemeldet. Bitte in ein paar Minuten erneut versuchen.',
+            'unreachable', 'temporary' => 'Meta war vorübergehend nicht erreichbar. Bitte erneut versuchen.',
+            default => null,
+        };
     }
 }

@@ -9,6 +9,7 @@ use App\Werbung\Werbefehler;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -144,9 +145,25 @@ final class Graphleser
         }
 
         if ($antwort->failed()) {
-            throw new Werbefehler(
-                Fehlereinordnung::ausMetaAntwort($antwort->status(), (array) $antwort->json())
-            );
+            $fehler = (array) $antwort->json();
+
+            // **Die andere Haelfte des Paares.** Der Graphschreiber haelt
+            // eine abgelehnte Antwort seit je vollstaendig fest, der Leser
+            // gar nicht -- und ein gescheitertes `me/adaccounts` war deshalb
+            // am 24.09.2026 nicht auseinanderzuhalten von einem abgelaufenen
+            // Token. Ohne Code und Subcode ist weder Metas Doku noch Metas
+            // Support zu durchsuchen.
+            Log::warning('Meta hat einen Lesezugriff abgelehnt.', [
+                'adresse' => $adresse,
+                'status' => $antwort->status(),
+                'code' => data_get($fehler, 'error.code'),
+                'subcode' => data_get($fehler, 'error.error_subcode'),
+                'meldung' => data_get($fehler, 'error.message'),
+                'klartext' => data_get($fehler, 'error.error_user_msg'),
+                'fbtrace_id' => data_get($fehler, 'error.fbtrace_id'),
+            ]);
+
+            throw new Werbefehler(Fehlereinordnung::ausMetaAntwort($antwort->status(), $fehler));
         }
 
         $daten = $antwort->json();
