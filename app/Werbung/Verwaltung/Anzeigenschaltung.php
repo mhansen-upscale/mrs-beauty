@@ -8,6 +8,7 @@ use App\Datenschutz\Anhangspeicher;
 use App\Enums\SyncState;
 use App\Models\Ad;
 use App\Models\AdAccount;
+use App\Models\AdCampaign;
 use App\Models\AdSet;
 use App\Models\AdSuggestion;
 use App\Models\Attachment;
@@ -291,11 +292,21 @@ final class Anzeigenschaltung
         $gruppe = $anzeige->set()->first();
 
         if (! $gruppe instanceof AdSet || str_starts_with($gruppe->external_id, 'lokal-')) {
+            // **Die Gruppe fehlt, nicht die Kampagne.** Die alte Meldung sagte
+            // "Die Kampagne steht noch nicht bei Meta" -- und wer daraufhin im
+            // Werbekonto nachsah, fand sie dort und suchte an der falschen
+            // Stelle weiter (24.09.2026).
+            //
+            // Der Name der Kampagne gehoert dazu: bei drei Kampagnen sagt
+            // "die Anzeigengruppe" nicht, welche gemeint ist.
+            $kampagne = $gruppe?->campaign()->first();
+
             throw new Werbefehler(new Fehlereinordnung(
                 'adset_not_synced',
                 wiederholen: true,
                 zustand: null,
-                klartext: 'Die Kampagne steht noch nicht bei Meta. Die Anzeige geht hinaus, sobald sie dort ist.',
+                klartext: 'Die Anzeigengruppe steht noch nicht bei Meta'
+                    .($kampagne instanceof AdCampaign ? ' — Kampagne „'.$kampagne->name.'"' : '').'.',
             ));
         }
 

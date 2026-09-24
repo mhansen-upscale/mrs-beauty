@@ -294,6 +294,54 @@ it('haelt eine wartende Anzeige als wartend fest, nicht als abgelehnt', function
         ->and($frisch?->sync_error)->toContain('Kampagne');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Die Meldung nennt, was wirklich fehlt
+|--------------------------------------------------------------------------
+|
+| "Die Kampagne steht noch nicht bei Meta" stand an einer Pruefung, die die
+| **Anzeigengruppe** prueft. Am 24.09.2026 hat das eine Stunde gekostet: Die
+| Kampagne war sichtbar im Werbekonto, die Meldung behauptete das Gegenteil,
+| und niemand kam auf die Gruppe.
+|
+| Dazu der Name der Kampagne -- bei drei Kampagnen sagt "die Kampagne" nicht,
+| welche gemeint ist.
+|
+*/
+
+it('nennt die Anzeigengruppe beim Namen, nicht die Kampagne', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    $aufbau->gruppe->external_id = 'lokal-abcdefghij';
+    $aufbau->gruppe->save();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['anzeige.png' => ['hash' => 'bildhash-1']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+    ]);
+
+    try {
+        app(AnzeigeUebertragen::class, [
+            'organisation' => (string) $aufbau->werbung->organisation->uuid,
+            'anzeige' => (string) $anzeige->uuid,
+        ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+    } catch (Werbefehler) {
+        // Wiederholbar -- der Auftrag wirft weiter, der Vermerk steht.
+    }
+
+    $fehler = (string) $anzeige->fresh()?->sync_error;
+
+    // Die Gruppe fehlt, nicht die Kampagne -- und die Kampagne steht mit
+    // Namen da, damit man weiss, wo man hinmuss.
+    expect($fehler)->toContain('Anzeigengruppe')
+        ->and($fehler)->toContain((string) $aufbau->kampagne->name)
+        // Kein Versprechen im gespeicherten Grund: was als Naechstes
+        // passiert, haengt am Zustand und steht in der Oberflaeche.
+        ->and($fehler)->not->toContain('geht hinaus');
+});
+
 it('gibt nach dem letzten Versuch auf, statt ewig zu warten', function (): void {
     $aufbau = new Anzeigenaufbau;
     $anzeige = $aufbau->geplanteAnzeige();
@@ -313,7 +361,7 @@ it('gibt nach dem letzten Versuch auf, statt ewig zu warten', function (): void 
     // Ohne das bliebe die Anzeige auf "wartet" stehen -- und drehte sich in
     // der Oberflaeche, obwohl niemand mehr etwas versucht.
     expect($frisch?->sync_state)->toBe(SyncState::Failed)
-        ->and($frisch?->sync_error)->toContain('mehrfach');
+        ->and($frisch?->sync_error)->toContain('aufgegeben');
 });
 
 it('haelt eine fachliche Ablehnung weiterhin als abgelehnt fest', function (): void {

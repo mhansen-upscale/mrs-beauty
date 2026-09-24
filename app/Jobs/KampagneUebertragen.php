@@ -73,8 +73,8 @@ final class KampagneUebertragen implements ShouldBeUnique, ShouldQueue
             }
 
             $kampagne->sync_state = SyncState::Failed;
-            $kampagne->sync_error = 'Die Übertragung ist mehrfach gescheitert. '
-                .($kampagne->sync_error ?? 'Bitte erneut versuchen.');
+            $kampagne->sync_error = 'Nach mehreren Versuchen aufgegeben. Zuletzt: '
+                .($kampagne->sync_error ?? 'kein Grund vermerkt.');
             $kampagne->save();
         });
     }

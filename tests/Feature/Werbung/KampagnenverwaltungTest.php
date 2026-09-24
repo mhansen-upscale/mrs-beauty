@@ -734,7 +734,7 @@ it('gibt bei der Kampagne nach dem letzten Versuch auf', function (): void {
     // versucht -- und der Wiederanlauf stellte sie bei jedem Verbinden
     // erneut ein, mit demselben Ausgang.
     expect($frisch?->sync_state)->toBe(SyncState::Failed)
-        ->and($frisch?->sync_error)->toContain('mehrfach');
+        ->and($frisch?->sync_error)->toContain('aufgegeben');
 });
 
 it('zeigt eine fachliche Ablehnung im Klartext', function (): void {

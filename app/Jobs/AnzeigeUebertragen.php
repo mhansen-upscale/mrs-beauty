@@ -71,8 +71,8 @@ final class AnzeigeUebertragen implements ShouldBeUnique, ShouldQueue
             }
 
             $anzeige->sync_state = SyncState::Failed;
-            $anzeige->sync_error = 'Die Übertragung ist mehrfach gescheitert. '
-                .($anzeige->sync_error ?? 'Bitte erneut versuchen.');
+            $anzeige->sync_error = 'Nach mehreren Versuchen aufgegeben. Zuletzt: '
+                .($anzeige->sync_error ?? 'kein Grund vermerkt.');
             $anzeige->save();
         });
     }
