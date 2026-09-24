@@ -150,9 +150,12 @@ it('nennt eine fehlende Freigabe beim Namen, statt zum Wiederholen zu raten', fu
     // Code 200: der Zugang steht, die Werberechte fehlen. Metas Antwort
     // traegt dafuer keinen Klartext -- und "bitte erneut versuchen" ist hier
     // schlicht falsch, Wiederholen hilft nicht.
+    // Beide Kanten weisen ab: dann fehlt die Freigabe wirklich, und es liegt
+    // nicht an der Art des Tokens.
     Http::fake([
         'graph.test/*/oauth/access_token*' => Http::response(['access_token' => 'geheim-1']),
         'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/me/assigned_ad_accounts*' => Http::response(Werbeaufbau::fehler(200), 403),
     ]);
 
     $state = Crypt::encryptString((string) json_encode([
@@ -187,6 +190,58 @@ it('haelt einen abgelehnten Lesezugriff im Protokoll fest', function (): void {
     expect($eintraege)->toHaveCount(1)
         ->and($eintraege[0]['code'] ?? null)->toBe(200)
         ->and($eintraege[0]['subcode'] ?? null)->toBe(1349174);
+});
+
+it('findet die Konten eines Systemnutzer-Tokens an der anderen Kante', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    // **Ein Systemnutzer-Token kennt `me/adaccounts` nicht.** `me` ist dort
+    // der Systemnutzer, und der traegt seine Konten unter
+    // `assigned_ad_accounts`. Meta antwortet auf die falsche Kante nicht mit
+    // einer leeren Liste, sondern mit Code 200 -- "keine Berechtigung".
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(200), 403),
+        'graph.test/*/me/assigned_ad_accounts*' => Http::response(Werbeaufbau::seite([[
+            'id' => 'act_1',
+            'name' => 'Praxis Werbung',
+            'currency' => 'EUR',
+            'account_status' => 1,
+        ]])),
+    ]);
+
+    $konten = app(Kontenauswahl::class)->verfuegbare('systemnutzer-token');
+
+    expect($konten)->toHaveCount(1)
+        ->and($konten[0]->kennung)->toBe('act_1')
+        ->and($konten[0]->nutzbar)->toBeTrue();
+});
+
+it('fragt die zweite Kante nicht, wenn die erste antwortet', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    // Ein Nutzertoken ohne Werbekonto ist kein Fehler -- und keine leere
+    // Antwort, die man an einer zweiten Kante nachschlagen muesste.
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::seite([])),
+    ]);
+
+    expect(app(Kontenauswahl::class)->verfuegbare('nutzer-token'))->toBe([]);
+
+    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'assigned_ad_accounts'));
+});
+
+it('geht bei einem toten Token nicht auf die zweite Kante', function (): void {
+    alsMandant(organisation('Demo-Praxis'));
+
+    // 190: das Token ist tot. An der zweiten Kante wird es nicht lebendiger,
+    // und ein zweiter Aufruf verdeckte nur den eigentlichen Grund.
+    Http::fake([
+        'graph.test/*/me/adaccounts*' => Http::response(Werbeaufbau::fehler(190), 401),
+    ]);
+
+    expect(fn () => app(Kontenauswahl::class)->verfuegbare('totes-token'))->toThrow(Werbefehler::class);
+
+    Http::assertNotSent(fn ($anfrage): bool => str_contains((string) $anfrage->url(), 'assigned_ad_accounts'));
 });
 
 it('waehlt bei mehreren Werbekonten, statt zu raten', function (): void {

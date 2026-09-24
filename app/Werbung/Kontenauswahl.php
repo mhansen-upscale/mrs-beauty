@@ -22,11 +22,51 @@ final class Kontenauswahl
     public function __construct(private readonly Graphleser $leser) {}
 
     /**
+     * Die Werbekonten hinter diesem Token.
+     *
+     * **Zwei Wege zum selben Ziel, und welcher gilt, haengt an der Art des
+     * Tokens.** Ein gewoehnliches Nutzertoken findet seine Konten unter
+     * `me/adaccounts`. Ein **Systemnutzer-Token** nicht: dort ist `me` der
+     * Systemnutzer, und der traegt seine Konten unter `assigned_ad_accounts`.
+     * Meta antwortet auf die falsche Kante nicht mit einer leeren Liste,
+     * sondern mit Code 200 -- "keine Berechtigung".
+     *
+     * Aufgefallen am 24.09.2026: die Login-Konfiguration war vollstaendig,
+     * die Berechtigungen alle erteilt, und das Verbinden scheiterte trotzdem
+     * bei jedem Versuch. Die Konfiguration stellt Systemnutzer-Token aus --
+     * eine Zeile in Metas Oberflaeche, die den ganzen Weg umlegt.
+     *
+     * **Dem Token sieht man das nicht an.** Deshalb wird gefragt statt
+     * geraten: erst die eine Kante, bei einer Abfuhr die andere.
+     *
      * @return list<Werbekontoangabe>
      */
     public function verfuegbare(string $token): array
     {
-        $zeilen = $this->leser->sammle($token, 'me/adaccounts', [
+        try {
+            // Hat die Kante geantwortet, ist ihre Antwort die Wahrheit --
+            // auch eine leere. Ein Nutzertoken ohne Werbekonto soll nicht
+            // in eine Fehlermeldung laufen.
+            return $this->lese($token, 'me/adaccounts');
+        } catch (Werbefehler $fehler) {
+            // Nur eine Abfuhr fuehrt weiter. Ein totes Token oder ein Rate
+            // Limit wird an der zweiten Kante nicht besser.
+            if ($fehler->einordnung->kurzgrund !== 'permission_missing') {
+                throw $fehler;
+            }
+        }
+
+        return $this->lese($token, 'me/assigned_ad_accounts');
+    }
+
+    /**
+     * Eine Kante lesen und in Angaben uebersetzen.
+     *
+     * @return list<Werbekontoangabe>
+     */
+    private function lese(string $token, string $pfad): array
+    {
+        $zeilen = $this->leser->sammle($token, $pfad, [
             'fields' => 'id,name,currency,timezone_name,account_status,business',
         ]);
 

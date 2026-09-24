@@ -20,6 +20,48 @@ Gilt für WP-00, WP-19 bis WP-22, WP-26 bis WP-28, WP-31, WP-32.
 
 Voraussetzungen vor der Einreichung: Unternehmensverifizierung, Domain-Verifizierung, Datenschutzerklärung, Endpunkt zur Datenlöschung, Tech-Provider-Status.
 
+### Woher die Berechtigungen kommen — zwei Wege, einer gilt
+
+`META_LOGIN_CONFIG_ID` entscheidet, **welche Liste Meta beim Anmelden abfragt**:
+
+| `META_LOGIN_CONFIG_ID` | Es gilt | Geändert wird |
+|---|---|---|
+| nicht gesetzt | `mrs.ads.scopes` aus `config/mrs.php` | im Repository |
+| gesetzt | die Login-Konfiguration bei Meta | in der Meta-App |
+
+**Ist sie gesetzt, schickt `Werbezugang::weiterleitung()` gar kein `scope` mehr
+mit.** Die Tabelle oben steht dann nur noch auf dem Papier — maßgeblich ist
+allein, was in der Konfiguration bei Meta hinterlegt ist.
+
+Das ist leicht zu übersehen, weil sich nichts an der App ändert und nichts am
+Code: eine einzige Umgebungsvariable verlegt die Quelle der Berechtigungen aus
+dem Repository nach Meta.
+
+### Die Art des Tokens entscheidet über die Kante
+
+In derselben Konfiguration steht unter **Zugriffstoken**, welche Art Token Meta
+ausstellt — und davon hängt ab, **wo** die Werbekonten stehen:
+
+| Zugriffstoken | Kante |
+|---|---|
+| Nutzer-Zugriffstoken | `me/adaccounts` |
+| Systemnutzer-Zugriffstoken | `me/assigned_ad_accounts` |
+
+Bei einem Systemnutzer-Token ist `me` der **Systemnutzer**, nicht die Person.
+Der trägt keine `adaccounts`-Kante. Meta antwortet darauf nicht mit einer
+leeren Liste, sondern mit **Code 200 — „keine Berechtigung"**, und das sieht
+aus wie eine fehlende Freigabe, obwohl in der Konfiguration alles steht.
+
+Genau das kostete am 24.09.2026 einen halben Tag: `ads_read`,
+`ads_management`, `business_management` erteilt, Asset-Typ *Werbekonten*
+angefragt, Anmeldung erfolgreich — und trotzdem „keine Berechtigung".
+
+**Dem Token sieht man seine Art nicht an.** `Kontenauswahl::verfuegbare()`
+fragt deshalb die eine Kante und bei einer Abfuhr die andere. Nur bei einer
+Abfuhr: ein totes Token oder ein Rate Limit wird an der zweiten Kante nicht
+besser, und ein zweiter Aufruf verdeckte den eigentlichen Grund.
+
+
 ## Werbekonten
 
 **Das Werbekonto gehört dem Kunden.** Zugriff erfolgt über eine Partnerschaft im Business Manager, nicht über eine Übertragung. Bei Kündigung oder Sperrung ist das der Unterschied zwischen einem Ärgernis und einem Rechtsstreit.
