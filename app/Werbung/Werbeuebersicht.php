@@ -166,6 +166,10 @@ final class Werbeuebersicht
                     'zielgruppe' => $this->zielgruppe($eigene->first()),
                     'verschwunden' => $kampagne->vanished_at !== null,
 
+                    // Beauftragt, aber noch nicht durch: die Zeile steht bis
+                    // dahin sichtbar auf dem Weg hinaus.
+                    'wirdEntfernt' => $kampagne->deleting_at !== null,
+
                     // Was die Praxis will und was bei Meta steht, sind zwei
                     // Dinge (WP-27).
                     'uebertragung' => $kampagne->sync_state->value,

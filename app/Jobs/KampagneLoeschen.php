@@ -9,6 +9,7 @@ use App\Models\AdAccount;
 use App\Models\AdCampaign;
 use App\Models\AdSet;
 use App\Models\Organization;
+use App\Support\Abbruchvermerk;
 use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Kampagnenverwaltung;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -61,6 +62,32 @@ final class KampagneLoeschen implements ShouldBeUnique, ShouldQueue
             'art' => $grund::class,
             'meldung' => $grund->getMessage(),
         ]);
+
+        $organisation = Organization::query()->whereUuid($this->organisation)->first();
+
+        if (! $organisation instanceof Organization) {
+            return;
+        }
+
+        // **Der Vermerk geht zurueck.** Eine Zeile, die auf ewig "wird
+        // entfernt" sagt, ist schlimmer als eine, die wieder normal dasteht:
+        // die zweite kann man erneut loeschen, die erste nur noch ansehen.
+        app(TenantContext::class)->runAs($organisation, function () use ($grund): void {
+            $kampagne = AdCampaign::query()->whereUuid($this->kampagne)->first();
+
+            if (! $kampagne instanceof AdCampaign) {
+                return;
+            }
+
+            $kampagne->deleting_at = null;
+            $kampagne->sync_error = Abbruchvermerk::satz(
+                $grund,
+                null,
+                'Kampagne löschen',
+                $this->kampagne,
+            );
+            $kampagne->save();
+        });
     }
 
     public function handle(TenantContext $mandant, Kampagnenverwaltung $verwaltung): void

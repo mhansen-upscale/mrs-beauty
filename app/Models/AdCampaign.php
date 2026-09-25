@@ -42,6 +42,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $stops_at
  * @property CarbonImmutable|null $synced_at
  * @property CarbonImmutable|null $vanished_at
+ * @property CarbonImmutable|null $deleting_at
  * @property-read AdAccount $account
  */
 class AdCampaign extends TenantModel implements HasPersonalData
@@ -70,6 +71,7 @@ class AdCampaign extends TenantModel implements HasPersonalData
             'stops_at' => 'immutable_datetime',
             'synced_at' => 'immutable_datetime',
             'vanished_at' => 'immutable_datetime',
+            'deleting_at' => 'immutable_datetime',
         ];
     }
 

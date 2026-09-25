@@ -496,9 +496,12 @@ final class WerbekontoController extends Controller
             );
         }
 
-        // Lokal sofort als verschwunden markieren waere falsch: geloescht
-        // wird sie, nicht vermisst. Bis der Auftrag durch ist, steht sie
-        // weiter da -- mit ihrem Zustand daneben.
+        // **Sofort sichtbar, auch wenn erst die Warteschlange loescht.** Ohne
+        // diesen Vermerk steht die Zeile nach dem Klick unveraendert da, als
+        // waere nichts geschehen (gemeldet am 24.09.2026).
+        $kampagne->deleting_at = CarbonImmutable::now();
+        $kampagne->save();
+
         KampagneLoeschen::dispatch((string) $organisation->uuid, (string) $kampagne->uuid);
 
         return redirect()->route('werbung.index')->with('erfolg', 'Die Kampagne wird entfernt.');

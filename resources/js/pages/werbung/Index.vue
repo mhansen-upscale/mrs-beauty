@@ -29,6 +29,7 @@ interface Kampagne extends Record<string, unknown> {
     gruppen: number;
     anzeigen: number;
     verschwunden: boolean;
+    wirdEntfernt: boolean;
     katalogtreffer: string | null;
     zahlen: Kennzahlen | null;
     uebertragung: string;
@@ -291,7 +292,7 @@ const uebertraegtGerade = (zeile: Kampagne): boolean =>
  * Ein Auftrag laeuft ueber die Warteschlange (Regel 4); ohne das Nachladen
  * saehe man das Ergebnis erst beim naechsten Neuladen im Browser.
  */
-const laeuft = computed<boolean>(() => props.kampagnen.some(uebertraegtGerade));
+const laeuft = computed<boolean>(() => props.kampagnen.some((k) => uebertraegtGerade(k) || k.wirdEntfernt));
 
 useNachladen(laeuft, ['kampagnen']);
 </script>
@@ -512,10 +513,17 @@ useNachladen(laeuft, ['kampagnen']);
                 <DataTable :zeilen="kampagnen" :spalten="spalten" schluessel="uuid" :suchfelder="['name', 'kennung']">
                     <template #leer>Noch keine Kampagnen gelesen.</template>
                     <template #zelle-name="{ zeile }">
-                        <span :class="zeile.verschwunden ? 'text-muted-foreground line-through' : ''">{{ zeile.name ?? zeile.kennung }}</span>
+                        <span :class="zeile.verschwunden || zeile.wirdEntfernt ? 'text-muted-foreground line-through' : ''">{{
+                            zeile.name ?? zeile.kennung
+                        }}</span>
                     </template>
                     <template #zelle-zustand="{ zeile }">
-                        <Badge v-if="zeile.verschwunden" variant="secondary">bei Meta entfernt</Badge>
+                        <!-- Geloescht wird in der Warteschlange: bis dahin sagt die Zeile, was mit ihr geschieht. -->
+                        <Badge v-if="zeile.wirdEntfernt" variant="secondary">
+                            <Loader2 class="mr-1 size-3 animate-spin" />
+                            Wird entfernt
+                        </Badge>
+                        <Badge v-else-if="zeile.verschwunden" variant="secondary">bei Meta entfernt</Badge>
                         <Badge v-else :variant="zeile.zustand === 'ACTIVE' ? 'success' : 'secondary'">{{ zeile.zustand ?? '—' }}</Badge>
                     </template>
                     <template #zelle-tagesbudget="{ zeile }">{{ betrag(zeile.tagesbudget) }}</template>
@@ -555,21 +563,21 @@ useNachladen(laeuft, ['kampagnen']);
 
                     <template #aktionen="{ zeile }">
                         <AktionsButton
-                            v-if="!zeile.verschwunden && konto.verbunden"
+                            v-if="!zeile.verschwunden && !zeile.wirdEntfernt && konto.verbunden"
                             :icon="zeile.zustand === 'ACTIVE' ? Pause : Play"
                             :beschriftung="zeile.zustand === 'ACTIVE' ? 'Pausieren' : 'Starten'"
                             @click="umschalten(zeile)"
                         />
 
                         <AktionsButton
-                            v-if="zeile.eigene && !zeile.verschwunden"
+                            v-if="zeile.eigene && !zeile.verschwunden && !zeile.wirdEntfernt"
                             :icon="Pencil"
                             beschriftung="Budget und Zielgruppe bearbeiten"
                             @click="oeffneBearbeiten(zeile)"
                         />
 
                         <AktionsButton
-                            v-if="zeile.eigene"
+                            v-if="zeile.eigene && !zeile.wirdEntfernt"
                             :icon="Trash2"
                             beschriftung="Kampagne löschen"
                             variant="ghost"

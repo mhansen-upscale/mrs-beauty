@@ -613,6 +613,16 @@ it('loescht eine eigene Kampagne bei Meta und bei uns', function (): void {
 
     Queue::assertPushed(KampagneLoeschen::class);
 
+    alsMandant($aufbau->organisation);
+
+    // **Sofort sichtbar**, obwohl erst die Warteschlange loescht -- sonst
+    // steht die Zeile nach dem Klick unveraendert da.
+    expect(AdCampaign::query()->first()?->deleting_at)->not->toBeNull();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->get(route('werbung.index'))
+        ->assertInertia(fn ($seite) => $seite->where('kampagnen.0.wirdEntfernt', true));
+
     Http::fake(['graph.test/*' => Http::response(['success' => true])]);
 
     (new KampagneLoeschen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
@@ -627,6 +637,34 @@ it('loescht eine eigene Kampagne bei Meta und bei uns', function (): void {
 
     expect(AdCampaign::query()->count())->toBe(0)
         ->and(AdSet::query()->count())->toBe(0);
+});
+
+it('nimmt den Loeschvermerk zurueck, wenn der Auftrag aufgibt', function (): void {
+    $aufbau = new Werbeaufbau;
+    $standort = werbestandort();
+
+    Queue::fake();
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->post(route('werbung.kampagne.anlegen'), kampagnenformular($standort));
+
+    $kampagne = AdCampaign::query()->firstOrFail();
+    $kampagne->external_id = 'camp-1';
+    $kampagne->save();
+
+    actingAs(Werbeaufbau::leitung($aufbau->organisation))
+        ->delete(route('werbung.kampagne.loeschen', ['kampagne' => $kampagne->uuid]));
+
+    (new KampagneLoeschen((string) $aufbau->organisation->uuid, (string) $kampagne->uuid))
+        ->failed(new RuntimeException('Zeitüberschreitung'));
+
+    alsMandant($aufbau->organisation);
+
+    $frisch = AdCampaign::query()->first();
+
+    // Eine Zeile, die auf ewig "wird entfernt" sagt, laesst sich nur noch
+    // ansehen. Zurueckgenommen kann man es erneut versuchen.
+    expect($frisch?->deleting_at)->toBeNull()
+        ->and((string) $frisch?->sync_error)->toContain('aufgegeben');
 });
 
 it('loescht keine fremde Kampagne', function (): void {
