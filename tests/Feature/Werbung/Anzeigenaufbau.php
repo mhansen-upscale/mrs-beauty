@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Werbung;
 
+use App\Anzeigen\Bild;
+use App\Anzeigen\Grafikablage;
 use App\Compliance\Pruefgegenstand;
 use App\Compliance\Pruefung;
-use App\Datenschutz\Anhangspeicher;
-use App\Enums\AttachmentContext;
+use App\Enums\Bildformat;
 use App\Enums\Role;
 use App\Enums\SyncState;
 use App\Enums\Vorschlagsstatus;
@@ -18,6 +19,7 @@ use App\Models\AdSuggestion;
 use App\Models\Location;
 use App\Models\Organization;
 use App\Models\User;
+use App\Support\Uuid;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use Carbon\CarbonImmutable;
 
@@ -78,21 +80,44 @@ final class Anzeigenaufbau
         $this->gruppe = $gruppe;
     }
 
+    /**
+     * **Mit jedem Format**, wenn nichts anderes verlangt ist (WP-31b):
+     * geschaltet wird nur ein vollstaendiger Satz.
+     *
+     * @param  list<Bildformat>|null  $formate
+     */
     public function vorschlagMitGrafik(
         Vorschlagsstatus $status = Vorschlagsstatus::Freigegeben,
         string $ueberschrift = 'In Ruhe beraten lassen',
+        ?array $formate = null,
     ): AdSuggestion {
         $vorschlag = $this->vorschlagOhneGrafik($status, $ueberschrift);
 
-        app(Anhangspeicher::class)->lege(
-            traeger: $vorschlag,
-            inhalt: 'bilddaten',
-            dateiname: 'anzeige-'.$vorschlag->uuid.'.png',
-            kontext: AttachmentContext::BrandReference,
-            wer: User::factory()->fuer($this->werbung->organisation, Role::Owner)->create(),
-        );
+        $this->legeGrafik($vorschlag, $formate ?? Bildformat::cases());
 
         return $vorschlag->fresh() ?? $vorschlag;
+    }
+
+    /**
+     * Ein neuer Formatsatz zu einem Entwurf -- so, wie ihn das Bildmodell
+     * ablegt.
+     *
+     * @param  list<Bildformat>  $formate
+     */
+    public function legeGrafik(AdSuggestion $vorschlag, array $formate): void
+    {
+        $wer = User::factory()->fuer($this->werbung->organisation, Role::Owner)->create();
+        $satz = Uuid::generate();
+
+        foreach ($formate as $format) {
+            app(Grafikablage::class)->lege(
+                $vorschlag,
+                $format,
+                new Bild('bilddaten-'.$format->value, 'image/png', 'testmodell'),
+                $satz,
+                $wer,
+            );
+        }
     }
 
     /**

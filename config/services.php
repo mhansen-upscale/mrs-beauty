@@ -84,10 +84,34 @@ return [
         |
         | 2K statt 1K: fuenf statt drei Cent, und Schrift wird mit der
         | Aufloesung besser. Gegen zwei Euro Verkaufspreis ist das nichts.
+        |
+        | Hier steht, was fuer jedes Format gilt; was je Format anders ist,
+        | steht darunter und hat Vorrang.
         */
         'input' => [
-            'aspect_ratio' => env('KIE_ASPECT_RATIO', '1:1'),
             'resolution' => env('KIE_RESOLUTION', '2K'),
+        ],
+
+        /*
+        | Die Eingabefelder je Anzeigenformat (WP-31b).
+        |
+        | **Ein Format, das hier fehlt, wird nicht beauftragt.** Ohne
+        | Seitenverhaeltnis waehlt das Modell `auto`, und die Grafik kaeme im
+        | falschen Format zurueck -- bezahlt und ohne Fehler.
+        |
+        | **4:5 nimmt GPT Image 2 in 2K nicht an**: "for 2K resolution, the
+        | following aspect ratios are not supported: 5:4, 4:5, 3:1, 1:3, and
+        | 9:21" -- in 4K dagegen schon. Acht statt fuenf Cent, und die Schrift
+        | bleibt scharf; 1K waere billiger, aber an der Schrift ist das Modell
+        | schon einmal gescheitert. 1:1 wiederum nimmt es in 4K nicht an.
+        |
+        | Fundstelle: docs.kie.ai/market/gpt/gpt-image-2-text-to-image,
+        | Felder aspect_ratio und resolution (Stand 27.09.2026).
+        */
+        'formate' => [
+            '1x1' => ['aspect_ratio' => '1:1'],
+            '4x5' => ['aspect_ratio' => '4:5', 'resolution' => env('KIE_RESOLUTION_4X5', '4K')],
+            '9x16' => ['aspect_ratio' => '9:16'],
         ],
 
         // **Fuenf Minuten Geduld.** Ein echter Lauf am 20.09.2026 war nach

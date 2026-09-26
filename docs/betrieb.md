@@ -243,7 +243,12 @@ App Review. Die Praxis merkt davon nichts; Meta ordnet dann weniger zu.
 **`KIE_API_KEY`** ist der Zugang zur Bilderzeugung (WP-31). Ohne ihn entstehen
 Anzeigentexte, aber keine Bilder — die Oberfläche sagt es, statt einen Fehler
 zu zeigen. **`KIE_MODEL`** wählt das Bildmodell; die Eingabefelder dazu stehen
-in `services.kie.input` und unterscheiden sich je Modell.
+in `services.kie.input` und unterscheiden sich je Modell. **Seit WP-31b
+entsteht jede Grafik in drei Formaten** (1:1, 4:5, 9:16), die Felder je Format
+stehen in `services.kie.formate`. Wer das Modell wechselt, prüft sie mit: ein
+Format ohne Seitenverhältnis wird nicht beauftragt, und die Grafik meldet es.
+`KIE_RESOLUTION_4X5` steht auf 4K, weil GPT Image 2 das Hochformat in 2K
+ablehnt.
 
 **`ATTACHMENTS_DISK=s3`** legt Anhänge in einen Bucket statt auf die lokale
 Platte. **In Produktion ist das Pflicht**: Container werden ersetzt, und mit

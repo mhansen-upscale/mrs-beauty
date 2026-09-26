@@ -294,7 +294,8 @@ eine ungeprüfte Aussage.
 Die erste Fassung war eine Liste von Textkarten mit den Befunden darunter —
 lesbar, aber man sah nie die Anzeige, immer nur ihre Bestandteile.
 
-Jetzt ist es ein Raster quadratischer Kacheln im Ausspielformat: die Grafik
+Jetzt ist es ein Raster quadratischer Kacheln im Ausspielformat (seit
+**WP-31b** eines von dreien — die Kachel zeigt das Quadrat): die Grafik
 ist das Sichtbare, Ampel und Zustand liegen als kleines Abzeichen darauf,
 und entschieden wird im Detail — Bild groß links, Text und Befunde rechts,
 darunter *Freigeben*, *Übersteuern*, *Verwerfen*. Ein Entwurf ohne Grafik
@@ -566,3 +567,11 @@ Mitarbeiterin im Gespräch mit einer Kundin), Überschrift „Lass dich noch
 heute von uns beraten!" und Schaltfläche „Termin anfragen" fehlerfrei
 gesetzt, Markenfarbe aufgegriffen. Dauer 1 Minute statt der 4:47 des alten
 Modells.
+
+
+## Nachtrag: drei Formate statt eines Quadrats
+
+Jede Grafik entstand quadratisch und ging so in jede Platzierung, auch in
+Stories. Seit **WP-31b** (`specs/WP-31b-anzeigenformate.md`, Entscheidung
+C13) entsteht sie in 1:1, 4:5 und 9:16, gleichzeitig beauftragt, und ein
+Formatsatz zählt als eine Grafik (B13).

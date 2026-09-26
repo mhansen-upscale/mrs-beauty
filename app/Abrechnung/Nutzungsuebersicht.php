@@ -6,9 +6,8 @@ namespace App\Abrechnung;
 
 use App\Enums\MessageCostCategory;
 use App\Enums\MessageDirection;
-use App\Models\AdSuggestion;
+use App\Models\AdSuggestionImage;
 use App\Models\AgentRun;
-use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\WaitlistOffer;
 use Carbon\CarbonImmutable;
@@ -132,13 +131,18 @@ final class Nutzungsuebersicht
     {
         // **Gezaehlt wird jede erzeugte Grafik, nicht jeder Entwurf.** Wer
         // zu einem Entwurf eine zweite erzeugen laesst, bekommt eine zweite
-        // Datei und eine zweite Position -- sie kostet dasselbe wie die
-        // erste. Der Entwurf als Zaehleinheit haette das Nacherzeugen
-        // verschenkt.
-        return Attachment::query()
-            ->where('attachable_type', AdSuggestion::class)
+        // Position -- sie kostet dasselbe wie die erste. Der Entwurf als
+        // Zaehleinheit haette das Nacherzeugen verschenkt.
+        //
+        // **Eine Grafik ist ein Formatsatz, nicht eine Datei** (B13,
+        // angepasst am 27.09.2026). Die drei Formate sind Pflicht jeder
+        // Anzeige; je Datei gezaehlt, wuerden aus 30 enthaltenen Grafiken
+        // stillschweigend 10 Anzeigen. Ein Satz, von dem nur ein Format
+        // ankam, zaehlt trotzdem -- er hat Geld gekostet.
+        return AdSuggestionImage::query()
             ->whereBetween('created_at', [$von, $bis])
-            ->count();
+            ->distinct()
+            ->count('batch');
     }
 
     public function angebote(CarbonImmutable $von, CarbonImmutable $bis): int

@@ -6,7 +6,9 @@ namespace App\Werbung\Verwaltung;
 
 use App\Datenschutz\Anhangabgelehnt;
 use App\Datenschutz\Anhangspeicher;
+use App\Enums\Bildformat;
 use App\Enums\SyncState;
+use App\Enums\Vorschlagsstatus;
 use App\Models\Ad;
 use App\Models\AdAccount;
 use App\Models\AdCampaign;
@@ -19,6 +21,7 @@ use App\Tenancy\TenantContext;
 use App\Werbung\Meta\Graphleser;
 use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
+use stdClass;
 
 /**
  * Aus einem freigegebenen Entwurf wird eine Anzeige.
@@ -77,7 +80,7 @@ final class Anzeigenschaltung
     /**
      * Traegt eine geplante Anzeige zu Meta.
      *
-     * Drei Schritte, in dieser Reihenfolge: Bild hochladen, Creative anlegen,
+     * Drei Schritte, in dieser Reihenfolge: Bilder hochladen, Creative anlegen,
      * Anzeige anlegen. Jeder braucht das Ergebnis des vorigen.
      *
      * **Erst nachsehen, dann anlegen.** Metas Marketing-API kennt keinen
@@ -113,8 +116,20 @@ final class Anzeigenschaltung
             ));
         }
 
-        $anzeige->image_hash ??= $this->ladeBildHoch($vorschlag, $konto, $token);
-        $anzeige->save();
+        // **Die Bilder werden beim Uebertragen gelesen, nicht beim Schalten.**
+        // Eine neue Grafik nach dem Schalten nimmt dem Entwurf die Freigabe
+        // (WP-31) -- ungeprueft darf sie nicht hinaus, auch nicht ueber
+        // "Erneut uebertragen" (WP-31b).
+        if ($vorschlag->status !== Vorschlagsstatus::Freigegeben) {
+            throw new Werbefehler(new Fehlereinordnung(
+                'suggestion_not_approved',
+                wiederholen: false,
+                zustand: null,
+                klartext: 'Der Entwurf zu dieser Anzeige ist nicht mehr freigegeben — etwa weil eine neue Grafik entstanden ist. Bitte prüfen, freigeben und erneut übertragen.',
+            ));
+        }
+
+        $this->ladeBilderHoch($anzeige, $vorschlag, $konto, $token);
 
         $creative = $anzeige->creative_external_id ?? $this->legeCreative($anzeige, $vorschlag, $konto, $token);
 
@@ -197,16 +212,26 @@ final class Anzeigenschaltung
     }
 
     /**
-     * Laedt die Grafik hoch und gibt Metas Bildkennung zurueck.
+     * Laedt jedes Format hoch, das Meta noch nicht hat (WP-31b).
      *
-     * Das Bild liegt bei uns (C10) und geht als Base64 hinaus -- Metas
-     * `/adimages` nimmt es so entgegen, ohne Multipart.
+     * **Geschaltet wird nur ein vollstaendiger Satz** (C13). Die Pruefung beim
+     * Schalten reicht nicht: zwischen Schalten und Uebertragen kann eine
+     * Grafik verschwinden -- und eine Anzeige mit zwei von drei Formaten
+     * liefert Meta trotzdem aus, mit einem Quadrat in der Story.
+     *
+     * **Die Kennung gehoert zur Datei, nicht zum Format.** Eine neue Grafik
+     * ist ein neues Bild; mit der Kennung der alten ginge das alte hinaus.
+     * Hat sich eine Kennung geaendert, entsteht auch ein neues Creative.
+     *
+     * Nach jedem Format wird gespeichert: ein Lauf, der beim dritten
+     * abbricht, laedt beim naechsten nur noch das dritte hoch.
      */
-    private function ladeBildHoch(AdSuggestion $vorschlag, AdAccount $konto, string $token): string
+    private function ladeBilderHoch(Ad $anzeige, AdSuggestion $vorschlag, AdAccount $konto, string $token): void
     {
-        $anhang = $vorschlag->bild();
+        $bilder = $vorschlag->bilder();
+        $fehlend = $vorschlag->fehlendeFormate();
 
-        if (! $anhang instanceof Attachment) {
+        if ($bilder === []) {
             throw new Werbefehler(new Fehlereinordnung(
                 'no_image',
                 wiederholen: false,
@@ -215,6 +240,38 @@ final class Anzeigenschaltung
             ));
         }
 
+        if ($fehlend !== []) {
+            throw new Werbefehler(new Fehlereinordnung(
+                'missing_formats',
+                wiederholen: false,
+                zustand: null,
+                klartext: 'Zu dieser Anzeige fehlen Formate: '.self::formatliste($fehlend).'. Bitte erzeugen Sie die Grafik neu.',
+            ));
+        }
+
+        $kennungen = $anzeige->image_hashes ?? [];
+
+        foreach ($bilder as $format => $anhang) {
+            if (isset($kennungen[$format]) && $kennungen[$format]['anhang'] === $anhang->uuid) {
+                continue;
+            }
+
+            $kennungen[$format] = ['anhang' => (string) $anhang->uuid, 'hash' => $this->ladeBildHoch($anhang, $konto, $token)];
+
+            $anzeige->image_hashes = $kennungen;
+            $anzeige->creative_external_id = null;
+            $anzeige->save();
+        }
+    }
+
+    /**
+     * Laedt eine Grafik hoch und gibt Metas Bildkennung zurueck.
+     *
+     * Das Bild liegt bei uns (C10) und geht als Base64 hinaus -- Metas
+     * `/adimages` nimmt es so entgegen, ohne Multipart.
+     */
+    private function ladeBildHoch(Attachment $anhang, AdAccount $konto, string $token): string
+    {
         // **Der Datensatz kann da sein und die Datei fort.** Dann wirft der
         // Anhangspeicher, nicht Meta -- und der Auftrag lief bis zum
         // 24.09.2026 in den Standardfall: "Die Ursache liegt bei uns". Das
@@ -246,11 +303,18 @@ final class Anzeigenschaltung
     }
 
     /**
-     * Das Creative: Bild, Text, Ueberschrift, Schaltflaeche und das Ziel.
+     * Das Creative: Bilder, Text, Ueberschrift, Schaltflaeche und das Ziel.
      *
      * **Hier darf die Leistung stehen** (C9). Das Ziel ist die eigene
      * Buchungsseite -- eine fremde Zielseite koennte alles behaupten, und
      * geprueft haben wir nur unsere.
+     *
+     * **Eine Anzeige, Formate je Platzierung** (WP-31b, C13). Nicht drei
+     * Anzeigen: die stuenden mit drei Auslieferungen im Wettbewerb
+     * gegeneinander, und die Kennzahlen zerfielen in drei Teile. Meta sieht
+     * dafuer `asset_feed_spec` mit Regeln vor, welche Platzierung welches
+     * Bild zeigt (Placement Asset Customization). Text und Ziel stehen darin
+     * je einmal; die Seite bleibt im `object_story_spec` der Absender.
      */
     private function legeCreative(Ad $anzeige, AdSuggestion $vorschlag, AdAccount $konto, string $token): string
     {
@@ -265,28 +329,103 @@ final class Anzeigenschaltung
             ));
         }
 
-        // **Was leer ist, geht nicht mit.** `description` ist nullable, und ein
-        // `"description": null` beantwortet Meta mit "Invalid parameter" --
-        // es lehnt damit das ganze Creative ab, nicht nur das Feld. Der
-        // Handlungsaufruf steht ausserhalb der Filterung: er ist ein Array
-        // und immer gesetzt.
-        $inhalt = array_filter([
-            'image_hash' => $anzeige->image_hash,
-            'link' => $this->ziel(),
-            'message' => $vorschlag->body,
-            'name' => $vorschlag->headline,
-            'description' => $vorschlag->description,
-        ], fn (?string $wert): bool => $wert !== null && $wert !== '');
+        $kennungen = $anzeige->image_hashes ?? [];
 
-        $inhalt['call_to_action'] = ['type' => (string) config('mrs.ads.call_to_action')];
+        // **Was leer ist, geht nicht mit.** `description` ist nullable, und ein
+        // leerer Wert liess Meta am 23.09.2026 das ganze Creative ablehnen
+        // ("Invalid parameter"), nicht nur das Feld.
+        $inhalt = array_filter([
+            'images' => array_map(
+                fn (Bildformat $format): array => [
+                    'hash' => (string) ($kennungen[$format->value]['hash'] ?? ''),
+                    'adlabels' => [['name' => $this->label($anzeige, $format)]],
+                ],
+                Bildformat::cases(),
+            ),
+            'bodies' => self::text($vorschlag->body),
+            'titles' => self::text($vorschlag->headline),
+            'descriptions' => self::text($vorschlag->description),
+            'link_urls' => [['website_url' => $this->ziel()]],
+            'call_to_action_types' => [(string) config('mrs.ads.call_to_action')],
+            'ad_formats' => ['SINGLE_IMAGE'],
+            'asset_customization_rules' => $this->regeln($anzeige),
+            'optimization_type' => 'PLACEMENT',
+        ], fn (array|string $wert): bool => $wert !== []);
 
         return $this->schreiber->lege($token, $konto->external_id.'/adcreatives', [
             'name' => (string) $anzeige->name,
-            'object_story_spec' => (string) json_encode([
-                'page_id' => $seite,
-                'link_data' => $inhalt,
-            ], JSON_UNESCAPED_UNICODE),
+            'object_story_spec' => (string) json_encode(['page_id' => $seite], JSON_UNESCAPED_UNICODE),
+            'asset_feed_spec' => (string) json_encode($inhalt, JSON_UNESCAPED_UNICODE),
         ]);
+    }
+
+    /**
+     * Welche Platzierung welches Format zeigt.
+     *
+     * **Eine Regel je Plattform**, wie in Metas Beispielen. **Die
+     * Auffangregel zuletzt** und ohne Einschraenkung -- als JSON-*Objekt*:
+     * ein leeres PHP-Array wuerde `[]`, und Metas Beispiel zeigt `{}`.
+     *
+     * Fundstelle: developers.facebook.com, "Placement Asset Customization"
+     * (Stand 28.06.2026). Die Platzierungen stehen in `mrs.ads.formate`.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function regeln(Ad $anzeige): array
+    {
+        $regeln = [];
+        $auffang = [];
+
+        foreach (Bildformat::cases() as $format) {
+            $label = ['name' => $this->label($anzeige, $format)];
+            $platzierungen = (array) config('mrs.ads.formate.'.$format->value.'.platzierungen', []);
+
+            if ($platzierungen === []) {
+                $auffang[] = ['customization_spec' => new stdClass, 'image_label' => $label];
+
+                continue;
+            }
+
+            foreach ($platzierungen as $plattform => $plaetze) {
+                $regeln[] = [
+                    'customization_spec' => [
+                        'publisher_platforms' => [(string) $plattform],
+                        $plattform.'_positions' => array_values((array) $plaetze),
+                    ],
+                    'image_label' => $label,
+                ];
+            }
+        }
+
+        return [...$regeln, ...$auffang];
+    }
+
+    /**
+     * Das Label eines Formats.
+     *
+     * **Regel 2 gilt auch hier**: Labels liegen offen im Werbekonto wie ein
+     * Kampagnenname. Sie tragen das Merkmal der Anzeige und das Format --
+     * sonst nichts.
+     */
+    private function label(Ad $anzeige, Bildformat $format): string
+    {
+        return 'anzeige_'.$anzeige->client_token.'_'.$format->value;
+    }
+
+    /**
+     * @return list<array{text: string}>
+     */
+    private static function text(?string $wert): array
+    {
+        return $wert === null || $wert === '' ? [] : [['text' => $wert]];
+    }
+
+    /**
+     * @param  list<Bildformat>  $formate
+     */
+    private static function formatliste(array $formate): string
+    {
+        return implode(', ', array_map(fn (Bildformat $f): string => $f->beschreibung(), $formate));
     }
 
     /**

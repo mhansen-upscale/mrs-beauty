@@ -14,11 +14,22 @@ namespace App\Anzeigen;
 interface Bildmodell
 {
     /**
-     * Erzeugt ein Bild und liefert es **fertig heruntergeladen** zurueck.
+     * Erzeugt je Format ein Bild und liefert es **fertig heruntergeladen**
+     * zurueck (WP-31b).
      *
-     * Wirft BildNichtErzeugt, wenn der Anbieter nicht antwortet oder ablehnt.
+     * **Gleichzeitig, nicht nacheinander**: ein Bild braucht ein bis drei
+     * Minuten, drei nacheinander passten nicht in den Auftrag der
+     * Warteschlange.
+     *
+     * **Ein gescheitertes Format wirft nicht**, es steht mit seinem Grund im
+     * Bildsatz. Geworfen wird nur, wenn gar nichts geht -- etwa ohne
+     * Anbindung.
+     *
+     * @param  array<string, string>  $auftraege  je Format (Wert von `Bildformat`) ein Auftrag
+     *
+     * @throws BildNichtErzeugt
      */
-    public function erzeuge(string $auftrag): Bild;
+    public function erzeuge(array $auftraege): Bildsatz;
 
     /** Ist ueberhaupt eines angebunden? */
     public function angebunden(): bool;

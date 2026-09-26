@@ -9,13 +9,13 @@ use App\Agent\ModellNichtErreichbar;
 use App\Agent\Sprachmodell;
 use App\Compliance\Pruefgegenstand;
 use App\Compliance\Pruefung;
-use App\Datenschutz\Anhangspeicher;
-use App\Enums\AttachmentContext;
+use App\Enums\Bildformat;
 use App\Enums\Vorschlagsstatus;
 use App\Marke\Markenprofil;
 use App\Models\AdSuggestion;
 use App\Models\Branding;
 use App\Models\User;
+use App\Support\Uuid;
 use Carbon\CarbonImmutable;
 
 /**
@@ -40,7 +40,7 @@ final class Vorschlagslauf
         private readonly Markenprofil $profil,
         private readonly Pruefung $pruefung,
         private readonly Bildmodell $bilder,
-        private readonly Anhangspeicher $anhaenge,
+        private readonly Grafikablage $ablage,
         private readonly Kontingente $kontingente,
     ) {}
 
@@ -139,6 +139,12 @@ final class Vorschlagslauf
      * Der woechentliche Lauf erzeugt keines: ein Bild kostet Geld, und
      * nichts gibt Geld aus, bevor jemand es will (dieselbe Regel wie beim
      * Anlegen einer Kampagne in WP-27).
+     *
+     * **Ein Auftrag je Format** (WP-31b): das Modell entwirft jedes eigens,
+     * statt ein Quadrat zu beschneiden -- die Schrift steht im Bild, und ein
+     * Zuschnitt schnitte sie ab.
+     *
+     * @throws BildNichtErzeugt wenn kein einziges Format ankam
      */
     public function erzeugeBild(AdSuggestion $vorschlag, User $wer, ?CarbonImmutable $jetzt = null): void
     {
@@ -146,24 +152,57 @@ final class Vorschlagslauf
 
         $this->pruefeBildmoeglich($jetzt);
 
-        $auftrag = $this->auftrag($vorschlag);
+        $auftraege = [];
+
+        foreach (Bildformat::cases() as $format) {
+            $auftraege[$format->value] = $this->auftrag($vorschlag, $format);
+        }
 
         // **Gezaehlt wird vor dem Erzeugen.** Ein Auftrag, der bei kie.ai
         // ankommt und dessen Antwort verlorengeht, hat trotzdem Geld
         // gekostet -- dieselbe Ueberlegung wie bei B7.
-        $vorschlag->image_prompt = $auftrag;
+        $vorschlag->image_prompt = (string) json_encode($auftraege, JSON_UNESCAPED_UNICODE);
         $vorschlag->image_requested_at = $jetzt;
         $vorschlag->image_error = null;
         $vorschlag->save();
 
-        $bild = $this->bilder->erzeuge($auftrag);
+        $ergebnis = $this->bilder->erzeuge($auftraege);
 
-        $vorschlag->image_model = $bild->modell;
+        if ($ergebnis->bilder === []) {
+            throw new BildNichtErzeugt(array_values($ergebnis->fehler)[0] ?? 'Das Bildmodell hat kein Bild geliefert.');
+        }
+
+        // Ein Satz, eine Kennung -- und eine Grafik im Kontingent (B13).
+        $satz = Uuid::generate();
+
+        foreach ($ergebnis->bilder as $format => $bild) {
+            $this->ablage->lege($vorschlag, Bildformat::from($format), $bild, $satz, $wer);
+            $vorschlag->image_model = $bild->modell;
+        }
+
+        // **Was fehlt, steht am Entwurf** -- welches Format und warum, im
+        // Produkt und nicht nur im Log (Regel 4). Die anderen bleiben: sie
+        // sind bezahlt.
+        $vorschlag->image_error = $ergebnis->fehler === [] ? null : $this->fehlt($ergebnis->fehler);
         $vorschlag->save();
 
-        $this->legeGrafik($vorschlag, $bild->inhalt, $bild->mime, $wer);
-
         $this->pruefeMitBild($vorschlag, $jetzt);
+    }
+
+    /**
+     * "Nicht entstanden: Stories (9:16). <Grund>" -- kurz genug fuer die
+     * Spalte, und der erste Grund steht dabei.
+     *
+     * @param  array<string, string>  $fehler
+     */
+    private function fehlt(array $fehler): string
+    {
+        $formate = array_map(
+            fn (string $format): string => Bildformat::tryFrom($format)?->beschreibung() ?? $format,
+            array_keys($fehler),
+        );
+
+        return mb_substr('Nicht entstanden: '.implode(', ', $formate).'. '.array_values($fehler)[0], 0, 255);
     }
 
     /**
@@ -216,35 +255,6 @@ final class Vorschlagslauf
     }
 
     /**
-     * Legt die erzeugte Grafik ab.
-     *
-     * **Die vorige bleibt liegen.** Der erste Entwurf loeschte sie -- eine
-     * Grafik kostet aber zwei Euro, und wer sie spurlos ueberschreibt, kann
-     * weder nachrechnen, wofuer bezahlt wurde, noch zur besseren Fassung
-     * zurueck. Gezeigt wird die neueste (siehe AdSuggestion::bild()).
-     */
-    private function legeGrafik(AdSuggestion $vorschlag, string $inhalt, string $mime, User $wer): void
-    {
-        // Liegt bei uns, nicht beim Anbieter (C10).
-        $this->anhaenge->lege(
-            traeger: $vorschlag,
-            inhalt: $inhalt,
-            dateiname: 'anzeige-'.$vorschlag->uuid.'.'.$this->endung($mime),
-            kontext: AttachmentContext::BrandReference,
-            wer: $wer,
-        );
-    }
-
-    private function endung(string $mime): string
-    {
-        return match ($mime) {
-            'image/webp' => 'webp',
-            'image/jpeg' => 'jpg',
-            default => 'png',
-        };
-    }
-
-    /**
      * Der Auftrag ans Bildmodell.
      *
      * **Der Text kommt mit**, woertlich: das Modell setzt ihn in die Grafik.
@@ -267,14 +277,14 @@ final class Vorschlagslauf
      * nach § 11 Abs. 1 S. 3 Nr. 1 HWG die Vorher-Nachher-Darstellung, nicht
      * der Mensch.
      */
-    private function auftrag(AdSuggestion $vorschlag): string
+    private function auftrag(AdSuggestion $vorschlag, Bildformat $format): string
     {
         $profil = $this->profil->alsDatenblock();
         $farbe = Branding::query()->first()?->primary_color;
         $motiv = $vorschlag->image_brief;
 
         return implode(' ', array_filter([
-            'Quadratische Werbegrafik für eine Praxis für ästhetische Behandlungen in Deutschland.',
+            $this->grafikart($format).' für eine Praxis für ästhetische Behandlungen in Deutschland.',
 
             // **Der Text steht mit im Auftrag**, wörtlich und in
             // Anführungszeichen: ein Modell, das paraphrasieren darf,
@@ -288,7 +298,7 @@ final class Vorschlagslauf
                 : null,
 
             'Deutsche Rechtschreibung, korrekte Umlaute, kein weiterer Text, keine erfundenen Wörter.',
-            'Die Schrift steht in der unteren Bildhälfte und liegt auf einer ruhigen Fläche, damit sie liest.',
+            $this->schriftlage($format),
 
             // Das Motiv der Praxis -- abgegrenzt und als Beschreibung
             // gekennzeichnet, damit ein "ignoriere alle Vorgaben" darin eine
@@ -310,5 +320,43 @@ final class Vorschlagslauf
             is_string($profil['zielgruppe'] ?? null) ? 'Sie spricht an: '.$profil['zielgruppe'] : null,
             'Stimmung: '.(string) ($profil['tonBeschreibung'] ?? 'ruhig und hochwertig'),
         ]));
+    }
+
+    /**
+     * Was fuer eine Grafik -- mit Seitenverhaeltnis.
+     *
+     * **Das Format steht im Satz, nicht nur im Feld.** Die erste Fassung
+     * schrieb "Quadratische Werbegrafik" in jeden Auftrag; ein Modell, dem
+     * man 9:16 schickt und "quadratisch" sagt, hat die Wahl.
+     */
+    private function grafikart(Bildformat $format): string
+    {
+        return match ($format) {
+            Bildformat::Quadrat => 'Quadratische Werbegrafik im Format 1:1',
+            Bildformat::Hochformat => 'Hochformatige Werbegrafik im Format 4:5 für den Feed',
+            Bildformat::Story => 'Bildschirmfüllende Werbegrafik im Hochformat 9:16 für Stories',
+        };
+    }
+
+    /**
+     * Wo die Schrift steht.
+     *
+     * **Stories haben Raender, die nicht uns gehoeren**: oben Profilbild und
+     * Name, unten Antwortfeld und Schaltflaechen. Schrift dort verschwindet
+     * unter der Oberflaeche der App. Die Werte stehen in
+     * `mrs.ads.formate.9x16.schutzzone`.
+     */
+    private function schriftlage(Bildformat $format): string
+    {
+        $zone = config('mrs.ads.formate.'.$format->value.'.schutzzone');
+
+        if (! is_array($zone)) {
+            return 'Die Schrift steht in der unteren Bildhälfte und liegt auf einer ruhigen Fläche, damit sie liest.';
+        }
+
+        return 'Die Schrift steht im mittleren Bereich und liegt auf einer ruhigen Fläche, damit sie liest.'
+            .' Frei von Schrift und Schaltfläche bleiben oben '.(int) ($zone['oben'] ?? 0).' %, unten '
+            .(int) ($zone['unten'] ?? 0).' % und seitlich je '.(int) ($zone['seiten'] ?? 0).' % der Fläche:'
+            .' dort liegen Profilzeile, Antwortfeld und Schaltflächen der App.';
     }
 }

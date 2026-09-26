@@ -42,6 +42,9 @@ interface Vorschlag {
     darfFreigeben: boolean;
     hatBild: boolean;
     bildUrl: string | null;
+
+    /** Jedes Format, auch das fehlende (`url` dann `null`). */
+    bilder: Formatbild[];
     bildLaeuft: boolean;
     bildFehler: string | null;
     motiv: string | null;
@@ -51,6 +54,20 @@ interface Vorschlag {
 
     /** Haengt die Uebertragung zu Meta? `null`, solange alles durch ist. */
     uebertragung: Uebertragung | null;
+}
+
+/**
+ * Eine Grafik in einem Format.
+ *
+ * **Drei Formate, dreimal Schrift.** Das Bildmodell setzt die Überschrift in
+ * jedes Format eigens — wer freigibt, muss alle drei lesen.
+ */
+interface Formatbild {
+    format: string;
+    name: string;
+    seitenverhaeltnis: string;
+    einsatz: string;
+    url: string | null;
 }
 
 interface Uebertragung {
@@ -164,8 +181,36 @@ const gewaehlt = computed<Vorschlag | null>(() => props.vorschlaege.find((v) => 
  */
 const motiv = ref('');
 
+/*
+ * **Ein Format groß, alle drei als Miniatur darüber.** Die Miniaturen sind
+ * zugleich die Auswahl und der Überblick, welches fehlt.
+ */
+const formatGewaehlt = ref<string>('1x1');
+const formatbild = computed<Formatbild | null>(
+    () => gewaehlt.value?.bilder.find((b) => b.format === formatGewaehlt.value) ?? gewaehlt.value?.bilder[0] ?? null,
+);
+
+// Als ganze Klassennamen, damit Tailwind sie im Quelltext findet.
+const seitenverhaeltnisKlasse: Record<string, string> = { '1x1': 'aspect-square', '4x5': 'aspect-[4/5]', '9x16': 'aspect-[9/16]' };
+
+const fehlendeFormate = (v: Vorschlag): Formatbild[] => v.bilder.filter((b) => b.url === null);
+
+/** Geschaltet wird nur ein vollständiger Satz — mit zwei von drei Formaten zeigte Meta ein Quadrat in der Story. */
+const schaltbarGrund = (v: Vorschlag): string => {
+    if (!props.kampagnen.length) {
+        return 'Legen Sie zuerst eine Kampagne an.';
+    }
+
+    const fehlen = fehlendeFormate(v);
+
+    return fehlen.length
+        ? `Es fehlen Formate: ${fehlen.map((b) => `${b.name} (${b.seitenverhaeltnis})`).join(', ')}. Bitte erzeugen Sie die Grafik neu.`
+        : '';
+};
+
 const oeffne = (vorschlag: Vorschlag) => {
     gewaehltId.value = vorschlag.uuid;
+    formatGewaehlt.value = '1x1';
     motiv.value = vorschlag.motiv ?? '';
     befundeOffen.value = false;
     detailOffen.value = true;
@@ -377,6 +422,18 @@ useNachladen(laeuft, ['vorschlaege']);
                         </span>
 
                         <!--
+                            Eine neue Fassung entsteht, die alte steht noch da.
+                            Ohne diesen Hinweis sähe die Kachel nach dem Klick
+                            aus, als wäre nichts passiert.
+                        -->
+                        <span v-if="vorschlag.bildUrl && vorschlag.bildLaeuft" class="absolute right-2 top-2">
+                            <Badge variant="outline" class="gap-1 bg-background/90 backdrop-blur-sm">
+                                <Loader2 class="size-3 animate-spin" />
+                                Neue Grafik
+                            </Badge>
+                        </span>
+
+                        <!--
                             Entweder Ampel oder Entscheidung. „Bitte prüfen"
                             neben „Freigegeben" ist ein Rat, der sich erledigt
                             hat. Deckende Fläche, weil darunter jedes Foto
@@ -417,6 +474,19 @@ useNachladen(laeuft, ['vorschlaege']);
                         </span>
 
                         <!--
+                            Ein unvollständiger Satz lässt sich nicht schalten.
+                            In der Fußzeile, nicht auf dem Bild: in dessen
+                            unterer Hälfte steht die Schrift der Grafik.
+                        -->
+                        <span
+                            v-if="vorschlag.hatBild && fehlendeFormate(vorschlag).length"
+                            class="mt-1 flex items-center gap-1.5 text-xs text-warning"
+                        >
+                            <AlertTriangle class="size-3 shrink-0" />
+                            {{ vorschlag.bilder.length - fehlendeFormate(vorschlag).length }} von {{ vorschlag.bilder.length }} Formaten
+                        </span>
+
+                        <!--
                             Eine Anzeige, die nicht angekommen ist, sieht sonst
                             aus wie eine, die laeuft.
                         -->
@@ -436,7 +506,7 @@ useNachladen(laeuft, ['vorschlaege']);
 
             <p class="text-xs text-muted-foreground">
                 Ein freigegebener Entwurf ist ein Entwurf — den Weg zu einer laufenden Anzeige gehen Sie über
-                <strong>Kampagnen</strong>. Noch {{ bilderRest }} Grafiken in diesem Monat enthalten.
+                <strong>Kampagnen</strong>. Noch {{ bilderRest }} Grafiken in diesem Monat enthalten, jede in drei Formaten.
             </p>
         </div>
 
@@ -453,9 +523,77 @@ useNachladen(laeuft, ['vorschlaege']);
                     </DialogDescription>
                 </DialogHeader>
 
-                <div v-if="gewaehlt" class="grid gap-5 sm:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
+                <div v-if="gewaehlt" class="grid gap-5 sm:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
                     <div class="space-y-3">
-                        <img v-if="gewaehlt.bildUrl" :src="gewaehlt.bildUrl" alt="" class="aspect-square w-full rounded-md border object-cover" />
+                        <template v-if="gewaehlt.hatBild">
+                            <!--
+                                **Jedes Format, nicht nur das Quadrat.** Meta
+                                zeigt im Feed das Hochformat und in Stories 9:16
+                                — und auf jedem steht eine eigene Schrift.
+                            -->
+                            <div class="grid grid-cols-3 gap-2" role="tablist" aria-label="Format">
+                                <button
+                                    v-for="bild in gewaehlt.bilder"
+                                    :key="bild.format"
+                                    type="button"
+                                    role="tab"
+                                    :aria-selected="formatGewaehlt === bild.format"
+                                    class="flex flex-col items-center gap-1 rounded-md border p-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    :class="formatGewaehlt === bild.format ? 'border-foreground/40 bg-muted' : 'hover:bg-muted/50'"
+                                    @click="formatGewaehlt = bild.format"
+                                >
+                                    <span class="flex h-12 items-center justify-center">
+                                        <img
+                                            v-if="bild.url"
+                                            :src="bild.url"
+                                            alt=""
+                                            class="h-12 rounded-sm object-cover"
+                                            :class="seitenverhaeltnisKlasse[bild.format]"
+                                        />
+                                        <span
+                                            v-else
+                                            class="flex h-12 items-center justify-center rounded-sm border border-dashed border-warning/60"
+                                            :class="seitenverhaeltnisKlasse[bild.format]"
+                                        >
+                                            <AlertTriangle class="size-3 text-warning" />
+                                        </span>
+                                    </span>
+                                    <span class="font-medium">{{ bild.seitenverhaeltnis }}</span>
+                                </button>
+                            </div>
+
+                            <!-- Eine feste Bühne: beim Umschalten springt das Detail nicht. -->
+                            <div class="flex h-80 items-center justify-center rounded-md border bg-muted/40 p-2">
+                                <img v-if="formatbild?.url" :src="formatbild.url" alt="" class="max-h-full max-w-full rounded-sm object-contain" />
+                                <p v-else class="flex flex-col items-center gap-2 px-4 text-center text-xs text-muted-foreground">
+                                    <AlertTriangle class="size-5 text-warning" />
+                                    Dieses Format ist nicht entstanden. Erzeugen Sie die Grafik neu — ohne alle drei Formate lässt sich die Anzeige
+                                    nicht schalten.
+                                </p>
+                            </div>
+
+                            <p v-if="formatbild" class="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
+                                <span>
+                                    <span class="font-medium text-foreground">{{ formatbild.name }} {{ formatbild.seitenverhaeltnis }}</span> ·
+                                    {{ formatbild.einsatz }}
+                                </span>
+                                <a
+                                    v-if="formatbild.url"
+                                    :href="formatbild.url"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="shrink-0 underline underline-offset-4"
+                                >
+                                    Groß ansehen
+                                </a>
+                            </p>
+
+                            <p v-if="gewaehlt.bildLaeuft" class="flex items-center gap-2 text-xs text-muted-foreground">
+                                <Loader2 class="size-3 animate-spin" />
+                                Eine neue Grafik entsteht. Die bisherige bleibt sichtbar, bis sie da ist.
+                            </p>
+                        </template>
+
                         <p
                             v-else
                             class="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground"
@@ -464,8 +602,8 @@ useNachladen(laeuft, ['vorschlaege']);
                             <Bild v-else class="size-5" />
                             {{
                                 gewaehlt.bildLaeuft
-                                    ? 'Die Grafik wird erzeugt — das dauert ein bis drei Minuten.'
-                                    : 'Noch keine Grafik. Eine Grafik kostet Geld und entsteht erst, wenn Sie sie anfordern.'
+                                    ? 'Die Grafik wird erzeugt, alle drei Formate zugleich. Das dauert ein bis drei Minuten.'
+                                    : 'Noch keine Grafik. Sie entsteht in drei Formaten (1:1, 4:5, 9:16), kostet Geld und wird erst erzeugt, wenn Sie sie anfordern.'
                             }}
                         </p>
 
@@ -520,7 +658,10 @@ useNachladen(laeuft, ['vorschlaege']);
                         </Button>
 
                         <p class="text-xs text-muted-foreground">
-                            {{ bildGrund || 'Jede erzeugte Grafik zählt gegen Ihr Kontingent. Die bisherige bleibt erhalten.' }}
+                            {{
+                                bildGrund ||
+                                'Jede Grafik entsteht in allen drei Formaten und zählt einmal gegen Ihr Kontingent. Die bisherige bleibt erhalten.'
+                            }}
                         </p>
 
                         <!--
@@ -542,8 +683,8 @@ useNachladen(laeuft, ['vorschlaege']);
                         </div>
 
                         <p v-if="gewaehlt.hatBild" class="rounded-md border p-2 text-xs text-muted-foreground">
-                            Die Schrift auf der Grafik hat das Bildmodell gesetzt — bitte lesen Sie sie, bevor Sie freigeben. Geprüft haben wir den
-                            Text, nicht das Bild.
+                            Die Schrift auf den Grafiken hat das Bildmodell gesetzt, in jedem Format eigens. Bitte lesen Sie alle drei, bevor Sie
+                            freigeben. Geprüft haben wir den Text, nicht die Bilder.
                         </p>
 
                         <!--
@@ -674,8 +815,8 @@ useNachladen(laeuft, ['vorschlaege']);
                                     v-if="gewaehlt.hatBild"
                                     type="button"
                                     size="sm"
-                                    :disabled="!kampagnen.length"
-                                    :title="kampagnen.length ? '' : 'Legen Sie zuerst eine Kampagne an.'"
+                                    :disabled="schaltbarGrund(gewaehlt) !== ''"
+                                    :title="schaltbarGrund(gewaehlt)"
                                     @click="oeffneSchalten(gewaehlt)"
                                 >
                                     <Megaphone />
@@ -688,6 +829,11 @@ useNachladen(laeuft, ['vorschlaege']);
 
                             <Button v-else type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)"> Zurückholen </Button>
                         </div>
+
+                        <!-- Ein gesperrter Knopf sagt, warum — der Tooltip allein erreicht niemanden am Telefon. -->
+                        <p v-if="gewaehlt.status === 'approved' && gewaehlt.hatBild && fehlendeFormate(gewaehlt).length" class="text-xs text-warning">
+                            {{ schaltbarGrund(gewaehlt) }}
+                        </p>
                     </div>
                 </div>
             </DialogContent>
@@ -748,7 +894,7 @@ useNachladen(laeuft, ['vorschlaege']);
                 Wer das weiß, formuliert sie anders.
             -->
             <p class="rounded-md border p-2 text-xs text-muted-foreground">
-                Die Überschrift und der Handlungsaufruf gehen wörtlich in die Grafik, wenn Sie eine erzeugen lassen.
+                Die Überschrift und der Handlungsaufruf gehen wörtlich in jedes Format der Grafik, wenn Sie eine erzeugen lassen.
             </p>
         </FormularDialog>
 

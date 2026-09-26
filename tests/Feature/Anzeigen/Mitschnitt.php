@@ -17,5 +17,10 @@ final class Mitschnitt
 {
     public static ?Anfrage $letzteAnfrage = null;
 
-    public static ?string $letzterBildauftrag = null;
+    /**
+     * Die Bildauftraege des letzten Laufs, je Format (WP-31b).
+     *
+     * @var array<string, string>
+     */
+    public static array $bildauftraege = [];
 }

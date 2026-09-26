@@ -13,7 +13,7 @@ namespace App\Anzeigen;
  */
 final class KeinBildmodell implements Bildmodell
 {
-    public function erzeuge(string $auftrag): Bild
+    public function erzeuge(array $auftraege): Bildsatz
     {
         throw new BildNichtErzeugt('Es ist kein Bildmodell angebunden.');
     }

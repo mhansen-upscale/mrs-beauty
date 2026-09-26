@@ -32,7 +32,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $sync_error
  * @property string|null $client_token
  * @property bool $managed_by_us
- * @property string|null $image_hash
+ * @property array<string, array{anhang: string, hash: string}>|null $image_hashes je Format die Bildkennung von Meta und der Anhang dazu (WP-31b)
  * @property string|null $ad_suggestion_id
  * @property CarbonImmutable|null $synced_at
  * @property CarbonImmutable|null $vanished_at
@@ -58,6 +58,7 @@ class Ad extends TenantModel implements HasPersonalData
             'name' => Encrypted::class,
             'sync_state' => SyncState::class,
             'managed_by_us' => 'boolean',
+            'image_hashes' => 'array',
             'synced_at' => 'immutable_datetime',
             'vanished_at' => 'immutable_datetime',
         ];

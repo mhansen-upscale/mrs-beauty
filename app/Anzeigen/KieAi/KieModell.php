@@ -7,6 +7,8 @@ namespace App\Anzeigen\KieAi;
 use App\Anzeigen\Bild;
 use App\Anzeigen\Bildmodell;
 use App\Anzeigen\BildNichtErzeugt;
+use App\Anzeigen\Bildsatz;
+use App\Enums\Bildformat;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -30,6 +32,10 @@ use Illuminate\Support\Facades\Http;
  * herunterladen und bei uns ablegen: ja. Beim Anbieter loeschen: kie.ai
  * dokumentiert keinen Weg dafuer. Deshalb steht hier kein erfundener Aufruf,
  * sondern dieser Absatz.
+ *
+ * **Ein Auftrag je Format** (WP-31b). Alle werden angelegt, bevor der erste
+ * abgefragt wird: nacheinander waeren es bis zu neun Minuten, und der Auftrag
+ * in der Warteschlange hat zehn.
  */
 final class KieModell implements Bildmodell
 {
@@ -40,29 +46,68 @@ final class KieModell implements Bildmodell
         return is_string($schluessel) && $schluessel !== '';
     }
 
-    public function erzeuge(string $auftrag): Bild
+    public function erzeuge(array $auftraege): Bildsatz
     {
         if (! $this->angebunden()) {
             throw new BildNichtErzeugt('Es ist kein Bildmodell angebunden.');
         }
 
-        $kennung = $this->beauftrage($auftrag);
-        $adresse = $this->warteAufErgebnis($kennung);
+        $fehler = [];
+        $kennungen = [];
 
-        return $this->lade($adresse);
+        foreach ($auftraege as $format => $auftrag) {
+            try {
+                $kennungen[$format] = $this->beauftrage($format, $auftrag);
+            } catch (BildNichtErzeugt $grund) {
+                $fehler[$format] = $grund->getMessage();
+            }
+        }
+
+        [$adressen, $nichtFertig] = $this->warteAufErgebnisse($kennungen);
+        $fehler += $nichtFertig;
+
+        $bilder = [];
+
+        foreach ($adressen as $format => $adresse) {
+            try {
+                $bilder[$format] = $this->lade($adresse);
+            } catch (BildNichtErzeugt $grund) {
+                $fehler[$format] = $grund->getMessage();
+            }
+        }
+
+        $reihenfolge = array_keys($auftraege);
+
+        return new Bildsatz($this->ordne($reihenfolge, $bilder), $this->ordne($reihenfolge, $fehler));
     }
 
-    private function beauftrage(string $auftrag): string
+    private function beauftrage(string $format, string $auftrag): string
     {
-        $antwort = $this->client()->post($this->basis().'/createTask', [
-            'model' => (string) config('services.kie.model'),
+        $felder = config('services.kie.formate.'.$format);
 
-            // **Der Auftrag steht unter `input`**, nicht oben -- zusammen
-            // mit den Feldern, die das eingestellte Modell kennt. Welche das
-            // sind, steht in der Konfiguration: sie unterscheiden sich von
-            // Modell zu Modell.
-            'input' => ['prompt' => $auftrag] + (array) config('services.kie.input', []),
-        ]);
+        // **Ohne Seitenverhaeltnis kein Auftrag.** Das Modell waehlte sonst
+        // `auto`, und die Grafik kaeme im falschen Format zurueck -- bezahlt
+        // und ohne Fehler.
+        if (! is_array($felder) || $felder === []) {
+            throw new BildNichtErzeugt(
+                'Für das Format '.(Bildformat::tryFrom($format)?->seitenverhaeltnis() ?? $format)
+                .' ist beim Bildmodell kein Seitenverhältnis eingestellt (services.kie.formate).'
+            );
+        }
+
+        try {
+            $antwort = $this->client()->post($this->basis().'/createTask', [
+                'model' => (string) config('services.kie.model'),
+
+                // **Der Auftrag steht unter `input`**, nicht oben -- zusammen
+                // mit den Feldern, die das eingestellte Modell kennt. Welche
+                // das sind, steht in der Konfiguration: sie unterscheiden sich
+                // von Modell zu Modell. Was je Format gilt, hat Vorrang.
+                'input' => ['prompt' => $auftrag] + $felder + (array) config('services.kie.input', []),
+            ]);
+        } catch (ConnectionException) {
+            throw new BildNichtErzeugt('kie.ai war nicht erreichbar.');
+        }
 
         if ($antwort->failed()) {
             throw new BildNichtErzeugt($this->meldung('kie.ai hat den Auftrag abgelehnt', $antwort));
@@ -81,37 +126,100 @@ final class KieModell implements Bildmodell
     }
 
     /**
-     * Fragt den Stand ab, bis ein Bild dasteht.
+     * Fragt den Stand aller Auftraege ab, bis jeder ein Bild hat oder
+     * aufgegeben ist.
      *
      * **Mit harter Obergrenze**, wie beim Paging in WP-26: ein Auftrag, der
-     * nie fertig wird, haelt sonst die Warteschlange an.
+     * nie fertig wird, haelt sonst die Warteschlange an. Die Grenze gilt fuer
+     * alle zusammen, nicht je Auftrag -- sie laufen ja gleichzeitig.
+     *
+     * @param  array<string, string>  $kennungen  Auftragskennung je Format
+     * @return array{0: array<string, string>, 1: array<string, string>} Bildadressen und Gruende, je Format
      */
-    private function warteAufErgebnis(string $kennung): string
+    private function warteAufErgebnisse(array $kennungen): array
     {
+        $offen = $kennungen;
+        $adressen = [];
+        $fehler = [];
         $versuche = max(1, (int) config('services.kie.max_polls'));
 
-        for ($versuch = 0; $versuch < $versuche; $versuch++) {
-            $antwort = $this->client()->get($this->basis().'/recordInfo', ['taskId' => $kennung]);
+        for ($versuch = 0; $versuch < $versuche && $offen !== []; $versuch++) {
+            foreach ($offen as $format => $kennung) {
+                try {
+                    $adresse = $this->frageNach($kennung);
+                } catch (BildNichtErzeugt $grund) {
+                    $fehler[$format] = $grund->getMessage();
+                    unset($offen[$format]);
 
-            if ($antwort->failed()) {
-                throw new BildNichtErzeugt($this->meldung('kie.ai antwortet nicht', $antwort));
+                    continue;
+                }
+
+                if ($adresse !== null) {
+                    $adressen[$format] = $adresse;
+                    unset($offen[$format]);
+                }
             }
 
-            $zustand = data_get($antwort->json(), 'data.state');
-
-            if ($zustand === 'fail') {
-                throw new BildNichtErzeugt($this->meldung('kie.ai konnte kein Bild erzeugen', $antwort));
+            if ($offen !== []) {
+                // waiting, queuing, generating -- weiter warten.
+                usleep((int) config('services.kie.poll_ms') * 1000);
             }
-
-            if ($zustand === 'success') {
-                return $this->adresseAus($antwort);
-            }
-
-            // waiting, queuing, generating -- weiter warten.
-            usleep((int) config('services.kie.poll_ms') * 1000);
         }
 
-        throw new BildNichtErzeugt('kie.ai wurde nicht rechtzeitig fertig (Auftrag '.$kennung.').');
+        foreach ($offen as $format => $kennung) {
+            $fehler[$format] = 'kie.ai wurde nicht rechtzeitig fertig (Auftrag '.$kennung.').';
+        }
+
+        return [$adressen, $fehler];
+    }
+
+    /**
+     * Fragt einmal nach. Null heisst: noch nicht fertig.
+     */
+    private function frageNach(string $kennung): ?string
+    {
+        try {
+            $antwort = $this->client()->get($this->basis().'/recordInfo', ['taskId' => $kennung]);
+        } catch (ConnectionException) {
+            // **Ein Aussetzer beim Nachfragen ist kein gescheitertes Bild.**
+            // Der Auftrag laeuft beim Anbieter weiter und ist bezahlt; die
+            // naechste Runde fragt wieder.
+            return null;
+        }
+
+        if ($antwort->failed()) {
+            throw new BildNichtErzeugt($this->meldung('kie.ai antwortet nicht', $antwort));
+        }
+
+        $zustand = data_get($antwort->json(), 'data.state');
+
+        if ($zustand === 'fail') {
+            throw new BildNichtErzeugt($this->meldung('kie.ai konnte kein Bild erzeugen', $antwort));
+        }
+
+        return $zustand === 'success' ? $this->adresseAus($antwort) : null;
+    }
+
+    /**
+     * In der Reihenfolge des Auftrags, nicht in der des Fertigwerdens.
+     *
+     * @template T
+     *
+     * @param  list<string>  $reihenfolge
+     * @param  array<string, T>  $werte
+     * @return array<string, T>
+     */
+    private function ordne(array $reihenfolge, array $werte): array
+    {
+        $geordnet = [];
+
+        foreach ($reihenfolge as $format) {
+            if (array_key_exists($format, $werte)) {
+                $geordnet[$format] = $werte[$format];
+            }
+        }
+
+        return $geordnet;
     }
 
     /**

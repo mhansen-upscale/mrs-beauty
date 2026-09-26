@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Enums\Bildformat;
 use App\Enums\ConnectionStatus;
 use App\Enums\Role;
 use App\Enums\SyncState;
@@ -153,7 +154,7 @@ it('laedt das Bild hoch, legt das Creative an und dann die Anzeige', function ()
 
     expect($frisch?->external_id)->toBe('anzeige-1')
         ->and($frisch?->creative_external_id)->toBe('creative-1')
-        ->and($frisch?->image_hash)->toBe('bildhash-1')
+        ->and(array_column((array) $frisch?->image_hashes, 'hash'))->toBe(['bildhash-1', 'bildhash-1', 'bildhash-1'])
         ->and($frisch?->sync_state)->toBe(SyncState::Synced);
 
     // Pausiert angelegt: eine Anzeige, die im Moment des Anlegens ausliefert,
@@ -1056,9 +1057,9 @@ it('schickt kein leeres Feld in das Creative', function (): void {
             return false;
         }
 
-        $inhalt = json_decode((string) $anfrage->data()['object_story_spec'], true);
+        $inhalt = json_decode((string) $anfrage->data()['asset_feed_spec'], true);
 
-        return is_array($inhalt) && ! array_key_exists('description', $inhalt['link_data']);
+        return is_array($inhalt) && ! array_key_exists('descriptions', $inhalt);
     });
 });
 
@@ -1084,9 +1085,9 @@ it('schickt eine vorhandene Beschreibung mit', function (): void {
             return false;
         }
 
-        $inhalt = json_decode((string) $anfrage->data()['object_story_spec'], true);
+        $inhalt = json_decode((string) $anfrage->data()['asset_feed_spec'], true);
 
-        return is_array($inhalt) && ($inhalt['link_data']['description'] ?? null) === 'In Ruhe und ohne Druck.';
+        return is_array($inhalt) && ($inhalt['descriptions'] ?? null) === [['text' => 'In Ruhe und ohne Druck.']];
     });
 });
 
@@ -1211,4 +1212,258 @@ it('zeigt keiner Praxis die Anzeigen einer anderen', function (): void {
     new Anzeigenaufbau(organisation('Zweite Praxis'));
 
     expect(Ad::query()->count())->toBe(0);
+});
+
+/*
+|--------------------------------------------------------------------------
+| WP-31b -- jedes Format an seine Platzierung
+|--------------------------------------------------------------------------
+|
+| Eine Anzeige, drei Grafiken. Meta bekommt ein Creative mit
+| `asset_feed_spec` und Regeln, welche Platzierung welches Bild zeigt
+| (Placement Asset Customization).
+|
+*/
+
+/** Meta nimmt an und vergibt je hochgeladenem Format eine eigene Kennung. */
+function metaNimmtFormateAn(): void
+{
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::sequence()
+            ->push(['images' => ['a.png' => ['hash' => 'hash-1x1']]])
+            ->push(['images' => ['b.png' => ['hash' => 'hash-4x5']]])
+            ->push(['images' => ['c.png' => ['hash' => 'hash-9x16']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['id' => 'anzeige-1']),
+    ]);
+}
+
+/** Was als `asset_feed_spec` hinausging -- roh, wie Meta es liest. */
+function gesendeterAssetFeedRoh(): string
+{
+    $paar = Http::recorded()->first(fn (array $p): bool => str_ends_with((string) $p[0]->url(), '/adcreatives'));
+
+    if ($paar === null) {
+        return '';
+    }
+
+    $feld = $paar[0]->data()['asset_feed_spec'] ?? '';
+
+    return is_string($feld) ? $feld : '';
+}
+
+/** @return array<string, mixed> */
+function gesendeterAssetFeed(): array
+{
+    return (array) json_decode(gesendeterAssetFeedRoh(), true);
+}
+
+/** @return list<string> die hochgeladenen Bilder, in der Reihenfolge des Hochladens */
+function hochgeladeneBilder(): array
+{
+    return array_values(Http::recorded()
+        ->filter(fn (array $p): bool => str_ends_with((string) $p[0]->url(), '/adimages'))
+        ->map(fn (array $p): string => (string) base64_decode((string) $p[0]->data()['bytes'], true))
+        ->all());
+}
+
+/**
+ * **Geschaltet wird nur ein vollstaendiger Satz.** Mit zwei von drei
+ * Formaten liefert Meta trotzdem aus -- mit einem Quadrat in der Story.
+ */
+it('schaltet keinen Entwurf ohne vollstaendigen Formatsatz', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $vorschlag = $aufbau->vorschlagMitGrafik(formate: [Bildformat::Quadrat]);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->post(route('anzeigen.schalten', ['vorschlag' => $vorschlag->uuid]), [
+            'kampagne' => (string) $aufbau->kampagne->uuid,
+        ])
+        // Die Meldung nennt, was fehlt -- sonst sucht man es.
+        ->assertSessionHas('fehler', fn (string $meldung): bool => str_contains($meldung, 'Hochformat (4:5)')
+            && str_contains($meldung, 'Stories (9:16)')
+            && ! str_contains($meldung, 'Quadratisch'));
+
+    expect(Ad::query()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+it('laedt jedes Format einzeln hoch', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    metaNimmtFormateAn();
+
+    app(Anzeigenschaltung::class)->uebertrage($anzeige, $aufbau->werbung->konto);
+
+    expect(hochgeladeneBilder())->toBe(['bilddaten-1x1', 'bilddaten-4x5', 'bilddaten-9x16'])
+        ->and(array_keys((array) $anzeige->fresh()?->image_hashes))->toBe(['1x1', '4x5', '9x16']);
+});
+
+/**
+ * Fundstelle: developers.facebook.com, "Placement Asset Customization",
+ * unterstuetzte Felder in customization_spec und die Beispiele dort
+ * (Stand 28.06.2026).
+ */
+it('ordnet jedem Format seine Platzierungen zu', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    metaNimmtFormateAn();
+
+    app(Anzeigenschaltung::class)->uebertrage($anzeige, $aufbau->werbung->konto);
+
+    $feed = gesendeterAssetFeed();
+
+    /** @var array<string, string> $label */
+    $label = collect((array) $feed['images'])
+        ->mapWithKeys(fn (array $bild): array => [$bild['hash'] => $bild['adlabels'][0]['name']])
+        ->all();
+
+    $regeln = collect((array) $feed['asset_customization_rules']);
+
+    $fuer = fn (string $plattform, string $platz): ?string => $regeln->first(
+        fn (array $regel): bool => in_array($plattform, $regel['customization_spec']['publisher_platforms'] ?? [], true)
+            && in_array($platz, $regel['customization_spec'][$plattform.'_positions'] ?? [], true)
+    )['image_label']['name'] ?? null;
+
+    expect($fuer('facebook', 'feed'))->toBe($label['hash-4x5'])
+        ->and($fuer('instagram', 'stream'))->toBe($label['hash-4x5'])
+        ->and($fuer('facebook', 'story'))->toBe($label['hash-9x16'])
+        ->and($fuer('instagram', 'story'))->toBe($label['hash-9x16'])
+        ->and($fuer('messenger', 'story'))->toBe($label['hash-9x16'])
+        // **Das Quadrat faengt alles Uebrige auf** -- zuletzt, ohne
+        // Einschraenkung.
+        ->and($regeln->last()['image_label']['name'])->toBe($label['hash-1x1'])
+        ->and($feed['optimization_type'])->toBe('PLACEMENT')
+        ->and($feed['ad_formats'])->toBe(['SINGLE_IMAGE'])
+        // Der Text steht einmal, nicht je Format.
+        ->and($feed['titles'])->toBe([['text' => 'In Ruhe beraten lassen']])
+        ->and($feed['bodies'])->toBe([['text' => 'Wir nehmen uns Zeit für Ihre Fragen.']])
+        ->and($feed['call_to_action_types'])->toBe([config('mrs.ads.call_to_action')]);
+
+    // **Ein leeres PHP-Array wird `[]`.** Meta erwartet fuer die
+    // Auffangregel ein Objekt, wie in seinem eigenen Beispiel.
+    expect(gesendeterAssetFeedRoh())->toContain('"customization_spec":{}');
+
+    // Die Seite bleibt der Absender; der Inhalt steht jetzt im Asset-Feed.
+    Http::assertSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adcreatives')
+        && json_decode((string) $anfrage->data()['object_story_spec'], true) === ['page_id' => '778899']);
+});
+
+/**
+ * **Regel 2 gilt auch fuer Labels.** Sie liegen offen im Werbekonto wie ein
+ * Kampagnenname. Nur der Inhalt der Anzeige darf die Leistung nennen (C9).
+ */
+it('setzt keine Katalogbezeichnung in Labels und Regeln', function (): void {
+    $aufbau = new Anzeigenaufbau;
+
+    Treatment::factory()->create(['name' => 'Botox', 'is_active' => true]);
+    Treatment::factory()->create(['name' => 'Faltenbehandlung', 'is_active' => true]);
+
+    $anzeige = $aufbau->geplanteAnzeige('Faltenbehandlung in Ruhe besprochen');
+
+    metaNimmtFormateAn();
+
+    app(Anzeigenschaltung::class)->uebertrage($anzeige, $aufbau->werbung->konto);
+
+    $feed = gesendeterAssetFeed();
+
+    // Der Inhalt nennt sie -- sonst waere der Test leer.
+    expect($feed['titles'][0]['text'])->toContain('Faltenbehandlung');
+
+    unset($feed['titles'], $feed['bodies'], $feed['descriptions']);
+    $rest = mb_strtolower((string) json_encode($feed, JSON_UNESCAPED_UNICODE));
+
+    foreach (Treatment::aktiveNamen() as $behandlung) {
+        expect($rest)->not->toContain(mb_strtolower($behandlung));
+    }
+});
+
+it('laedt ein schon hochgeladenes Format nicht erneut hoch', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+    $bilder = $anzeige->vorschlag()->firstOrFail()->bilder();
+
+    // Der erste Lauf kam bis zum Hochformat -- dann riss die Verbindung.
+    $anzeige->image_hashes = [
+        '1x1' => ['anhang' => (string) $bilder['1x1']->uuid, 'hash' => 'hash-vorher-1x1'],
+        '4x5' => ['anhang' => (string) $bilder['4x5']->uuid, 'hash' => 'hash-vorher-4x5'],
+    ];
+    $anzeige->save();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+        'graph.test/*/act_*/adimages' => Http::response(['images' => ['c.png' => ['hash' => 'hash-9x16']]]),
+        'graph.test/*/act_*/adcreatives' => Http::response(['id' => 'creative-1']),
+        'graph.test/*/act_*/ads' => Http::response(['id' => 'anzeige-1']),
+    ]);
+
+    app(Anzeigenschaltung::class)->uebertrage($anzeige, $aufbau->werbung->konto);
+
+    expect(hochgeladeneBilder())->toBe(['bilddaten-9x16'])
+        ->and(array_column((array) $anzeige->fresh()?->image_hashes, 'hash'))
+        ->toBe(['hash-vorher-1x1', 'hash-vorher-4x5', 'hash-9x16']);
+});
+
+/**
+ * **Die Kennung gehoert zur Datei, nicht zum Format.** Eine neue Grafik ist
+ * ein neues Bild -- mit der Kennung der alten ginge das alte hinaus, und mit
+ * dem alten Creative auch.
+ */
+it('laedt eine neue Grafik neu hoch und legt ein neues Creative an', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+    $vorschlag = $anzeige->vorschlag()->firstOrFail();
+
+    $anzeige->image_hashes = collect($vorschlag->bilder())
+        ->map(fn ($anhang): array => ['anhang' => (string) $anhang->uuid, 'hash' => 'hash-alt'])
+        ->all();
+    $anzeige->creative_external_id = 'creative-alt';
+    $anzeige->save();
+
+    travelTo(CarbonImmutable::now()->addMinute());
+    $aufbau->legeGrafik($vorschlag, Bildformat::cases());
+
+    metaNimmtFormateAn();
+
+    app(Anzeigenschaltung::class)->uebertrage($anzeige, $aufbau->werbung->konto);
+
+    expect(hochgeladeneBilder())->toHaveCount(3)
+        ->and($anzeige->fresh()?->creative_external_id)->toBe('creative-1');
+});
+
+/**
+ * **Die Uebertragung liest die Bilder beim Uebertragen, nicht beim
+ * Schalten.** Eine neue Grafik nach dem Schalten nimmt dem Entwurf die
+ * Freigabe (WP-31) -- und ungeprueft darf sie nicht zu Meta, auch nicht
+ * ueber "Erneut uebertragen".
+ */
+it('uebertraegt keine Anzeige, deren Entwurf nicht mehr freigegeben ist', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    $vorschlag = $anzeige->vorschlag()->firstOrFail();
+    $vorschlag->status = Vorschlagsstatus::Entwurf;
+    $vorschlag->save();
+
+    Http::fake([
+        'graph.test/*/act_*/ads?*' => Http::response(Werbeaufbau::seite([])),
+    ]);
+
+    app(AnzeigeUebertragen::class, [
+        'organisation' => (string) $aufbau->werbung->organisation->uuid,
+        'anzeige' => (string) $anzeige->uuid,
+    ])->handle(app(TenantContext::class), app(Anzeigenschaltung::class));
+
+    $frisch = $anzeige->fresh();
+
+    expect($frisch?->sync_state)->toBe(SyncState::Failed)
+        ->and((string) $frisch?->sync_error)->toContain('nicht mehr freigegeben');
+
+    Http::assertNotSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adimages'));
+    Http::assertNotSent(fn ($anfrage): bool => str_ends_with((string) $anfrage->url(), '/adcreatives'));
 });

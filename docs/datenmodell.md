@@ -347,6 +347,8 @@ Löschanfrage nach DSGVO nicht an einem Angebot scheitert.
 | `ad_accounts` | eines je Mandant; Systembenutzer-Token verschlüsselt, mit Ablaufüberwachung; Währung und Zeitzone des Kontos |
 | `ad_campaigns`, `ad_sets`, `ads` | `external_id` je Ebene, **Name feldverschlüsselt**, Budgets als Ganzzahl in kleinster Einheit, `vanished_at` statt Löschung |
 | dazu ab WP-27 | `sync_state`, `sync_error`, `client_token`, `managed_by_us`; an `ad_sets` die Zielgruppe: Standort, Umkreis, Alter, Geschlecht |
+| dazu ab WP-31b | an `ads` `image_hashes` statt `image_hash`: je Format Metas Bildkennung **und der Anhang, zu dem sie gehört** — eine neue Grafik wird neu hochgeladen |
+| `ad_suggestion_images` | je Grafik eines Anzeigenentwurfs Format (`1x1`, `4x5`, `9x16`) und Satz (`batch`); die Datei selbst ist ein Anhang am Entwurf. **Gezählt wird der Satz, nicht die Datei** (B13, C13) |
 | `ad_insights` | Tageszeilen je Ebene: Ausgaben, Impressionen, Klicks, Link-Klicks, von Meta gemeldete Ergebnisse |
 | Zustand | `ConnectionStatus`: `active`, `expired`, `degraded`, `suspended` — derselbe wie bei Kanal- und Kalenderverbindungen |
 

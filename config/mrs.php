@@ -840,6 +840,55 @@ return [
         'uebertragung_timeout_minutes' => 10,
 
         /*
+        | Anzeigenformate (WP-31b, Entscheidung C13)
+        |
+        | Je Format die Platzierungen, in denen Meta es zeigt, und -- wo die
+        | App ueber dem Bild liegt -- die Raender, die frei bleiben.
+        |
+        | Fundstellen: Metas Leitfaden fuer Bildanzeigen (4:5 fuer den Feed,
+        | 9:16 fuer Stories und Reels, 1:1 als universelles Format) und
+        | developers.facebook.com, "Placement Asset Customization",
+        | unterstuetzte Felder in customization_spec (Stand 28.06.2026).
+        |
+        | **Nur Platzierungen, die dort stehen.** `reels` steht nicht in der
+        | Liste; Reels bekommen deshalb die Auffangregel. Ein geratener Wert
+        | ist genau der Fehler, der die erste kie.ai-Anbindung vier Stellen
+        | gekostet hat.
+        */
+        'formate' => [
+
+            // **Das Auffangformat.** Keine eigene Platzierung: es gilt fuer
+            // jede, die keine Regel hat -- rechte Spalte, Marketplace, Suche,
+            // Reels. Die Regel dafuer steht zuletzt und ist leer.
+            '1x1' => [
+                'platzierungen' => [],
+            ],
+
+            // Der Feed. Instagram zeigt Explore und Profil wie einen Feed.
+            '4x5' => [
+                'platzierungen' => [
+                    'facebook' => ['feed'],
+                    'instagram' => ['stream', 'explore', 'profile_feed'],
+                ],
+            ],
+
+            '9x16' => [
+                'platzierungen' => [
+                    'facebook' => ['story'],
+                    'instagram' => ['story'],
+                    'messenger' => ['story'],
+                ],
+
+                // **Was frei bleibt, in Prozent der Flaeche.** Oben liegen
+                // Profilbild und Name, unten Antwortfeld und Schaltflaechen,
+                // an den Seiten schneiden Geraete ab. Die Werte sind die fuer
+                // Reels -- strenger als die fuer Stories (14 % unten) und
+                // damit fuer beide richtig.
+                'schutzzone' => ['oben' => 14, 'unten' => 35, 'seiten' => 6],
+            ],
+        ],
+
+        /*
         | Laengen eines Anzeigentextes (WP-31)
         |
         | Fundstelle: der Auftrag an das Sprachmodell in App\Anzeigen\

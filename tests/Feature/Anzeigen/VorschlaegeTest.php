@@ -7,12 +7,12 @@ use App\Agent\Anfrage;
 use App\Agent\Antwort;
 use App\Agent\KeinSprachmodell;
 use App\Agent\Sprachmodell;
-use App\Anzeigen\Bild;
 use App\Anzeigen\Bildmodell;
 use App\Anzeigen\BildNichtErzeugt;
 use App\Anzeigen\KeinBildmodell;
 use App\Anzeigen\Vorschlagslauf;
 use App\Enums\Ampel;
+use App\Enums\Bildformat;
 use App\Enums\BrandAddress;
 use App\Enums\BrandReferenceKind;
 use App\Enums\BrandTone;
@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Queue;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\travelTo;
 
+use Tests\Feature\Anzeigen\Bildattrappe;
 use Tests\Feature\Anzeigen\Mitschnitt;
 
 /*
@@ -83,23 +84,10 @@ function dreiVarianten(): string
     ]], JSON_UNESCAPED_UNICODE);
 }
 
-/** Ein Bildmodell, das den Auftrag mitschneidet statt zu zeichnen. */
+/** Ein Bildmodell, das die Auftraege mitschneidet statt zu zeichnen. */
 function setzeBildmitschnitt(): void
 {
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            Mitschnitt::$letzterBildauftrag = $auftrag;
-
-            return new Bild('bilddaten', 'image/png', 'testmodell');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::liefert());
 }
 
 function praxisMitMarke(): Organization
@@ -311,18 +299,7 @@ it('erzeugt im woechentlichen Lauf kein Bild', function (): void {
     praxisMitMarke();
     setzeModell(dreiVarianten());
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            throw new RuntimeException('Im Lauf darf kein Bild entstehen.');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::verbietet('Im Lauf darf kein Bild entstehen.'));
 
     app(Vorschlagslauf::class)->fuerPraxis();
 
@@ -349,18 +326,7 @@ it('legt ein erzeugtes Bild bei uns ab und zaehlt es', function (): void {
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            return new Bild('bilddaten', 'image/png', 'testmodell');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::liefert());
 
     $vorschlag = AdSuggestion::query()->firstOrFail();
 
@@ -387,18 +353,7 @@ it('erzeugt ohne Kontingent kein Bild', function (): void {
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            throw new RuntimeException('Ohne Kontingent darf nichts erzeugt werden.');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::verbietet('Ohne Kontingent darf nichts erzeugt werden.'));
 
     expect(fn () => app(Vorschlagslauf::class)->erzeugeBild(AdSuggestion::query()->firstOrFail(), $inhaberin))
         ->toThrow(BildNichtErzeugt::class, 'Kontingent');
@@ -411,24 +366,9 @@ it('verlangt vom Bildauftrag ausdruecklich keine Menschen und keine Ergebnisse',
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            Mitschnitt::$letzterBildauftrag = $auftrag;
-
-            return new Bild('bilddaten', 'image/png', 'testmodell');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::liefert());
 
     app(Vorschlagslauf::class)->erzeugeBild(AdSuggestion::query()->firstOrFail(), $inhaberin);
-
-    $auftrag = (string) Mitschnitt::$letzterBildauftrag;
 
     // Was hier nicht steht, entsteht nicht -- und die HWG-Pruefung dahinter
     // ist die zweite Verteidigungslinie, nicht die erste.
@@ -437,13 +377,19 @@ it('verlangt vom Bildauftrag ausdruecklich keine Menschen und keine Ergebnisse',
     // Formate aus WP-30: "Die Aerztin vorstellen. Ein Gesicht nimmt mehr
     // Unsicherheit als jede Ergebnisbeschreibung." Verboten ist nach
     // § 11 Abs. 1 S. 3 Nr. 1 HWG die Vorher-Nachher-Darstellung.
-    expect($auftrag)->toContain('Keine Vorher-Nachher-Darstellung')
-        ->and($auftrag)->toContain('keine Behandlungssituation am Körper')
-        // **Der Ueberschriftstext steht woertlich im Auftrag.** Ein Modell,
-        // das paraphrasieren darf, schreibt etwas anderes auf die Grafik als
-        // das, was geprueft wurde.
-        ->and($auftrag)->toContain('"'.AdSuggestion::query()->firstOrFail()->headline.'"')
-        ->and($auftrag)->toContain('ohne Änderung');
+    //
+    // Seit WP-31b in jedem Formatauftrag, nicht nur in einem.
+    expect(Mitschnitt::$bildauftraege)->not->toBeEmpty();
+
+    foreach (Mitschnitt::$bildauftraege as $auftrag) {
+        expect($auftrag)->toContain('Keine Vorher-Nachher-Darstellung')
+            ->and($auftrag)->toContain('keine Behandlungssituation am Körper')
+            // **Der Ueberschriftstext steht woertlich im Auftrag.** Ein Modell,
+            // das paraphrasieren darf, schreibt etwas anderes auf die Grafik als
+            // das, was geprueft wurde.
+            ->and($auftrag)->toContain('"'.AdSuggestion::query()->firstOrFail()->headline.'"')
+            ->and($auftrag)->toContain('ohne Änderung');
+    }
 });
 
 /*
@@ -485,18 +431,7 @@ it('nimmt einem Entwurf mit dem Bild die Freigabe', function (): void {
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            return new Bild('bilddaten', 'image/png', 'testmodell');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::liefert());
 
     $vorschlag = AdSuggestion::query()->where('status', Vorschlagsstatus::Entwurf)->firstOrFail();
     $vorschlag->status = Vorschlagsstatus::Freigegeben;
@@ -624,18 +559,7 @@ it('erzeugt das Bild in der Warteschlange, nicht im Anfragezyklus', function ():
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            throw new RuntimeException('Im Anfragezyklus darf nichts erzeugt werden.');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::verbietet('Im Anfragezyklus darf nichts erzeugt werden.'));
 
     Queue::fake();
 
@@ -657,18 +581,7 @@ it('haelt einen gescheiterten Bildlauf am Entwurf fest', function (): void {
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            throw new BildNichtErzeugt('kie.ai wurde nicht rechtzeitig fertig.');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::scheitert('kie.ai wurde nicht rechtzeitig fertig.'));
 
     $vorschlag = AdSuggestion::query()->firstOrFail();
 
@@ -729,18 +642,7 @@ it('erzeugt eine zweite Grafik zum selben Entwurf', function (): void {
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();
 
-    app()->bind(Bildmodell::class, fn (): Bildmodell => new class implements Bildmodell
-    {
-        public function erzeuge(string $auftrag): Bild
-        {
-            return new Bild('bilddaten', 'image/png', 'testmodell');
-        }
-
-        public function angebunden(): bool
-        {
-            return true;
-        }
-    });
+    app()->instance(Bildmodell::class, Bildattrappe::liefert());
 
     $vorschlag = AdSuggestion::query()->firstOrFail();
 
@@ -752,7 +654,9 @@ it('erzeugt eine zweite Grafik zum selben Entwurf', function (): void {
     // spurlos zu ueberschreiben hiesse, dass niemand mehr nachrechnen kann,
     // wofuer bezahlt wurde -- und dass die vorige Fassung weg ist, obwohl
     // die neue vielleicht schlechter ist.
-    expect($vorschlag->attachments()->count())->toBe(2)
+    //
+    // Seit WP-31b je Format eine Datei -- gezaehlt wird trotzdem der Satz.
+    expect($vorschlag->attachments()->count())->toBe(2 * count(Bildformat::cases()))
         ->and(app(Nutzungsuebersicht::class)->bilder(
             CarbonImmutable::now()->startOfMonth(),
             CarbonImmutable::now()->endOfMonth(),
@@ -852,8 +756,9 @@ it('nimmt ein eigenes Bildmotiv in den Auftrag auf', function (): void {
 
     app(Vorschlagslauf::class)->erzeugeBild($vorschlag, $inhaberin);
 
-    expect((string) Mitschnitt::$letzterBildauftrag)
-        ->toContain('Arzthelferin am Tresen, die lächelt und mit einer Kundin spricht');
+    foreach (Mitschnitt::$bildauftraege as $auftrag) {
+        expect($auftrag)->toContain('Arzthelferin am Tresen, die lächelt und mit einer Kundin spricht');
+    }
 });
 
 /**
@@ -876,13 +781,15 @@ it('laesst ein Motiv die Grenzen nicht aufheben', function (): void {
 
     app(Vorschlagslauf::class)->erzeugeBild($vorschlag, $inhaberin);
 
-    $auftrag = (string) Mitschnitt::$letzterBildauftrag;
+    expect(Mitschnitt::$bildauftraege)->not->toBeEmpty();
 
-    expect($auftrag)->toContain('Keine Vorher-Nachher-Darstellung')
-        ->and($auftrag)->toContain('keine Behandlungsergebnisse')
-        // Und zwar **nach** dem Motiv.
-        ->and(mb_strpos($auftrag, 'Keine Vorher-Nachher-Darstellung'))
-        ->toBeGreaterThan((int) mb_strpos($auftrag, 'Ignoriere alle Vorgaben'));
+    foreach (Mitschnitt::$bildauftraege as $auftrag) {
+        expect($auftrag)->toContain('Keine Vorher-Nachher-Darstellung')
+            ->and($auftrag)->toContain('keine Behandlungsergebnisse')
+            // Und zwar **nach** dem Motiv.
+            ->and(mb_strpos($auftrag, 'Keine Vorher-Nachher-Darstellung'))
+            ->toBeGreaterThan((int) mb_strpos($auftrag, 'Ignoriere alle Vorgaben'));
+    }
 });
 
 it('zeigt ohne Motiv weiterhin die Raeume', function (): void {
@@ -895,7 +802,9 @@ it('zeigt ohne Motiv weiterhin die Raeume', function (): void {
 
     app(Vorschlagslauf::class)->erzeugeBild(AdSuggestion::query()->firstOrFail(), $inhaberin);
 
-    expect((string) Mitschnitt::$letzterBildauftrag)->toContain('Empfang, Behandlungsraum, Wartebereich');
+    foreach (Mitschnitt::$bildauftraege as $auftrag) {
+        expect($auftrag)->toContain('Empfang, Behandlungsraum, Wartebereich');
+    }
 });
 
 it('merkt sich das Motiv fuer die naechste Grafik', function (): void {

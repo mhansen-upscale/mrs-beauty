@@ -64,6 +64,10 @@ Ein Test hält es fest: keiner der aktiven Katalognamen steht im Namen.
 | Creative | `{konto}/adcreatives` mit `object_story_spec` | `id` |
 | Anzeige | `{konto}/ads` mit `adset_id` und `creative` | `id` |
 
+> **Seit WP-31b** je Format ein Bild, und das Creative trägt die drei Bilder
+> in `asset_feed_spec` mit Regeln je Platzierung; `object_story_spec` nennt
+> nur noch die Seite. Siehe `specs/WP-31b-anzeigenformate.md`.
+
 **Erst nachsehen, dann anlegen.** Metas Marketing-API kennt keinen
 Idempotenzschlüssel; ein Auftrag, dessen Antwort verlorenging, legte beim
 zweiten Versuch eine zweite Anzeige an — und die kostet ein zweites Mal

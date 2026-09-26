@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Enums\Bildformat;
 use App\Enums\SyncState;
 use App\Jobs\AnzeigeUebertragen as Auftrag;
 use App\Models\Ad;
@@ -143,7 +144,7 @@ final class AnzeigeUebertragen extends Command
     /**
      * Wie weit der Auftrag kam.
      *
-     * Die drei Schritte bauen aufeinander auf -- Bild, Creative, Anzeige.
+     * Die drei Schritte bauen aufeinander auf -- Bilder, Creative, Anzeige.
      * Welcher gesetzt ist, sagt, wo er stehen blieb.
      */
     private function zeigeZustand(Ad $anzeige): void
@@ -152,7 +153,7 @@ final class AnzeigeUebertragen extends Command
 
         $this->zeile('Zustand', $anzeige->sync_state->value);
         $this->zeile('Grund', $anzeige->sync_error ?? '-');
-        $this->zeile('Bild hochgeladen', $anzeige->image_hash !== null ? 'ja' : 'nein');
+        $this->zeile('Formate hochgeladen', count($anzeige->image_hashes ?? []).' von '.count(Bildformat::cases()));
         $this->zeile('Creative angelegt', $anzeige->creative_external_id !== null ? 'ja' : 'nein');
         $this->zeile('Anzeige bei Meta', $beiMeta ? 'ja ('.$anzeige->external_id.')' : 'nein');
         $this->zeile('Angelegt (UTC)', (string) $anzeige->created_at?->toDateTimeString());

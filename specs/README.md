@@ -64,6 +64,7 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 | WP-29 | Brand Guide | steht: Tonalität, Wortwahl, Referenzmaterial mit Erklärung im Wortlaut; liefert `banned_terms` an WP-30 |
 | WP-30 | HWG-Compliance-Engine | Differenzierungsmerkmal; steht — **aber juristisch ungeprüft**, und das Produkt sagt es; Buchungsseite und Templates angeschlossen (C11) |
 | WP-31 | Anzeigenvorschläge | steht: wöchentliche Textentwürfe aus dem Brand Guide, HWG-geprüft, Bild auf Wunsch über kie.ai |
+| WP-31b | Anzeigenformate | Nachtrag zu WP-31 und WP-27b: jede Grafik in 1:1, 4:5 und 9:16, bei Meta je Platzierung zugeordnet (C13); ein Formatsatz zählt als eine Grafik (B13) |
 | WP-32 | Attribution & ROI-Dashboard | rechtfertigt das Abo; **zwei Sitzungen**, beide stehen — 32a Erfassung und Zuordnung, 32b Kennzahlen, Dashboard und Conversions API |
 | WP-32c | Conversions API mit dem Token der Praxis | offen: Token aus der Werbekonto-Verbindung statt Plattformschlüssel (B16), Pixel als Asset in der Login-Konfiguration; sendet erst nach App Review |
 

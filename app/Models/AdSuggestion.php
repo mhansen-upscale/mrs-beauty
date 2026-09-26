@@ -7,10 +7,12 @@ namespace App\Models;
 use App\Casts\Encrypted;
 use App\Contracts\HasPersonalData;
 use App\Enums\Ampel;
+use App\Enums\Bildformat;
 use App\Enums\Vorschlagsstatus;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\MasksPersonalData;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
@@ -95,19 +97,89 @@ class AdSuggestion extends TenantModel implements HasPersonalData
     }
 
     /**
-     * Die Grafik zu diesem Entwurf.
+     * Die Grafiken dieses Entwurfs, je Format und Satz (WP-31b).
+     *
+     * @return HasMany<AdSuggestionImage, $this>
+     */
+    public function grafiken(): HasMany
+    {
+        return $this->hasMany(AdSuggestionImage::class, 'ad_suggestion_id');
+    }
+
+    /**
+     * Die Grafik zu diesem Entwurf, in einem Format.
+     *
+     * Ohne Angabe das Quadrat: es ist das Auffangformat und das Bild auf der
+     * Kachel.
+     */
+    public function bild(Bildformat $format = Bildformat::Quadrat): ?Attachment
+    {
+        return $this->bilder()[$format->value] ?? null;
+    }
+
+    /**
+     * Je Format die neueste Grafik, in der Reihenfolge der Formate.
+     *
+     * **Die neueste je Format, nicht der neueste Satz.** Scheitert in einem
+     * Satz ein Format, steht dort weiter das vorige -- gezeigt wird genau
+     * das, was hinausginge. Jede fruehere Fassung bleibt liegen: sie ist
+     * bezahlt (WP-31).
      *
      * **Wurde die Beziehung geladen, wird sie benutzt.** Die Galerie zeigt
      * dreissig Entwuerfe; eine eigene Abfrage je Kachel waere dort eine
      * Abfrage zu viel -- und zwar dreissigmal.
+     *
+     * @return array<string, Attachment>
      */
-    public function bild(): ?Attachment
+    public function bilder(): array
     {
-        $anhang = $this->relationLoaded('attachments')
-            ? $this->attachments->sortByDesc('created_at')->first()
-            : $this->attachments()->latest('created_at')->first();
+        $grafiken = $this->relationLoaded('grafiken')
+            ? $this->grafiken
+            : $this->grafiken()->with('attachment')->get();
 
-        return $anhang instanceof Attachment && ! $anhang->istAbgelehnt() ? $anhang : null;
+        // Zwei Grafiken koennen denselben Zeitstempel tragen; dann entscheidet
+        // der Schluessel, statt beliebig -- wie bei der Pruefung.
+        $neueste = $grafiken->sortBy([
+            fn (AdSuggestionImage $a, AdSuggestionImage $b): int => $b->created_at <=> $a->created_at,
+            fn (AdSuggestionImage $a, AdSuggestionImage $b): int => strcmp($b->getKey(), $a->getKey()),
+        ]);
+
+        $bilder = [];
+
+        foreach (Bildformat::cases() as $format) {
+            $anhang = $neueste->first(fn (AdSuggestionImage $g): bool => $g->format === $format)?->attachment;
+
+            if ($anhang instanceof Attachment && ! $anhang->istAbgelehnt()) {
+                $bilder[$format->value] = $anhang;
+            }
+        }
+
+        return $bilder;
+    }
+
+    /**
+     * Welche Formate fehlen? **Geschaltet wird nur ein vollstaendiger Satz**
+     * (C13): mit zwei von dreien liefert Meta trotzdem aus, mit einem Quadrat
+     * in der Story.
+     *
+     * @return list<Bildformat>
+     */
+    public function fehlendeFormate(): array
+    {
+        $bilder = $this->bilder();
+
+        return array_values(array_filter(
+            Bildformat::cases(),
+            fn (Bildformat $format): bool => ! isset($bilder[$format->value]),
+        ));
+    }
+
+    /** Wann kam zuletzt eine Grafik an -- gleich welchen Formats? */
+    public function letzteGrafikAm(): ?CarbonImmutable
+    {
+        $grafiken = $this->relationLoaded('grafiken') ? $this->grafiken : $this->grafiken()->get();
+
+        return $grafiken->max('created_at');
     }
 
     public function ampel(): ?Ampel

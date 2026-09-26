@@ -12,6 +12,7 @@ use App\Anzeigen\Vorschlagslauf;
 use App\Datenschutz\Anhangspeicher;
 use App\Enums\Ability;
 use App\Enums\Ampel;
+use App\Enums\Bildformat;
 use App\Enums\ConnectionStatus;
 use App\Enums\SyncState;
 use App\Enums\Vorschlagsstatus;
@@ -73,7 +74,7 @@ final class AnzeigenController extends Controller
         $steht = Queue::size('maintenance') > 0;
 
         $vorschlaege = AdSuggestion::query()
-            ->with(['pruefung', 'attachments'])
+            ->with(['pruefung', 'grafiken.attachment'])
             ->orderByDesc('week')
             ->orderBy('created_at')
             ->limit(30)
@@ -130,11 +131,10 @@ final class AnzeigenController extends Controller
         return Inertia::render('anzeigen/Index', [
             'vorschlaege' => $vorschlaege
                 ->map(function (AdSuggestion $v) use ($frist, $steht, $laeuftIn, $uebertragung): array {
-                    $bild = $v->bild();
-                    $laeuft = ! $bild instanceof Attachment
-                        && $v->image_requested_at !== null
+                    $bilder = $v->bilder();
+                    $laeuft = $this->unterwegs($v)
                         && $v->image_error === null
-                        && $v->image_requested_at->greaterThan($frist);
+                        && $v->image_requested_at?->greaterThan($frist) === true;
 
                     return [
                         'uuid' => $v->uuid,
@@ -151,10 +151,10 @@ final class AnzeigenController extends Controller
                         'uebersteuert' => $v->pruefung?->uebersteuert() ?? false,
                         'uebersteuerungsgrund' => $v->pruefung?->override_reason,
                         'darfFreigeben' => $v->darfFreigegebenWerden(),
-                        'hatBild' => $bild instanceof Attachment,
+                        'hatBild' => $bilder !== [],
 
-                        // **Laeuft gerade**: angefordert, noch keine Datei, kein
-                        // Fehler, und noch innerhalb der Frist. Ohne diesen
+                        // **Laeuft gerade**: angefordert, seitdem keine Datei,
+                        // kein Fehler, und noch innerhalb der Frist. Ohne diesen
                         // Zustand sieht die Kachel nach einem Klick
                         // minutenlang unveraendert aus -- ohne die Frist
                         // dreht sie ewig.
@@ -170,17 +170,26 @@ final class AnzeigenController extends Controller
                         'bildmodell' => $v->image_model,
                         'laeuftIn' => $laeuftIn->get((string) $v->getKey(), []),
                         'uebertragung' => $uebertragung->get((string) $v->getKey()),
-                        'bildFehler' => $v->image_error ?? ($this->abgebrochen($v, $bild, $laeuft)
+                        'bildFehler' => $v->image_error ?? ($this->abgebrochen($v, $laeuft)
                             ? ($steht
                                 ? 'Der Auftrag wartet noch — die Warteschlange wird gerade nicht abgearbeitet.'
                                 : 'Die Grafik ist nicht angekommen. Bitte noch einmal versuchen.')
                             : null),
 
-                        // Die Adresse bleibt dieselbe, wenn eine Grafik ersetzt
-                        // wird. Ohne den Zeitstempel zeigte der Browser die alte.
-                        'bildUrl' => $bild instanceof Attachment
-                            ? route('anzeigen.bild', ['vorschlag' => $v->uuid, 'v' => $bild->created_at?->timestamp])
-                            : null,
+                        // Die Kachel zeigt das Quadrat -- es ist das
+                        // Auffangformat und passt in die Kachel.
+                        'bildUrl' => $this->bildadresse($v, Bildformat::Quadrat, $bilder[Bildformat::Quadrat->value] ?? null),
+
+                        // **Jedes Format, auch das fehlende** (WP-31b). Wer
+                        // freigibt, muss die Schrift auf allen dreien lesen:
+                        // das Bildmodell hat sie dreimal gesetzt.
+                        'bilder' => array_map(fn (Bildformat $f): array => [
+                            'format' => $f->value,
+                            'name' => $f->label(),
+                            'seitenverhaeltnis' => $f->seitenverhaeltnis(),
+                            'einsatz' => $f->einsatz(),
+                            'url' => $this->bildadresse($v, $f, $bilder[$f->value] ?? null),
+                        ], Bildformat::cases()),
                     ];
                 })
                 ->values(),
@@ -210,9 +219,8 @@ final class AnzeigenController extends Controller
             'werbekonto' => $this->werbekonto(),
 
             'warteschlangeSteht' => $steht && $vorschlaege->contains(
-                fn (AdSuggestion $v): bool => $v->bild() === null
-                    && $v->image_requested_at !== null
-                    && $v->image_requested_at->lessThanOrEqualTo($frist)
+                fn (AdSuggestion $v): bool => $this->unterwegs($v)
+                    && $v->image_requested_at?->lessThanOrEqualTo($frist) === true
             ),
             'reifegrad' => $this->profil->reifegrad(),
             'laengen' => [
@@ -244,18 +252,45 @@ final class AnzeigenController extends Controller
     }
 
     /**
+     * Angefordert, und seitdem kam nichts an.
+     *
+     * **Seitdem, nicht ueberhaupt** (WP-31b). Bis dahin galt ein Entwurf nur
+     * als "entsteht gerade", solange er noch gar keine Grafik hatte -- beim
+     * Nacherzeugen stand die alte unveraendert da, und niemand sah, dass
+     * etwas passiert.
+     */
+    private function unterwegs(AdSuggestion $vorschlag): bool
+    {
+        $angefordert = $vorschlag->image_requested_at;
+        $zuletzt = $vorschlag->letzteGrafikAm();
+
+        return $angefordert !== null && ($zuletzt === null || $zuletzt->lessThan($angefordert));
+    }
+
+    /**
      * Ein Lauf, von dem nichts mehr kommt.
      *
-     * Angefordert, keine Datei, kein festgehaltener Grund -- und die Frist
-     * ist abgelaufen. Ein Worker, den jemand abschiesst, hinterlaesst genau
-     * diesen Zustand, und stillschweigend waere er das Schlimmste: die
+     * Angefordert, seitdem keine Datei, kein festgehaltener Grund -- und die
+     * Frist ist abgelaufen. Ein Worker, den jemand abschiesst, hinterlaesst
+     * genau diesen Zustand, und stillschweigend waere er das Schlimmste: die
      * Praxis hat bezahlt und sieht nichts.
      */
-    private function abgebrochen(AdSuggestion $vorschlag, ?Attachment $bild, bool $laeuft): bool
+    private function abgebrochen(AdSuggestion $vorschlag, bool $laeuft): bool
     {
-        return ! $bild instanceof Attachment
-            && ! $laeuft
-            && $vorschlag->image_requested_at !== null;
+        return ! $laeuft && $this->unterwegs($vorschlag);
+    }
+
+    /**
+     * Die Adresse einer Grafik.
+     *
+     * Sie bleibt dieselbe, wenn eine Grafik ersetzt wird. Ohne den
+     * Zeitstempel zeigte der Browser die alte.
+     */
+    private function bildadresse(AdSuggestion $vorschlag, Bildformat $format, ?Attachment $anhang): ?string
+    {
+        return $anhang instanceof Attachment
+            ? route('anzeigen.bild', ['vorschlag' => $vorschlag->uuid, 'format' => $format->value, 'v' => $anhang->created_at?->timestamp])
+            : null;
     }
 
     /**
@@ -410,8 +445,19 @@ final class AnzeigenController extends Controller
             return back()->with('fehler', 'Erst freigeben, dann schalten.');
         }
 
-        if (! $vorschlag->bild() instanceof Attachment) {
+        $fehlend = $vorschlag->fehlendeFormate();
+
+        if (count($fehlend) === count(Bildformat::cases())) {
             return back()->with('fehler', 'Ohne Grafik ist es keine Anzeige. Bitte erzeugen Sie zuerst eine.');
+        }
+
+        // **Geschaltet wird nur ein vollstaendiger Satz** (C13). Mit zwei von
+        // drei Formaten liefert Meta trotzdem aus -- mit einem Quadrat in der
+        // Story.
+        if ($fehlend !== []) {
+            return back()->with('fehler', 'Es fehlen Formate: '
+                .implode(', ', array_map(fn (Bildformat $f): string => $f->beschreibung(), $fehlend))
+                .'. Bitte erzeugen Sie die Grafik neu.');
         }
 
         $kampagne = AdCampaign::query()->whereUuid((string) $daten['kampagne'])->first();
@@ -567,11 +613,15 @@ final class AnzeigenController extends Controller
         return back()->with('erfolg', 'Die Grafik wird erzeugt — das dauert ein bis drei Minuten.');
     }
 
-    public function bild(AdSuggestion $vorschlag, Anhangspeicher $speicher): StreamedResponse
+    public function bild(Request $request, AdSuggestion $vorschlag, Anhangspeicher $speicher): StreamedResponse
     {
         Gate::authorize(Ability::ManageCampaigns->value);
 
-        $anhang = $vorschlag->bild();
+        $format = Bildformat::tryFrom((string) $request->query('format', Bildformat::Quadrat->value));
+
+        abort_unless($format instanceof Bildformat, 404);
+
+        $anhang = $vorschlag->bild($format);
 
         abort_unless($anhang instanceof Attachment, 404);
 
