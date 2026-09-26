@@ -106,6 +106,12 @@ wirft, statt grün zu liefern.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** **Templates und Buchungsseite sind angeschlossen**
+> (C11). Die Buchungsseite zeigt Beschreibung und Preis nur bei Grün oder
+> begründeter Übersteuerung im Katalog; die Prüfung trägt einen Fingerabdruck
+> des geprüften Texts. Die juristische Durchsicht bleibt bewusst offen — die
+> Ampel ist eine Hilfe und sagt es.
+
 - **Die juristische Durchsicht** (WP-01). Bis dahin steht der Warnblock.
 - **Die Bildprüfung selbst.** Sie erkennt Wörter, keine Kompositionen. Ein
   Modell dafür gehört zu WP-31, wo Bilder überhaupt erst entstehen. Was dort

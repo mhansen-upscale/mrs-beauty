@@ -34,6 +34,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * @property MessageDirection $direction
  * @property MessageStatus $status
  * @property MessageCostCategory|null $cost_category
+ * @property int|null $charge_tenth_cents Einzeln berechnet, nur im Service-Fenster (B14)
  * @property string $conversation_id
  * @property string|null $external_id
  * @property string|null $body
@@ -67,6 +68,7 @@ class Message extends TenantModel implements HasPersonalData
             'direction' => MessageDirection::class,
             'status' => MessageStatus::class,
             'cost_category' => MessageCostCategory::class,
+            'charge_tenth_cents' => 'integer',
             'body' => Encrypted::class,
             'subject' => Encrypted::class,
             'template_variables' => Encrypted::class,

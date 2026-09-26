@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Bot, ChartNoAxesCombined, CreditCard, KeyRound, Mail, Palette, User } from 'lucide-vue-next';
+import { Bot, ChartNoAxesCombined, CreditCard, KeyRound, Mail, MessageCircle, Palette, User } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 import type { SharedData } from '@/types';
@@ -24,6 +24,7 @@ const sidebarNavItems = computed<NavItem[]>(() => [
     ...(darf('organization.manage')
         ? [
               { title: 'Postfach', href: '/settings/postfach', icon: Mail },
+              { title: 'WhatsApp', href: '/settings/whatsapp', icon: MessageCircle },
               { title: 'Tracking', href: '/settings/tracking', icon: ChartNoAxesCombined },
           ]
         : []),

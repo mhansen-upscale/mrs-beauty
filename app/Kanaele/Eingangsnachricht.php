@@ -40,5 +40,15 @@ final class Eingangsnachricht
          * @var list<array{name: string, inhalt: string}>
          */
         public readonly array $anhaenge = [],
+
+        /**
+         * Die Kennung einer Datei beim Anbieter, die erst geholt werden muss
+         * -- bei WhatsApp kommt nur sie mit der Zustellung, nicht die Datei.
+         * Geholt wird in einem eigenen Auftrag (MedienHolen).
+         */
+        public readonly ?string $medienKennung = null,
+
+        /** Der Dateiname, wenn der Absender einen mitgeschickt hat. */
+        public readonly ?string $dateiname = null,
     ) {}
 }

@@ -179,6 +179,9 @@ erreichbar.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Alles hier Genannte ist mit WP-23 und WP-24
+> erledigt; die Einordnung kennt dazu den **Behandlerwunsch**.
+
 **Die harte Weiche** (WP-23): Wortstammsuche für Komplikationssignale,
 Bildanhänge, Alarm. Was dieses Paket hat, ist ihre Untergrenze über die
 erkannte Absicht — überstimmbar durch ein Modell, das sich irrt. Genau

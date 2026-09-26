@@ -91,6 +91,9 @@ Besonders:
 | `tests/Feature/Verfuegbarkeit/HoldTest.php` | 12–15 |
 | `tests/Parallel/NebenlaeufigkeitTest.php` | **16, 17** |
 
+> **Nachtrag 26.09.2026.** 19 und 20 stehen seit WP-14:
+> `tests/Feature/Kalender/RueckabgleichTest.php` und `AusgangsabgleichTest.php`.
+
 Offen bleiben **19 und 20** — eigenmarkierte Events und extern gelöschte
 Termine. Beide setzen den Kalendersync voraus und gehören zu WP-14.
 

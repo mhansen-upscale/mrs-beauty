@@ -207,9 +207,19 @@ seither genau diese eine Form und keine andere.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** `Schedule` und `Contact` sind **bewusst nicht**
+> angeschlossen. Beide schickten weitere personenbezogene Ereignisse an Meta,
+> und nach C8 ist schon die Zugehörigkeit zu einer ästhetischen Praxis ein
+> Gesundheitsdatum. Die einzige Stelle mit Einwilligung (Buchung mit
+> Messeinwilligung) meldet bereits `Lead`. `Schedule` bei der Bestätigung
+> bräuchte die Besucherkennung am Termin — eine neue Speicherung, die zu
+> entscheiden ist, nicht nebenbei zu bauen.
+
 - **Gegen die echte Conversions API geprüft ist nichts.** Es fehlt
   `META_CAPI_TOKEN`, und ohne Zugang sendet das Produkt bewusst gar nicht —
-  der Normalfall vor dem App Review.
+  der Normalfall vor dem App Review. Der Zugang kommt künftig nicht aus
+  `META_CAPI_TOKEN`, sondern aus der Werbekonto-Verbindung der Praxis
+  (Entscheidung B16, **WP-32c**).
 - **`Schedule` und `Contact`** sind erlaubt, werden aber noch nirgends
   ausgelöst. `Lead` bei der Buchung genügt für den Anfang.
 - **Die Modellumschaltung rechnet je Termin neu** und lädt dafür die

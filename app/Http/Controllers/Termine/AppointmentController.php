@@ -21,6 +21,7 @@ use App\Models\AppointmentType;
 use App\Models\Contact;
 use App\Models\Location;
 use App\Models\Practitioner;
+use App\Models\WorkingHour;
 use App\Support\Uuid;
 use App\Termine\NichtBuchbar;
 use App\Termine\Statusautomat;
@@ -30,6 +31,8 @@ use App\Verfuegbarkeit\SlotNichtVerfuegbar;
 use App\Verfuegbarkeit\Slotvorschlag;
 use App\Verfuegbarkeit\Verfuegbarkeit;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -74,6 +77,9 @@ final class AppointmentController extends Controller
                 'appointmentTypes' => [],
                 'appointments' => [],
                 'date' => CarbonImmutable::now()->toDateString(),
+                'view' => 'tag',
+                'days' => [],
+                'hours' => ['from' => 8, 'to' => 18],
                 'location' => null,
                 'canManage' => $darfAendern,
             ]);
@@ -85,8 +91,28 @@ final class AppointmentController extends Controller
         // zwei Uhr.
         $zone = $standort->zone();
         $datum = $this->gewaehltesDatum($request, $standort);
-        $von = CarbonImmutable::parse($datum.' 00:00:00', $zone)->utc();
-        $bis = $von->addDay();
+        $mitternacht = CarbonImmutable::parse($datum.' 00:00:00', $zone);
+
+        // Der Tag -- fuer die Vorschlaege immer, auch in der Wochenansicht:
+        // eine Woche voller freier Startzeiten waere eine Rechnung, die
+        // niemand angefordert hat. Tage werden in der Ortszeit addiert, damit
+        // der Tag der Zeitumstellung 23 oder 25 Stunden hat und nicht 24.
+        $tagVon = $mitternacht->utc();
+        $tagBis = $mitternacht->addDay()->utc();
+
+        // **Die Woche ist eine Woche der Praxis** (offen seit WP-11): Montag
+        // 00:00 bis Montag 00:00 Ortszeit. Wer in UTC schneidet, verliert den
+        // Sonntagabend oder bekommt den naechsten Montag dazu.
+        $ansicht = $request->string('ansicht')->toString() === 'woche' ? 'woche' : 'tag';
+        $montag = $mitternacht->startOfWeek(CarbonInterface::MONDAY);
+
+        [$von, $bis] = $ansicht === 'woche'
+            ? [$montag->utc(), $montag->addDays(7)->utc()]
+            : [$tagVon, $tagBis];
+
+        $tage = $ansicht === 'woche'
+            ? array_map(fn (int $versatz): string => $montag->addDays($versatz)->toDateString(), range(0, 6))
+            : [$datum];
 
         $eigener = $darfAendern ? null : $this->eigenerBehandler($request);
 
@@ -116,6 +142,11 @@ final class AppointmentController extends Controller
 
         return Inertia::render('termine/Index', [
             'date' => $datum,
+            'view' => $ansicht,
+            'days' => $tage,
+            // Das Zeitraster: von der fruehesten Arbeitszeit bis zur
+            // spaetesten, und so weit darueber hinaus, wie ein Termin reicht.
+            'hours' => $this->raster($standort, $behandler, $termine),
             'canManage' => $darfAendern,
 
             'location' => [
@@ -187,7 +218,7 @@ final class AppointmentController extends Controller
 
             // Erst auf Anforderung berechnet -- ein Teilnachladevorgang von
             // Inertia, keine eigene API-Route (Entscheidung S2).
-            'proposals' => Inertia::optional(fn (): array => $this->vorschlaege($request, $standort, $von, $bis)),
+            'proposals' => Inertia::optional(fn (): array => $this->vorschlaege($request, $standort, $tagVon, $tagBis)),
             'contacts' => Inertia::optional(fn (): array => $this->kontakte($request)),
         ]);
     }
@@ -312,6 +343,8 @@ final class AppointmentController extends Controller
     {
         return [
             'uuid' => $termin->uuid,
+            // Der Tag in Ortszeit -- die Wochenansicht sortiert danach.
+            'date' => $standort->ortszeit($termin->starts_at)->toDateString(),
             'color_index' => $farbe,
             'practitioner' => $termin->practitioner->uuid,
             'practitioner_name' => $termin->practitioner->name(),
@@ -453,6 +486,57 @@ final class AppointmentController extends Controller
         }
 
         return $standort->ortszeit(CarbonImmutable::now())->toDateString();
+    }
+
+    /**
+     * Von welcher bis zu welcher vollen Stunde das Raster reicht.
+     *
+     * Aus den Arbeitszeiten der gezeigten Behandler an diesem Standort -- und
+     * weiter, wenn ein Termin darueber hinausgeht: ein uebersteuerter Termin
+     * um 19:30 muss sichtbar sein, auch wenn um 18 Uhr Feierabend ist.
+     *
+     * @param  EloquentCollection<int, Practitioner>  $behandler
+     * @param  EloquentCollection<int, Appointment>  $termine
+     * @return array{from: int, to: int}
+     */
+    private function raster(Location $standort, EloquentCollection $behandler, EloquentCollection $termine): array
+    {
+        $zeiten = WorkingHour::query()
+            ->where('location_id', $standort->getKey())
+            ->whereIn('practitioner_id', $behandler->modelKeys())
+            ->get();
+
+        $minuten = [];
+
+        foreach ($zeiten as $zeit) {
+            $minuten[] = $this->minuten($zeit->starts_at);
+            $minuten[] = $this->minuten($zeit->ends_at);
+        }
+
+        foreach ($termine as $termin) {
+            $minuten[] = $this->minuten($standort->ortszeit($termin->blocked_from)->format('H:i'));
+
+            $ende = $standort->ortszeit($termin->blocked_until);
+            $minuten[] = $ende->toDateString() !== $standort->ortszeit($termin->blocked_from)->toDateString()
+                ? 24 * 60
+                : $this->minuten($ende->format('H:i'));
+        }
+
+        if ($minuten === []) {
+            return ['from' => 8, 'to' => 18];
+        }
+
+        return [
+            'from' => max(0, intdiv(min($minuten), 60)),
+            'to' => min(24, (int) ceil(max($minuten) / 60)),
+        ];
+    }
+
+    private function minuten(string $uhrzeit): int
+    {
+        [$stunde, $minute] = array_map(intval(...), explode(':', $uhrzeit) + [0, 0]);
+
+        return $stunde * 60 + $minute;
     }
 
     private function eigenerBehandler(Request $request): ?Practitioner

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Benachrichtigung\Mailmarke;
 use App\Enums\AppointmentStatus;
 use App\Enums\BookingChannel;
 use App\Enums\CancellationReason;
@@ -309,6 +310,45 @@ it('nennt im Text Datum, Uhrzeit, Standort, Behandler und Behandlung', function 
         ->toContain($szenario->aufbau->behandler->name())
         ->toContain($szenario->aufbau->standort->name)
         ->toContain($szenario->aufbau->standort->ortszeit($termin->starts_at)->format('H:i'));
+});
+
+it('traegt in Kopf und Fuss die Praxis, nicht das Produkt', function (): void {
+    // Offen seit WP-13: der Absendername war die Praxis, Kopf und Fuss waren
+    // config('app.name').
+    [, $termin] = terminMitNachrichten();
+
+    $termin->loadMissing(['appointmentType', 'practitioner', 'location', 'contact']);
+
+    $marke = new Mailmarke(
+        praxisname: 'Praxis Sonnenschein',
+        impressum: 'https://praxis-sonnenschein.test/impressum',
+        datenschutz: 'https://praxis-sonnenschein.test/datenschutz',
+    );
+
+    $html = (string) (new Terminnachricht($termin, NotificationKind::Reminder, 'Praxis Sonnenschein', $marke))
+        ->toMail($termin->contact)
+        ->render();
+
+    expect($html)->toContain('Praxis Sonnenschein')
+        ->toContain('https://praxis-sonnenschein.test/impressum');
+
+    expect(str_contains($html, (string) config('app.name')))->toBeFalse()
+        ->and(str_contains($html, 'All rights reserved'))->toBeFalse();
+});
+
+it('zeigt das Logo der Praxis im Kopf, wenn eines hinterlegt ist', function (): void {
+    [, $termin] = terminMitNachrichten();
+
+    $termin->loadMissing(['appointmentType', 'practitioner', 'location', 'contact']);
+
+    $html = (string) (new Terminnachricht(
+        $termin,
+        NotificationKind::Confirmation,
+        'Praxis Sonnenschein',
+        new Mailmarke('Praxis Sonnenschein', logo: 'https://mrs-beauty.test/buchung/sonnenschein/logo'),
+    ))->toMail($termin->contact)->render();
+
+    expect($html)->toContain('src="https://mrs-beauty.test/buchung/sonnenschein/logo"');
 });
 
 /* Mandantengrenze ---------------------------------------------------------- */

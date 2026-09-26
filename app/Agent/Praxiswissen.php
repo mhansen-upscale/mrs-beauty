@@ -6,6 +6,7 @@ namespace App\Agent;
 
 use App\Models\Location;
 use App\Models\Organization;
+use App\Models\Practitioner;
 use App\Models\Treatment;
 
 /**
@@ -38,6 +39,29 @@ final class Praxiswissen
                 'name' => $behandlung->name,
                 'dauer' => null,
                 'preis' => $this->preis($behandlung),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Wer behandelt -- fuer den Behandlerwunsch (Schritt 6).
+     *
+     * Die Namen stehen ohnehin auf der Buchungsseite; sie sind Produktwissen,
+     * keine fremde Eingabe.
+     *
+     * @return list<array{uuid: string, name: string}>
+     */
+    public function behandler(): array
+    {
+        /** @var list<array{uuid: string, name: string}> */
+        return Practitioner::query()
+            ->where('is_active', true)
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn (Practitioner $behandler): array => [
+                'uuid' => (string) $behandler->uuid,
+                'name' => $behandler->name(),
             ])
             ->values()
             ->all();

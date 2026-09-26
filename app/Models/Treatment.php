@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 /**
  * Eine Behandlung aus dem Leistungskatalog.
@@ -97,6 +98,55 @@ class Treatment extends TenantModel
             ->map(strval(...))
             ->values()
             ->toArray();
+    }
+
+    /**
+     * Die juengste HWG-Pruefung dessen, was die Buchungsseite zeigen wuerde
+     * (WP-30).
+     *
+     * @return MorphOne<ComplianceCheck, $this>
+     */
+    public function pruefung(): MorphOne
+    {
+        return $this->morphOne(ComplianceCheck::class, 'checkable')
+            ->ofMany(['checked_at' => 'max', 'id' => 'max'], 'max');
+    }
+
+    /**
+     * Der Preis, wie ihn die Buchungsseite nennt -- oder nichts.
+     *
+     * "ab 250 €" oder "250–400 €". Eine Obergrenze ohne Untergrenze laesst der
+     * Katalog nicht zu.
+     */
+    public function preistext(): ?string
+    {
+        if ($this->price_from_cents === null) {
+            return null;
+        }
+
+        $ab = self::euro($this->price_from_cents);
+
+        return $this->price_to_cents === null || $this->price_to_cents === $this->price_from_cents
+            ? 'ab '.$ab
+            : str_replace(' €', '', $ab).'–'.self::euro($this->price_to_cents);
+    }
+
+    /**
+     * Alles, was die Buchungsseite ueber diese Behandlung sagen wuerde -- und
+     * damit alles, was die HWG-Pruefung sehen muss. Preis und Beschreibung
+     * zusammen: ein Preis kann selbst Werbung sein ("nur heute").
+     */
+    public function oeffentlicherText(): string
+    {
+        return trim(implode("\n", array_filter([
+            is_string($this->description) ? trim($this->description) : null,
+            $this->preistext(),
+        ])));
+    }
+
+    private static function euro(int $cent): string
+    {
+        return number_format($cent / 100, $cent % 100 === 0 ? 0 : 2, ',', '.').' €';
     }
 
     /**

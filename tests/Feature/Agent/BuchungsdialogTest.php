@@ -10,13 +10,17 @@ use App\Enums\BookingChannel;
 use App\Enums\BookingState;
 use App\Enums\ConsentType;
 use App\Enums\MessageDirection;
+use App\Enums\WaitlistStatus;
+use App\Enums\Weekday;
 use App\Models\AgentDialog;
 use App\Models\AgentRun;
 use App\Models\Appointment;
 use App\Models\Consent;
 use App\Models\Message;
+use App\Models\Practitioner;
 use App\Models\SlotHold;
 use App\Models\Treatment;
+use App\Models\WaitlistEntry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -71,10 +75,15 @@ function dialogaufbau(array $antworten = [], AgentMode $modus = AgentMode::Auto)
 }
 
 /** Eine Nachricht der Person, durch den Agenten geschickt. */
-function schreibt(Agentenaufbau $agent, string $text, string $absicht = 'other', ?string $behandlung = null): ?AgentRun
-{
+function schreibt(
+    Agentenaufbau $agent,
+    string $text,
+    string $absicht = 'other',
+    ?string $behandlung = null,
+    ?string $behandler = null,
+): ?AgentRun {
     $agent->modell->anfragen = [];
-    $agent->modell->antworten([Testmodell::einordnung(absicht: $absicht, sicherheit: 0.95, behandlung: $behandlung)]);
+    $agent->modell->antworten([Testmodell::einordnung(absicht: $absicht, sicherheit: 0.95, behandlung: $behandlung, behandler: $behandler)]);
 
     return app(Agentenlauf::class)->fuer($agent->nachricht($text));
 }
@@ -168,8 +177,9 @@ it('erzeugt aus zwei Buchungsversuchen einen Termin und eine Rueckfrage', functi
         ->and($lauf?->action)->toBe(AgentAction::Escalated);
 });
 
-it('bricht ohne passenden Slot nicht ab', function (): void {
-    // Testfall 14.
+it('bietet ohne passenden Slot die Warteliste an, statt abzubrechen', function (): void {
+    // Testfall 14: "Kein passender Slot -> Wartelistenangebot statt Abbruch".
+    // Bis zum 26.09.2026 uebergab der Agent hier an einen Menschen.
     [$agent, $praxis] = dialogaufbau();
 
     // Nichts frei: der Kalender ist voll. Ausgedrueckt als leere
@@ -179,10 +189,78 @@ it('bricht ohne passenden Slot nicht ab', function (): void {
 
     $lauf = schreibt($agent, 'Termin für Botox bitte', 'booking_request', 'Botox');
 
-    // **Keine Sackgasse**: uebergeben, nicht abgebrochen -- und mit einem
-    // Satz, der der Person sagt, dass sich jemand meldet.
+    expect($lauf?->action)->toBe(AgentAction::Answered)
+        ->and(letzterText($lauf))->toContain('Warteliste')
+        ->and(AgentDialog::query()->firstOrFail()->state)->toBe(BookingState::WartelisteAnbieten)
+        // Gefragt, noch nicht eingetragen.
+        ->and(WaitlistEntry::query()->count())->toBe(0);
+});
+
+it('traegt nach einem Ja auf die Warteliste ein -- mit Einwilligung', function (): void {
+    [$agent, $praxis] = dialogaufbau();
+    DB::table('appointment_slots')->delete();
+
+    schreibt($agent, 'Termin für Botox bitte', 'booking_request', 'Botox');
+    $lauf = schreibt($agent, 'Ja, gern');
+
+    $eintrag = WaitlistEntry::query()->firstOrFail();
+
+    expect($lauf?->action)->toBe(AgentAction::Answered)
+        ->and(letzterText($lauf))->toContain('auf der Warteliste')
+        ->and($eintrag->status)->toBe(WaitlistStatus::Active)
+        ->and($eintrag->appointment_type_id)->toBe($praxis->art->getKey())
+        ->and($eintrag->min_notice_hours)->toBe((int) config('mrs.agent.waitlist.min_notice_hours'))
+        ->and($eintrag->expires_at->greaterThan(CarbonImmutable::now()))->toBeTrue()
+        ->and(AgentDialog::query()->firstOrFail()->state)->toBe(BookingState::AufWarteliste)
+        // **K11**: ohne Einwilligung bekaeme der Eintrag nie ein Angebot. Die
+        // Frage nach der Warteliste ist zugleich die nach dem Kanal.
+        ->and(Consent::query()->where('type', ConsentType::ServiceMessages->value)->count())->toBe(1);
+});
+
+it('fragt fuer die Warteliste nach dem Namen, wenn ihn niemand kennt', function (): void {
+    [$agent, $praxis] = dialogaufbau();
+    DB::table('appointment_slots')->delete();
+
+    $identitaet = $agent->gespraech->channelIdentity;
+    $identitaet->display_name = null;
+    $identitaet->save();
+
+    schreibt($agent, 'Termin für Botox bitte', 'booking_request', 'Botox');
+    $lauf = schreibt($agent, 'Ja, gern');
+
+    // Das Ja ist kein Name -- und die Einwilligung ist trotzdem schon erteilt.
+    expect(letzterText($lauf))->toContain('Wie ist Ihr Name')
+        ->and(WaitlistEntry::query()->count())->toBe(0);
+
+    schreibt($agent, 'Jana Berger');
+
+    $eintrag = WaitlistEntry::query()->with('contact')->firstOrFail();
+
+    expect($eintrag->contact->name())->toBe('Jana Berger')
+        ->and(Consent::query()->count())->toBe(1);
+});
+
+it('uebergibt nach einem Nein zur Warteliste an einen Menschen', function (): void {
+    [$agent, $praxis] = dialogaufbau();
+    DB::table('appointment_slots')->delete();
+
+    schreibt($agent, 'Termin für Botox bitte', 'booking_request', 'Botox');
+    $lauf = schreibt($agent, 'Nein, lieber nicht');
+
     expect($lauf?->action)->toBe(AgentAction::Escalated)
-        ->and($lauf?->escalation_reason)->not->toBeNull();
+        ->and(WaitlistEntry::query()->count())->toBe(0)
+        ->and(Consent::query()->count())->toBe(0);
+});
+
+it('traegt im Modus suggest niemanden ein', function (): void {
+    [$agent, $praxis] = dialogaufbau(modus: AgentMode::Suggest);
+    DB::table('appointment_slots')->delete();
+
+    schreibt($agent, 'Termin für Botox bitte', 'booking_request', 'Botox');
+    schreibt($agent, 'Ja, gern');
+
+    expect(WaitlistEntry::query()->count())->toBe(0)
+        ->and(Consent::query()->count())->toBe(0);
 });
 
 it('eskaliert nach drei erfolglosen Klaerungsversuchen', function (): void {
@@ -323,4 +401,82 @@ it('haelt im Modus suggest weder Slot noch bucht er', function (): void {
     expect(Appointment::query()->count())->toBe(0)
         ->and(SlotHold::query()->count())->toBe(0)
         ->and(Consent::query()->count())->toBe(0);
+});
+
+/* Behandlerwunsch ---------------------------------------------------------- */
+
+/**
+ * Eine zweite Behandlerin, die nur mittwochnachmittags arbeitet -- so ist an
+ * jedem Vorschlag zu erkennen, bei wem er liegt.
+ */
+function zweiteBehandlerin(Aufbau $praxis): Practitioner
+{
+    $sauer = Practitioner::factory()->create(['title' => 'Dr.', 'first_name' => 'Lena', 'last_name' => 'Sauer']);
+    $sauer->locations()->attach($praxis->standort);
+    $sauer->workingHours()->create([
+        'location_id' => $praxis->standort->getKey(),
+        'weekday' => Weekday::Mittwoch,
+        'starts_at' => '14:00:00',
+        'ends_at' => '17:00:00',
+    ]);
+    $praxis->art->practitioners()->attach($sauer);
+    $praxis->erzeugeSlots('2027-01-12', '2027-01-20');
+
+    return $sauer;
+}
+
+it('schlaegt bei einem Behandlerwunsch nur deren Termine vor', function (): void {
+    // docs/fachlogik/agent.md, Schritt 6: behandler_klaeren "nur wenn der
+    // Kontakt danach fragt". Bis zum 26.09.2026 wurde der Zustand
+    // uebersprungen.
+    [$agent, $praxis] = dialogaufbau();
+    $sauer = zweiteBehandlerin($praxis);
+
+    $lauf = schreibt($agent, 'Geht Botox auch bei Frau Dr. Sauer?', 'booking_request', 'Botox', 'Dr. Lena Sauer');
+
+    expect(letzterText($lauf))->toContain('Diese Termine sind frei');
+
+    schreibt($agent, 'Der erste passt');
+
+    expect(SlotHold::query()->gueltig()->firstOrFail()->practitioner_id)->toBe($sauer->getKey());
+});
+
+it('erkennt eine Behandlerin auch am Nachnamen allein', function (): void {
+    [$agent, $praxis] = dialogaufbau();
+    $sauer = zweiteBehandlerin($praxis);
+
+    schreibt($agent, 'Termin bei Frau Sauer?', 'booking_request', 'Botox', 'Frau Sauer');
+    schreibt($agent, 'Der erste passt');
+
+    expect(SlotHold::query()->gueltig()->firstOrFail()->practitioner_id)->toBe($sauer->getKey());
+});
+
+it('fragt nach, wenn der genannte Behandler nicht zu finden ist', function (): void {
+    [$agent, $praxis] = dialogaufbau();
+    $sauer = zweiteBehandlerin($praxis);
+
+    $lauf = schreibt($agent, 'Geht das bei Dr. Unbekannt?', 'booking_request', 'Botox', 'Dr. Unbekannt');
+
+    // Nicht raten -- und keinen Termin bei jemand anderem vorschlagen, als
+    // waere nichts gesagt worden.
+    expect(letzterText($lauf))->toContain('Sauer')
+        ->and(AgentDialog::query()->firstOrFail()->state)->toBe(BookingState::BehandlerKlaeren);
+
+    schreibt($agent, 'Dann bei Frau Sauer');
+    schreibt($agent, 'Der erste passt');
+
+    expect(SlotHold::query()->gueltig()->firstOrFail()->practitioner_id)->toBe($sauer->getKey());
+});
+
+it('nimmt auf die Warteliste mit Behandlerwunsch, wenn bei ihr nichts frei ist', function (): void {
+    [$agent, $praxis] = dialogaufbau();
+    $sauer = zweiteBehandlerin($praxis);
+
+    // Bei Frau Dr. Sauer ist alles belegt, beim anderen Behandler nicht.
+    DB::table('appointment_slots')->where('practitioner_id', $sauer->getKey())->delete();
+
+    schreibt($agent, 'Botox bei Dr. Sauer bitte', 'booking_request', 'Botox', 'Dr. Lena Sauer');
+    schreibt($agent, 'Ja, gern');
+
+    expect(WaitlistEntry::query()->firstOrFail()->practitioner_id)->toBe($sauer->getKey());
 });

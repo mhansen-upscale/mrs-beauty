@@ -233,6 +233,11 @@ richtig.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Die Logo-Route ist nicht mehr die einzige ihrer
+> Art: Anhänge gehen über `anhang.zeigen` hinaus (C12). Das Mailgerüst trägt
+> die Praxis in Kopf und Fuß (`resources/views/mail/praxis.blade.php`,
+> `App\Benachrichtigung\Mailmarke`). Offen bleibt die eigene Domain je Praxis.
+
 - **Eine eigene Domain je Praxis.** Ein anderes Thema mitsamt Zertifikaten.
 - **Die Logo-Route ist die einzige ihrer Art.** Anhänge aus dem Posteingang
   haben weiterhin keinen Weg nach draußen (offen seit WP-21); das Muster

@@ -4,8 +4,9 @@
 > `docs/fachlogik/agent.md` (Regel 5), `docs/integrationen/meta.md` (Regel 2)
 > und `specs/WP-23-agent-guardrails.md` (Regeln 5 und 6) als verbindlich
 > zitiert. Regeln 2 und 5 sind **wörtlich belegt**. Die übrigen sind aus den
-> vorhandenen Spezifikationen abgeleitet und **zu prüfen**, bevor ein Paket
-> sich darauf stützt. Jede Regel trägt ihren Status.
+> vorhandenen Spezifikationen abgeleitet. Seit dem 26.09.2026 steht bei jeder,
+> **wo der Code sie durchsetzt** — fachlich bestätigen muss sie weiterhin der
+> Produktverantwortliche. Jede Regel trägt ihren Status.
 
 Sechs Regeln. Sie stehen über jeder Abwägung von Aufwand, Eleganz oder
 Termindruck. Wer eine davon brechen will, ändert zuerst dieses Dokument.
@@ -18,7 +19,11 @@ ebenfalls verbindlich.
 
 ## Regel 1 — Keine Abfrage ohne Mandantenbezug
 
-*Status: abgeleitet aus `specs/README.md` („WP-03 … nicht nachrüstbar") — zu prüfen.*
+*Status: abgeleitet aus `specs/README.md` („WP-03 … nicht nachrüstbar") — fachlich zu bestätigen.
+Im Code durchgesetzt: `TenantModel` mit Global Scope, erzwungen von
+`tests/Feature/Tenancy/ArchitekturTest.php` (jedes Modell, jede Tabelle, jeder
+Fremdschlüssel `(id, organization_id)`); `acrossTenants()` verlangt eine
+Begründung und protokolliert sie.*
 
 Jede Tabelle mit Nutzdaten trägt eine `organization_id`. Jede Abfrage darauf
 ist mandantengebunden, erzwungen durch einen globalen Scope, nicht durch
@@ -72,17 +77,26 @@ an, auch an einen selbst gewählten.
 Kampagne kann „Botox Herbst" heißen; die Praxis hat sie so benannt, bevor sie
 uns kannte. Sie wird gekennzeichnet, nicht umbenannt (Entscheidung C9).
 
-**Ausführbar abgesichert.** Ein Test unter `tests/Feature/Meta` lädt alle
-aktiven Katalognamen und prüft jeden ausgehenden Payload dagegen — Ereignisse,
-Zielgruppen und Strukturnamen. Ausgenommen ist allein der Anzeigeninhalt
-selbst. Ein Treffer lässt den Test fehlschlagen. Siehe
-`docs/fachlogik/attribution.md`, Testfall 7.
+**Ausführbar abgesichert.** Tests laden alle aktiven Katalognamen
+(`Treatment::aktiveNamen()`) und prüfen jeden ausgehenden Payload dagegen —
+Ereignisse, Zielgruppen und Strukturnamen. Ausgenommen ist allein der
+Anzeigeninhalt selbst. Ein Treffer lässt den Test fehlschlagen. Siehe
+`docs/fachlogik/attribution.md`, Testfall 7. Die Prüfungen stehen dort, wo der
+Payload entsteht: Pixel (`tests/Feature/Meta/PixelTest.php`), Conversions API
+(`tests/Feature/Attribution/AuswertungTest.php`,
+„haelt jeden ausgehenden Payload gegen alle aktiven Katalognamen"),
+Kampagnen- und Anzeigenstruktur (`tests/Feature/Werbung/KampagnenverwaltungTest.php`,
+`AnzeigenschaltungTest.php`).
 
 ---
 
 ## Regel 3 — Personenbezogene Daten werden verschlüsselt und sparsam geführt
 
-*Status: abgeleitet aus WP-03 und `docs/integrationen/kalender.md`, R2 — zu prüfen.*
+*Status: abgeleitet aus WP-03 und `docs/integrationen/kalender.md`, R2 — fachlich zu bestätigen.
+Im Code durchgesetzt: `Encrypted`-Cast mit Schlüssel je Organisation
+(`tests/Feature/Tenancy/VerschluesselungTest.php`), Anhänge verschlüsselt
+außerhalb der Datenbank, Fristen über `mrs:aufbewahrung`, neutrale
+Kalendertitel (`tests/Feature/Kalender`).*
 
 Namen, Kontaktwege, Nachrichteninhalte, Notizen und Anhänge liegen
 feldverschlüsselt. Was nicht gebraucht wird, wird nicht gespeichert: aus einem
@@ -97,7 +111,13 @@ durchgesetzt, nicht auf Zuruf (WP-18).
 
 ## Regel 4 — Kein schreibender Fremdsystemzugriff im Request-Zyklus
 
-*Status: abgeleitet aus `docs/integrationen/meta.md`, Abschnitt Rate Limits — zu prüfen.*
+*Status: abgeleitet aus `docs/integrationen/meta.md`, Abschnitt Rate Limits — fachlich zu bestätigen.
+Im Code durchgesetzt: schreibende Aufrufe laufen als Aufträge
+(`app/Jobs`), Fehler nach `Fehlereinordnung`, Ausfälle stehen auf dem
+Dashboard und in `mrs:betrieb`. **Eine bewusste Ausnahme:** Stripe-Kasse und
+-Portal öffnen im Anfragezyklus, weil ein Mensch auf die Weiterleitung wartet
+(`Stripeclient`); der Rechnungsposten für das Service-Fenster läuft dagegen
+als Auftrag.*
 
 Jeder schreibende Aufruf an Meta, Google oder Microsoft läuft über eine Queue
 mit Idempotenzschlüssel. Die Oberfläche bleibt bedienbar, wenn ein
@@ -129,7 +149,10 @@ Verteidigungslinie. Beide Ebenen sind nötig, nicht eine davon.
 ## Regel 6 — Im Zweifel eskalieren
 
 *Status: abgeleitet aus `docs/fachlogik/agent.md`, Abschnitt Grundhaltung, und
-`specs/WP-23-agent-guardrails.md` — zu prüfen.*
+`specs/WP-23-agent-guardrails.md` — fachlich zu bestätigen.
+Im Code durchgesetzt: die harte Weiche vor jeder Textgenerierung
+(`tests/Feature/Agent/GuardrailTest.php`). Auch beim Absagen und Verschieben
+(G12): unbekannte Person oder mehr als ein Termin heißt Übergabe.*
 
 Der Agent ist eine Empfangskraft, keine medizinische Fachkraft. Medizinische
 Fragen, Beschwerden, Komplikationssignale und Bildanhänge gehen ohne
@@ -152,6 +175,9 @@ Person.**
   Kommentar. Keine Magic Numbers in Klassen.
 - **Tests laufen gegen MySQL**, nicht gegen SQLite. Sperrverhalten und
   generierte Spalten sind genau dort relevant, wo es darauf ankommt.
+- **`vendor/bin/pest` ohne Argumente muss grün laufen** — so ruft die CI ihn
+  auf. Die ganze Kette: `composer check`, dazu `npm run format:check`,
+  `npx eslint .` und `npx vue-tsc --noEmit`.
 - **PHPStan Stufe 8**, in der CI erzwungen (Entscheidung S10). Ein Befund wird
   behoben, nicht nach `ignoreErrors` verschoben. Ausgenommen ist allein Code,
   den ein Paket veröffentlicht hat und den wir nicht schreiben.

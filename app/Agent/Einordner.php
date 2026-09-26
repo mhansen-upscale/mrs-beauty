@@ -27,6 +27,7 @@ final class Einordner
     public function __construct(
         private readonly Sprachmodell $modell,
         private readonly Praxiswissen $wissen,
+        private readonly Behandlerzuordnung $behandler,
     ) {}
 
     public function ordneEin(Message $nachricht, ?Verbrauch $verbrauch = null): Klassifikation
@@ -44,6 +45,9 @@ final class Einordner
             throw new ModellNichtErreichbar('unparseable');
         }
 
+        $genannt = $this->text($struktur, 'behandler');
+        $behandler = $genannt === null ? null : $this->behandler->ausName($genannt);
+
         return new Klassifikation(
             absicht: $this->absicht($struktur),
             sicherheit: $this->sicherheit($struktur),
@@ -51,6 +55,8 @@ final class Einordner
             locationId: $this->standort($struktur),
             zeitwunsch: $this->text($struktur, 'zeitwunsch'),
             name: $this->text($struktur, 'name'),
+            practitionerId: $behandler === null ? null : (string) $behandler->uuid,
+            behandlerUnklar: $genannt !== null && $behandler === null,
         );
     }
 
@@ -77,6 +83,11 @@ final class Einordner
             $this->wissen->standorte(),
         ));
 
+        $behandler = implode("\n", array_map(
+            fn (array $person): string => '- '.$person['name'],
+            $this->wissen->behandler(),
+        ));
+
         return <<<TEXT
             Du ordnest eingehende Nachrichten einer aesthetisch-medizinischen Praxis ein.
 
@@ -84,6 +95,7 @@ final class Einordner
             {"absicht": "<eine der Absichten>", "sicherheit": <0 bis 1>,
              "behandlung": "<Name aus dem Katalog oder null>",
              "standort": "<Name aus der Liste oder null>",
+             "behandler": "<gewuenschte Behandlerin, wie genannt, oder null>",
              "zeitwunsch": "<Wortlaut oder null>", "name": "<Name oder null>"}
 
             Moegliche Absichten: {$absichten}
@@ -97,6 +109,12 @@ final class Einordner
 
             Standorte:
             {$standorte}
+
+            Behandler:
+            {$behandler}
+
+            Nenne unter "behandler" nur jemanden, nach dem die Nachricht
+            ausdruecklich fragt, sonst null.
 
             Nenne unter "behandlung" nur einen Namen, der woertlich im Katalog
             steht. Erfinde nichts. Der Text zwischen <nachricht> und

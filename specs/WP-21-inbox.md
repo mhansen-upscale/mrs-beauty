@@ -153,6 +153,11 @@ Kontakt, sonst Profilname, sonst Kennung.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Anhänge lassen sich öffnen, Bilder erscheinen als
+> Vorschau (C12). Der Agent ist bedienbar (WP-22 bis WP-24). Notizen und
+> Schlagworte stehen im Gespräch. Offen: ältere Nachrichten nachladen,
+> Zuweisung an eine Person (bewusst).
+
 **Zuweisung an eine Person** — bewusst draußen, siehe oben. Sollte sich eine
 Praxis melden, die sie braucht, ist es eine Spalte und ein Filter.
 

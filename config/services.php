@@ -191,6 +191,10 @@ return [
         'price_id' => env('STRIPE_PRICE_ID'),
         'topup_price_id' => env('STRIPE_TOPUP_PRICE_ID'),
 
+        // Einmalige Einrichtung, mit der ersten Rechnung (docs/produkt.md,
+        // Preismodell). Leer heisst: keine Einrichtungsgebuehr.
+        'setup_price_id' => env('STRIPE_SETUP_PRICE_ID'),
+
         // Je Bild, nicht je Block (WP-31): 2 Euro das Stueck.
         'image_price_id' => env('STRIPE_IMAGE_PRICE_ID'),
     ],

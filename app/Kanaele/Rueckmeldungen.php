@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Kanaele;
 
+use App\Abrechnung\Servicefensterabrechnung;
 use App\Enums\MessageCostCategory;
 use App\Enums\MessageStatus;
 use App\Models\Message;
@@ -20,6 +21,8 @@ use Carbon\CarbonImmutable;
  */
 final class Rueckmeldungen
 {
+    public function __construct(private readonly Servicefensterabrechnung $servicefenster) {}
+
     /**
      * Die Kette des Versands. Hoeher heisst weiter.
      *
@@ -97,6 +100,11 @@ final class Rueckmeldungen
         }
 
         $nachricht->cost_category = $meldung->kategorie;
+
+        // Eine Antwort im Fenster bekommt hier ihren Preis -- den, der jetzt
+        // gilt (B14). Ein Template zaehlt gegen das Kontingent und bleibt
+        // ohne Einzelpreis.
+        $this->servicefenster->bepreise($nachricht);
 
         return true;
     }

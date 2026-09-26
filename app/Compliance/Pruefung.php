@@ -84,11 +84,24 @@ final class Pruefung
         $pruefung->legal_as_of = $ergebnis->rechtsstand;
         $pruefung->checked_at = $ergebnis->geprueftAm;
         $pruefung->result = $ergebnis->ampel;
+        // Wofuer das Ergebnis gilt: dieser Text, nicht der Datensatz.
+        $pruefung->content_hash = self::fingerabdruck($inhalt);
         $pruefung->findings = (string) json_encode(
             array_map(fn (Befund $b): array => $b->toArray(), $ergebnis->befunde)
         );
         $pruefung->save();
 
         return $pruefung;
+    }
+
+    /**
+     * Der Fingerabdruck eines Pruefgegenstands.
+     *
+     * Wer spaeter wissen will, ob eine Pruefung noch dem steht, was jetzt
+     * veroeffentlicht wuerde, vergleicht ihn -- nicht den Zeitstempel.
+     */
+    public static function fingerabdruck(Pruefgegenstand $inhalt): string
+    {
+        return hash('sha256', $inhalt->gesamttext().($inhalt->hatBild ? "\0bild" : ''), true);
     }
 }

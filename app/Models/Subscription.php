@@ -24,6 +24,7 @@ use Carbon\CarbonImmutable;
  * @property int $extra_messages
  * @property int $extra_agent_runs
  * @property int $extra_images
+ * @property string|null $service_window_billed_period Letzter abgerechneter Monat, `Y-m` (B14)
  */
 class Subscription extends TenantModel
 {

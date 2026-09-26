@@ -137,6 +137,13 @@ Betrieb — dort ist Horizon zuständig und hat alle vier.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** **Sicherung und Wiederherstellung regelt Laravel
+> Cloud** (`docs/betrieb.md`). **Die CI wäre beim ersten Lauf gescheitert**:
+> `phpunit.xml` nannte eine Suite `tests/Unit`, die es nicht gab —
+> `vendor/bin/pest` brach mit Exit 2 ab —, und ESLint fand zwei Fehler in
+> `BuchungLayout.vue`. Beides behoben; die ganze Kette läuft lokal grün.
+> Gelaufen ist die CI selbst weiterhin nicht.
+
 **Backups und Wiederherstellung** gehören zur Plattform und stehen in
 `docs/betrieb.md` als Prüfliste, nicht als Code.
 

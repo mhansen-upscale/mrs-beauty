@@ -5,9 +5,10 @@
          colors="true"
 >
     <testsuites>
-        <testsuite name="Unit">
-            <directory>tests/Unit</directory>
-        </testsuite>
+        <!-- Keine Unit-Suite: jeder Test hier laeuft gegen MySQL und gehoert
+             nach Feature oder Parallel. Ein Verzeichnis, das es nicht gibt,
+             laesst `vendor/bin/pest` mit Exit 2 abbrechen, bevor ein einziger
+             Test laeuft. Genau so ruft die CI ihn auf. -->
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>

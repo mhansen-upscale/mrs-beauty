@@ -355,9 +355,15 @@ und ESLint für das Frontend, `vue-tsc` für die Typen.
 
 ## Was noch offen ist
 
-- Das Dashboard zeigt noch die Platzhalter des Starter-Kits. Was dort steht,
-  entscheidet sich mit WP-32.
-- Ein Bauteil für Hinweise und Bestätigungen (Toast) fehlt. Bisher meldet die
-  Oberfläche Fehler nur am Formularfeld. Die Kalenderseite (WP-14) zeigt
-  `flash.erfolg` und `flash.fehler` als Band über der Tabelle — beides steht
-  seitdem in jeder Inertia-Antwort und wartet auf ein gemeinsames Bauteil.
+- ~~Das Dashboard zeigt noch die Platzhalter des Starter-Kits.~~ Erledigt: es
+  zeigt Störungen (Regel 4), offene Klärungen der Warteliste und den
+  Buchungslink. Die Kennzahlenkette steht unter *Auswertung* (WP-32b).
+- ~~Ein Bauteil für Hinweise und Bestätigungen (Toast) fehlt.~~ Erledigt seit
+  WP-07: `components/Rueckmeldung.vue` im `AppLayout` zeigt `flash.erfolg`,
+  `flash.fehler` und `flash.hinweise` auf jeder Seite. Ein schwebender Toast
+  ist es bewusst nicht — eine Meldung, die nach drei Sekunden verschwindet,
+  liest niemand am Empfang, der gerade telefoniert.
+- **`vendor/bin/pest` ohne Argumente muss laufen.** So ruft die CI ihn auf.
+  Eine Suite in `phpunit.xml`, deren Verzeichnis fehlt, bricht den Lauf mit
+  Exit 2 ab, bevor ein Test läuft — gefunden am 26.09.2026, bevor die CI je
+  gelaufen war.

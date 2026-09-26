@@ -36,6 +36,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $ad_suggestion_id
  * @property CarbonImmutable|null $synced_at
  * @property CarbonImmutable|null $vanished_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 class Ad extends TenantModel implements HasPersonalData
 {

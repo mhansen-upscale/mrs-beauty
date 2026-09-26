@@ -34,6 +34,29 @@ enum BookingState: string
 
     case Gebucht = 'gebucht';
 
+    /**
+     * Nichts frei -- die Warteliste ist angeboten (Testfall 14). Die Frage ist
+     * zugleich die nach dem Kanal: ohne Einwilligung bekaeme der Eintrag nie
+     * ein Angebot (K11).
+     */
+    case WartelisteAnbieten = 'warteliste_anbieten';
+
+    case AufWarteliste = 'auf_warteliste';
+
+    /*
+     * Ein Termin, der schon steht (offen seit WP-24): absagen oder
+     * verschieben -- immer mit ausdruecklicher Bestaetigung.
+     */
+    case AbsageBestaetigen = 'absage_bestaetigen';
+
+    case VerschiebenVorschlagen = 'verschieben_vorschlagen';
+
+    /** Der neue Slot ist gehalten, der alte noch belegt. */
+    case VerschiebenBestaetigen = 'verschieben_bestaetigen';
+
+    /** Abgesagt, verschoben -- oder bewusst stehen gelassen. */
+    case Geaendert = 'geaendert';
+
     public function label(): string
     {
         return match ($this) {
@@ -46,13 +69,19 @@ enum BookingState: string
             self::Einwilligung => 'Einwilligung',
             self::Bestaetigen => 'Bestätigen',
             self::Gebucht => 'Gebucht',
+            self::WartelisteAnbieten => 'Warteliste anbieten',
+            self::AufWarteliste => 'Auf der Warteliste',
+            self::AbsageBestaetigen => 'Absage bestätigen',
+            self::VerschiebenVorschlagen => 'Verschieben: Termine vorschlagen',
+            self::VerschiebenBestaetigen => 'Verschieben bestätigen',
+            self::Geaendert => 'Termin geändert',
         };
     }
 
     /** Ist der Vorgang abgeschlossen? */
     public function abgeschlossen(): bool
     {
-        return $this === self::Gebucht;
+        return in_array($this, [self::Gebucht, self::AufWarteliste, self::Geaendert], true);
     }
 
     /**
@@ -65,8 +94,14 @@ enum BookingState: string
     public function haeltSlot(): bool
     {
         return match ($this) {
-            self::SlotsVorschlagen, self::DatenErheben, self::Einwilligung, self::Bestaetigen => true,
+            self::SlotsVorschlagen, self::DatenErheben, self::Einwilligung, self::Bestaetigen, self::VerschiebenBestaetigen => true,
             default => false,
         };
+    }
+
+    /** Geht es gerade um einen Termin, der schon steht? */
+    public function aendertTermin(): bool
+    {
+        return in_array($this, [self::AbsageBestaetigen, self::VerschiebenVorschlagen, self::VerschiebenBestaetigen], true);
     }
 }

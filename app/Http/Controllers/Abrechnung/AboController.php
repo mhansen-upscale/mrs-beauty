@@ -10,6 +10,7 @@ use App\Abrechnung\Stripe\Stripeclient;
 use App\Enums\Ability;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -57,6 +58,8 @@ final class AboController extends Controller
                 'zeitraum' => $nutzung['zeitraum'],
                 'nachrichten' => $nutzung['nachrichten'],
                 'kostenpflichtig' => $nutzung['kostenpflichtigeNachrichten'],
+                // Antworten im offenen Fenster: gezaehlt, nie gesperrt (B14).
+                'servicefenster' => $nutzung['servicefenster'],
                 'agentenlaeufe' => $nutzung['agentenlaeufe'],
                 'angebote' => $nutzung['angebote'],
                 'bilder' => $this->nutzung->bilder(
@@ -75,6 +78,17 @@ final class AboController extends Controller
 
             // Einzeln nachkaufbar, nicht in Bloecken (WP-31).
             'bildpreisCent' => (int) config('mrs.billing.image_price_cents'),
+
+            // Die Praxis soll vor dem Klick wissen, was ein Block kostet.
+            // Abgerechnet wird bei Stripe; die Zahl hier nennt ihn nur.
+            'blockpreisCent' => (int) config('mrs.billing.prices.topup_cents'),
+            'blockmengen' => [
+                'nachrichten' => (int) config('mrs.billing.topup.messages'),
+                'agentenlaeufe' => (int) config('mrs.billing.topup.agent_runs'),
+            ],
+
+            // Vorerst null (B14) -- die Oberflaeche sagt dann "ohne Berechnung".
+            'servicefensterpreisZehntelCent' => (int) config('mrs.billing.service_window.price_tenth_cents'),
 
             'stripeAngebunden' => $this->stripe->angebunden(),
             'hatKunden' => is_string($abo->stripe_customer_id) && $abo->stripe_customer_id !== '',
@@ -127,6 +141,7 @@ final class AboController extends Controller
             modus: $abschluss ? 'subscription' : 'payment',
             menge: $daten['was'] === 'bilder' ? (int) ($daten['menge'] ?? 1) : 1,
             artikel: $abschluss ? null : (string) $daten['was'],
+            einrichtung: $abschluss ? $this->einrichtung($abo) : null,
         );
 
         if ($adresse === null) {
@@ -137,6 +152,21 @@ final class AboController extends Controller
         // Webhook meldet sie. Wer sie hier schon gutschriebe, verschenkte
         // Kontingent an jeden, der die Kasse wieder schliesst.
         return redirect()->away($adresse);
+    }
+
+    /**
+     * Die Einrichtung wird einmal berechnet -- beim ersten Abschluss, nicht
+     * bei jeder Rueckkehr nach einer Kuendigung.
+     */
+    private function einrichtung(Subscription $abo): ?string
+    {
+        $preis = config('services.stripe.setup_price_id');
+
+        if (! is_string($preis) || $preis === '' || is_string($abo->stripe_subscription_id)) {
+            return null;
+        }
+
+        return $preis;
     }
 
     /** Rechnungen, Zahlungsart, Kuendigung -- alles im Portal von Stripe. */

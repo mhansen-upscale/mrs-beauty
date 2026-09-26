@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Benachrichtigung\Mailmarke;
 use App\Enums\NotificationKind;
 use App\Kalender\Termineinladung;
 use App\Models\Appointment;
@@ -26,11 +27,20 @@ final class Terminnachricht extends Notification
 {
     use Queueable;
 
+    private readonly Mailmarke $marke;
+
     public function __construct(
         private readonly Appointment $termin,
         private readonly NotificationKind $art,
         private readonly string $praxisname,
+
+        /**
+         * Kopf und Fuss mit der Praxis (WP-07). Ohne Angabe nur ihr Name --
+         * nie der des Produkts.
+         */
+        ?Mailmarke $marke = null,
     ) {
+        $this->marke = $marke ?? new Mailmarke($praxisname);
         $this->onQueue('default');
     }
 
@@ -48,6 +58,9 @@ final class Terminnachricht extends Notification
         $beginn = $standort->ortszeit($this->termin->starts_at);
 
         $nachricht = (new MailMessage)
+            // **Kopf und Fuss tragen die Praxis**, nicht config('app.name')
+            // (offen seit WP-13): das Geruest steht in mail.praxis.
+            ->markdown('mail.praxis', ['marke' => $this->marke])
             // Die Mail kommt von der Praxis, nicht von uns. Die Adresse
             // bleibt unsere -- eine eigene Absenderdomain samt SPF und DKIM
             // gehoert zu WP-07 --, der Anzeigename ist der der Praxis.

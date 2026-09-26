@@ -327,6 +327,10 @@ selbst migriert.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Microsoft steht (WP-15), das Mailgerüst trägt die
+> Praxis (WP-07/WP-13). Offen: Serientermine mit abweichenden Instanzen und
+> die Menge der Protokolleinträge des Webhooks.
+
 **Microsoft Graph (WP-15)** und **erst danach** die gemeinsame Abstraktion.
 
 **Wiederkehrende Termine mit abweichenden Einzelinstanzen** laufen heute über

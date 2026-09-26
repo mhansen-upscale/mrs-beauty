@@ -10,6 +10,7 @@ use App\Enums\LeadSource;
 use App\Enums\LeadStatus;
 use App\Models\Appointment;
 use App\Models\Contact;
+use App\Models\Conversation;
 use App\Models\Lead;
 use App\Models\Treatment;
 use Carbon\CarbonImmutable;
@@ -150,6 +151,29 @@ final class Leadverwaltung
         $lead->status = LeadStatus::Contacted;
         $lead->last_activity_at = $jetzt;
         $lead->save();
+    }
+
+    /**
+     * Die Praxis hat im Posteingang geantwortet -- Mensch oder Assistent.
+     *
+     * **Die Reaktion vermerkt sich selbst** (offen seit WP-17): wer antwortet,
+     * hat reagiert. Nur offene Leads im Status "neu"; ein Lead mit Termin
+     * bleibt, wo er ist. Die erste Reaktion zaehlt einmal (Lead::vermerkeReaktion).
+     */
+    public function beiAntwort(Conversation $gespraech, ?CarbonImmutable $jetzt = null): void
+    {
+        $kontakt = $gespraech->contact;
+
+        if (! $kontakt instanceof Contact) {
+            return;
+        }
+
+        Lead::query()
+            ->offen()
+            ->where('contact_id', $kontakt->getKey())
+            ->where('status', LeadStatus::New->value)
+            ->get()
+            ->each(fn (Lead $lead): Lead => $this->vermerkeReaktion($lead, $jetzt));
     }
 
     /** Von Hand: die Praxis hat reagiert. */

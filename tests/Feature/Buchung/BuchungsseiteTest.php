@@ -13,6 +13,7 @@ use App\Models\Contact;
 use App\Models\Organization;
 use App\Models\Practitioner;
 use App\Models\SlotHold;
+use App\Models\Treatment;
 use App\Tenancy\TenantContext;
 use App\Verfuegbarkeit\SlotHalter;
 use Carbon\CarbonImmutable;
@@ -194,22 +195,31 @@ it('zeigt keinen inaktiven Standort', function (): void {
     get('/buchen/demo-praxis')->assertInertia(fn ($seite) => $seite->has('locations', 0));
 });
 
-it('zeigt weder Preis noch Behandlungsbeschreibung', function (): void {
+it('zeigt weder ungeprueften Preis noch ungepruefte Beschreibung', function (): void {
     [, $szenario] = praxisMitBuchungsseite();
 
+    $behandlung = Treatment::factory()->create([
+        'description' => 'Strafft die Stirn dauerhaft.',
+        'price_from_cents' => 25000,
+    ]);
+
     $szenario->aufbau->art->description = 'Strafft die Stirn dauerhaft.';
+    $szenario->aufbau->art->treatment_id = $behandlung->getKey();
     $szenario->aufbau->art->save();
 
     app(TenantContext::class)->forget();
 
-    // Beides steht im Katalog und wartet auf die HWG-Pruefung (WP-30). Eine
+    // Beides steht im Katalog und erscheint erst nach der HWG-Pruefung
+    // (WP-30, tests/Feature/Compliance/VeroeffentlichungTest.php). Eine
     // ungepruefte Wirkaussage auf der Werbeseite einer aesthetischen Praxis
-    // ist genau die Haftung, gegen die dieses Produkt antritt.
+    // ist genau die Haftung, gegen die dieses Produkt antritt. Die
+    // Beschreibung der Terminart ist intern und erscheint nie.
     $antwort = get('/buchen/demo-praxis');
 
     $antwort->assertInertia(fn ($seite) => $seite
         ->has('appointmentTypes.0')
-        ->missing('appointmentTypes.0.description')
+        ->where('appointmentTypes.0.description', null)
+        ->where('appointmentTypes.0.price', null)
         ->missing('appointmentTypes.0.price_from_cents')
     );
 });

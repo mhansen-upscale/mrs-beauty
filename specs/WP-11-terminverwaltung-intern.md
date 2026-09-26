@@ -290,6 +290,13 @@ seitdem über `scripts/pruefe-build.mjs` nach, ob jede Seite im Manifest steht.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Die **Wochenansicht** steht als Zeitraster —
+> Montag bis Sonntag in Ortszeit des Standorts, Stunden aus den
+> Arbeitszeiten, auf dem Telefon als Liste je Tag
+> (`components/termine/Wochenraster.vue`, `tests/Feature/Termine/WochenansichtTest.php`).
+> Die Kontaktsuche findet seit WP-16 auch Telefonnummern. Die Tagesansicht
+> bleibt eine Liste je Behandler.
+
 Die Tagesansicht ist eine Liste je Behandler, kein Zeitraster. Für eine Praxis
 mit zwei Behandlern trägt das; ab vier Spalten will man eine Zeitachse sehen.
 Das gehört zusammen mit der Wochenansicht in ein späteres Paket.

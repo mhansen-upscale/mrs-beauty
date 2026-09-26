@@ -88,6 +88,10 @@ const wochentext = (iso: string): string => new Date(iso).toLocaleDateString('de
  * `pending` — nur traegt sie den Grund dafuer bei sich und kann so den ganzen
  * Tag liegen. Ein Rad, das sich dabei dreht, verspricht etwas, das nicht
  * eintritt (so gesehen am 23.09.2026).
+ *
+ * Einen Auftrag, der nie anläuft, erkennt der Server an der Frist
+ * (`mrs.ads.uebertragung_timeout_minutes`) und liefert dann selbst einen
+ * Grund — damit ist die Anzeige nicht mehr unterwegs, und der Knopf erscheint.
  */
 const unterwegs = (u: Uebertragung | null): boolean => u !== null && u.zustand === 'pending' && u.fehler === null && !props.werbekonto.gestoert;
 

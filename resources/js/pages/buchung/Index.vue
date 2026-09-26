@@ -21,6 +21,9 @@ interface Terminart {
     uuid: string;
     name: string;
     duration_minutes: number;
+    /** Nur nach der HWG-Prüfung (WP-30) — sonst null. */
+    description: string | null;
+    price: string | null;
     locations: string[];
     practitioners: Behandler[];
 }
@@ -429,6 +432,12 @@ const behandlerNamen = (eintrag: Terminart): string =>
                         <span class="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                             <Clock class="size-3.5" />
                             {{ eintrag.duration_minutes }} Minuten
+                            <template v-if="eintrag.price"> · {{ eintrag.price }}</template>
+                        </span>
+
+                        <!-- Geprüft, bevor es hier steht (WP-30). Als Text, nie als Auszeichnung. -->
+                        <span v-if="eintrag.description" class="mt-2 block whitespace-pre-line text-sm text-muted-foreground">
+                            {{ eintrag.description }}
                         </span>
 
                         <!-- Wer sie macht: ein Gesicht nimmt mehr Unsicherheit als jeder Beschreibungstext. -->

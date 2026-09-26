@@ -18,6 +18,8 @@ use App\Kanaele\Konversationen;
 use App\Kanaele\Nachrichtenversand;
 use App\Kanaele\Posteingang;
 use App\Kontakte\Kontaktsuche;
+use App\Kontakte\Notizbuch;
+use App\Leads\Leadverwaltung;
 use App\Models\AgentRun;
 use App\Models\Attachment;
 use App\Models\ChannelConnection;
@@ -25,6 +27,8 @@ use App\Models\Contact;
 use App\Models\Conversation;
 use App\Models\Lead;
 use App\Models\Message;
+use App\Models\Note;
+use App\Models\Tag;
 use App\Models\WhatsAppTemplate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,6 +55,8 @@ final class InboxController extends Controller
         private readonly Konversationen $konversationen,
         private readonly Nachrichtenversand $versand,
         private readonly Kontaktsuche $kontakte,
+        private readonly Leadverwaltung $leads,
+        private readonly Notizbuch $notizbuch,
     ) {}
 
     public function index(Request $request): Response
@@ -130,6 +136,9 @@ final class InboxController extends Controller
 
         $this->versand->stelleEin($conversation, $daten['body']);
 
+        // Wer antwortet, hat reagiert (WP-17): Speed-to-Lead misst ab hier.
+        $this->leads->beiAntwort($conversation);
+
         return back();
     }
 
@@ -154,6 +163,8 @@ final class InboxController extends Controller
         $werte = array_values(array_map(strval(...), $daten['werte'] ?? []));
 
         $this->versand->stelleTemplateEin($conversation, $template, $werte);
+
+        $this->leads->beiAntwort($conversation);
 
         return back();
     }
@@ -355,6 +366,22 @@ final class InboxController extends Controller
             'kontakt' => $gespraech->contact instanceof Contact ? [
                 'uuid' => $gespraech->contact->uuid,
                 'name' => $gespraech->contact->name(),
+
+                // Notizen und Schlagworte (offen seit WP-18) -- nur fuer die,
+                // die Kontakte pflegen. Wer nur mitliest, bekommt sie nicht.
+                ...(Gate::allows(Ability::ManageContacts->value) ? [
+                    'notizen' => $this->notizbuch->notizen($gespraech->contact)
+                        ->map(fn (Note $notiz): array => [
+                            'uuid' => $notiz->uuid,
+                            'text' => $notiz->body,
+                            'von' => $notiz->author?->name,
+                            'wann' => $notiz->created_at?->toIso8601String(),
+                        ])
+                        ->values(),
+                    'schlagworte' => $this->notizbuch->schlagworte($gespraech->contact)
+                        ->map(fn (Tag $schlagwort): array => ['uuid' => $schlagwort->uuid, 'name' => $schlagwort->name])
+                        ->values(),
+                ] : []),
             ] : null,
 
             'anfrage' => $this->offeneAnfrage($gespraech),
@@ -410,6 +437,7 @@ final class InboxController extends Controller
                         'uuid' => $anhang->uuid,
                         'name' => $anhang->original_name,
                         'groesse' => $anhang->size_bytes,
+                        'bild' => $anhang->istBild(),
                     ])
                     ->values(),
             ])->values(),
@@ -512,6 +540,7 @@ final class InboxController extends Controller
         /** @var list<array<string, mixed>> */
         return WhatsAppTemplate::query()
             ->sendbar()
+            ->with('pruefung')
             ->orderBy('name')
             ->get()
             ->map(fn (WhatsAppTemplate $template): array => [
@@ -522,6 +551,14 @@ final class InboxController extends Controller
                 'kostet' => $template->category->kostetGeld(),
                 'rumpf' => $template->body,
                 'variablen' => $template->variables,
+
+                // Die HWG-Ampel (WP-30) -- ein Hinweis, keine Sperre: das
+                // Template hat Meta genehmigt, und Meta prueft kein HWG.
+                'ampel' => $template->pruefung?->result->value,
+                'befunde' => array_map(
+                    fn (array $befund): string => (string) ($befund['titel'] ?? ''),
+                    $template->pruefung?->befunde() ?? [],
+                ),
             ])
             ->values()
             ->all();

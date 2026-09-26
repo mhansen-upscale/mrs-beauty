@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * warum etwas damals durchging.
  *
  * @property Ampel $result
+ * @property string|null $content_hash Fingerabdruck des geprueften Texts, Rohbytes
  * @property int $ruleset_version
  * @property CarbonImmutable $legal_as_of
  * @property CarbonImmutable $checked_at
@@ -37,7 +38,7 @@ class ComplianceCheck extends TenantModel implements HasPersonalData
     protected $guarded = ['id'];
 
     /** @var list<string> */
-    protected $hidden = ['checkable_id', 'overridden_by_user_id'];
+    protected $hidden = ['checkable_id', 'overridden_by_user_id', 'content_hash'];
 
     /**
      * @return array<string, string>

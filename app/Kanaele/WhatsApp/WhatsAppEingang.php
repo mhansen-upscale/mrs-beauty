@@ -157,6 +157,8 @@ final class WhatsAppEingang implements Kanaleingang, Rueckmeldungsleser
 
         [$inhalt, $medientyp] = $this->inhalt($roh, $art);
 
+        $mitDatei = in_array($art, ['image', 'video', 'audio', 'document', 'sticker'], true);
+
         return new Eingangsnachricht(
             externeId: $kennung,
             absender: $absender,
@@ -164,6 +166,8 @@ final class WhatsAppEingang implements Kanaleingang, Rueckmeldungsleser
             medientyp: $medientyp,
             zeitpunkt: $this->zeitpunkt(data_get($roh, 'timestamp')),
             anzeigename: $namen[$absender] ?? null,
+            medienKennung: $mitDatei ? $this->text($roh, $art.'.id') : null,
+            dateiname: $mitDatei ? $this->text($roh, $art.'.filename') : null,
         );
     }
 
@@ -183,8 +187,8 @@ final class WhatsAppEingang implements Kanaleingang, Rueckmeldungsleser
             'text' => [$this->text($roh, 'text.body'), null],
 
             // Die Bildunterschrift ist der Inhalt, der Mime-Typ das Medium.
-            // Die Datei selbst wird nicht geholt -- das braucht den
-            // Media-Endpunkt und die Virenpruefung und ist eine eigene Naht.
+            // Die Datei selbst holt ein eigener Auftrag ueber den
+            // Media-Endpunkt (MedienHolen) -- hier kommt nur ihre Kennung an.
             'image', 'video', 'audio', 'document', 'sticker' => [
                 $this->text($roh, $art.'.caption'),
                 $this->text($roh, $art.'.mime_type') ?? $art,

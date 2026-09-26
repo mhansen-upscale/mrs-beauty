@@ -176,9 +176,31 @@ return [
             'kein interesse', 'doch nicht',
         ],
 
+        // Die Antwort auf "bei wem?", wenn es keinen Wunsch gibt (Schritt 6,
+        // behandler_klaeren).
+        'indifference' => [
+            'egal', 'ist mir gleich', 'gleich wer', 'wer frei ist', 'wer zeit hat',
+            'beliebig', 'keine präferenz', 'keine praeferenz', 'hauptsache',
+        ],
+
         // Wie weit voraus der Agent Termine vorschlaegt und wie viele.
         'proposal_days' => 14,
         'proposal_count' => 3,
+
+        // Testfall 14 (docs/fachlogik/agent.md): ohne passenden Slot bietet
+        // der Agent die Warteliste an. Was er dabei nicht fragt, setzt er
+        // grosszuegig -- jeder Wochentag, jede Uhrzeit, jeder Standort, wenn
+        // keiner gewaehlt ist. Eine Einschraenkung, die niemand geaeussert
+        // hat, waere ein erfundener Wunsch.
+        //
+        // Der Vorlauf (K8) ist die eine Grenze, die er nicht offen lassen
+        // kann: ohne ihn gingen Angebote hinaus, die niemand annehmen kann.
+        // 24 Stunden sind die vorsichtige Vorgabe; das Team verkuerzt sie am
+        // Eintrag, wenn jemand spontaner ist.
+        'waitlist' => [
+            'days' => 60,
+            'min_notice_hours' => 24,
+        ],
 
         // Schritt 6: Lebensdauer des Slot-Holds im Buchungsdialog.
         'slot_hold_ttl_minutes' => 15,
@@ -422,6 +444,11 @@ return [
             'port' => (int) env('CLAMAV_PORT', 3310),
             'timeout_seconds' => (int) env('CLAMAV_TIMEOUT', 10),
         ],
+
+        // Was im Browser angezeigt werden darf (AnhangController). Alles
+        // andere wird heruntergeladen, als Bytes: eine HTML-Datei aus dem
+        // Chat, im Browser geoeffnet, liefe unter unserer Adresse.
+        'inline_mimes' => ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
     ],
 
     /*
@@ -441,6 +468,25 @@ return [
     'billing' => [
 
         'trial_days' => 30,
+
+        // **Die Preise** (festgelegt am 26.09.2026, docs/produkt.md, Abschnitt
+        // "Preismodell"). Netto, in Cent. Abgerechnet wird bei Stripe unter
+        // den Preis-IDs aus config/services.php -- die Zahlen hier nennen den
+        // Preis nur in der Oberflaeche und **muessen dem Preis bei Stripe
+        // entsprechen**. Wer einen aendert, aendert beide.
+        'prices' => [
+            // Eine Stufe je Praxis (B10), monatlich kuendbar.
+            'base_cents' => 79000,
+
+            // Einmalig mit dem Abschluss: Rufnummer, Meta-Verifizierung,
+            // Katalog und Brand Guide einrichten. Nur, wenn bei Stripe ein
+            // Preis dafuer hinterlegt ist (STRIPE_SETUP_PRICE_ID).
+            'setup_cents' => 149000,
+
+            // Ein Block beim Aufstocken -- 250 Templates oder 600
+            // Assistenzlaeufe, unter derselben Preis-ID.
+            'topup_cents' => 5900,
+        ],
 
         // Was der Grundpreis enthaelt, je Monat.
         'included' => [
@@ -479,6 +525,24 @@ return [
         // Steht hier, damit die Oberflaeche ihn nennen kann -- abgerechnet
         // wird bei Stripe.
         'image_price_cents' => 200,
+
+        // **Antworten im offenen Service-Fenster** (Entscheidung B14,
+        // 26.09.2026). Ob Meta sie ab dem 01.10.2026 berechnet, sagen die
+        // eigenen Unterlagen unterschiedlich (docs/integrationen/meta.md: ja;
+        // B12 ging von kostenlos aus). Deshalb wird ab jetzt **gezaehlt** und
+        // mit diesem Preis **berechnet** -- vorerst null Euro.
+        //
+        // In Cent je Antwort, Nachkommastelle erlaubt ("1.5"). Ein Wert ueber
+        // null fliesst ohne Codeaenderung in die Rechnung: der Preis wird an
+        // jeder Antwort festgehalten, sobald Meta die Kategorie meldet, und
+        // am Monatsersten als ein Sammelposten zu Stripe geschickt. Er gilt
+        // ab dann, nicht rueckwirkend.
+        //
+        // **Gesperrt wird eine Antwort trotzdem nie** (B12): sie zaehlt nicht
+        // gegen das Kontingent. Gespeichert in Zehntel-Cent (B11).
+        'service_window' => [
+            'price_tenth_cents' => (int) round(((float) env('WHATSAPP_SERVICEFENSTER_CENT', 0)) * 10),
+        ],
     ],
 
     /*
@@ -514,6 +578,20 @@ return [
             // Wenn ein Gespraech keinen Betreff hat: eine Mail ohne Betreff
             // landet in manchen Postfaechern im Spam.
             'default_subject' => 'Ihre Nachricht an uns',
+        ],
+
+        'whatsapp' => [
+
+            // Medien aus dem Chat (offen seit WP-20a). Dieselbe Grenze wie bei
+            // der E-Mail: was darueber liegt, wird nicht geholt -- der Verlauf
+            // nennt den Medientyp trotzdem.
+            'max_media_bytes' => 10 * 1024 * 1024,
+
+            // **Wohin das Token mitgeschickt werden darf.** Die Adresse der
+            // Datei kommt aus Metas Antwort; wer sie faelschen koennte, liesse
+            // uns sonst das Zugangstoken an einen beliebigen Rechner schicken.
+            // Verglichen wird das Ende des Hostnamens.
+            'media_hosts' => ['fbsbx.com', 'facebook.com', 'fbcdn.net', 'whatsapp.net'],
         ],
     ],
 
@@ -749,6 +827,17 @@ return [
         // Ladezustand. Der Auftrag selbst wartet hoechstens fuenf Minuten
         // (services.kie.max_polls), hier ist Luft fuer die Warteschlange.
         'image_timeout_minutes' => 10,
+
+        // Wie lange eine wartende Anzeige ohne Grund als "wird uebertragen"
+        // gilt.
+        //
+        // **Derselbe Fehler wie bei der Grafik, eine Stufe spaeter.** Ein
+        // Auftrag, der nie anlaeuft, vermerkt keinen Grund und gibt nicht
+        // auf -- die Seite drehte dann ohne Ende und blendete den Knopf aus
+        // (26.09.2026, Staging). Die Warteschlange `default` versucht es
+        // dreimal mit 60 Sekunden (config/warteschlangen.php); danach steht
+        // ein Grund an der Anzeige. Was laenger ohne steht, ist verloren.
+        'uebertragung_timeout_minutes' => 10,
 
         /*
         | Laengen eines Anzeigentextes (WP-31)

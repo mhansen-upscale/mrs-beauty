@@ -17,6 +17,8 @@ Ein Vergabelauf startet bei:
 
 Bei Auslöser 3 wird kein Slot-Hold gesetzt, weil der Slot noch belegt ist. Nimmt jemand an, wird der wackelige Termin erst nach Rückfrage beim Team aufgelöst. Das ist ausdrücklich kein automatischer Vorgang.
 
+*Nachtrag 26.09.2026:* Die Rückfrage hat ihren Ort im Produkt. Eine Zusage auf ein paralleles Angebot erscheint auf der Warteliste unter **„Zu klären"** und auf dem Dashboard; das Team entscheidet: **„Termin an sie geben"** (der bisherige Termin wird von der Praxis abgesagt, der neue in derselben Transaktion gebucht) oder **„Bisherigen Termin behalten"** (das Angebot ist überholt, die Wartende bleibt auf der Liste). In beiden Fällen bekommt sie eine Nachricht.
+
 ## Auswahl der Kandidaten
 
 Ein Wartelisteneintrag kommt in Frage, wenn **alle** Bedingungen gelten:

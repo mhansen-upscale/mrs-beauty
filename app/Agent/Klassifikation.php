@@ -30,6 +30,18 @@ final class Klassifikation
         public readonly ?string $zeitwunsch = null,
 
         public readonly ?string $name = null,
+
+        /** Kanonische UUID der gewuenschten Behandlerin -- oder null. */
+        public readonly ?string $practitionerId = null,
+
+        /**
+         * Ein Behandler wurde genannt, laesst sich aber keinem zuordnen.
+         *
+         * **Dann wird gefragt, nicht geraten** -- und auch nicht so getan,
+         * als waere nichts gesagt worden: ein Vorschlag bei jemand anderem
+         * waere die Antwort auf eine Frage, die niemand gestellt hat.
+         */
+        public readonly bool $behandlerUnklar = false,
     ) {}
 
     /**
@@ -40,6 +52,7 @@ final class Klassifikation
         return array_filter([
             'treatment_id' => $this->treatmentId,
             'location_id' => $this->locationId,
+            'practitioner_id' => $this->practitionerId,
             'zeitwunsch' => $this->zeitwunsch,
             'name' => $this->name,
         ], fn (mixed $wert): bool => $wert !== null && $wert !== '');

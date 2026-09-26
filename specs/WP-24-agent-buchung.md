@@ -184,6 +184,14 @@ existiert.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Alle drei Punkte sind umgesetzt:
+> **Warteliste** statt Übergabe, wenn nichts frei ist (G13, Testfall 14);
+> **Absagen und Verschieben** unter vier Bedingungen (G12,
+> `tests/Feature/Agent/TerminaenderungTest.php`); der **Behandlerwunsch** mit
+> `behandler_klaeren` (`requested_practitioner_id`). Nebenbei behoben: die
+> Rückfrage zu einem bestehenden Termin nannte die Zeit um die Rüstzeit
+> verschoben.
+
 **Die Warteliste** (WP-25). Ohne passenden Slot übergibt der Agent heute an
 einen Menschen und sagt das auch — das Wartelistenangebot ersetzt diesen
 einen Satz.

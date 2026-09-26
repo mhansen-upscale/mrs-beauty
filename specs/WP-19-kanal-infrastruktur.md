@@ -275,6 +275,10 @@ stehen sie im Nachweis.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Zwei Kanäle statt vier (P11), Statusrückmeldungen
+> werden gelesen. Offen und bewusst: die Anonymisierung lässt die
+> Kanalidentität stehen — gehört in die Datenschutzunterlagen (WP-01).
+
 **Die vier Kanäle** (WP-20) — und mit ihnen die Templates, die
 Kostenerfassung im Abo (B7, B8) und die Qualitätsbewertung.
 

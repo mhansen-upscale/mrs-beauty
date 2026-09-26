@@ -116,6 +116,12 @@ class Attachment extends TenantModel implements HasPersonalData
         return Scanergebnis::tryFrom($this->scan_result)?->gibtFrei() ?? false;
     }
 
+    /** Darf er im Browser erscheinen, statt heruntergeladen zu werden? */
+    public function istBild(): bool
+    {
+        return in_array($this->mime, (array) config('mrs.attachments.inline_mimes', []), true);
+    }
+
     /**
      * Hat die Pruefung diesen Anhang **beanstandet**?
      *

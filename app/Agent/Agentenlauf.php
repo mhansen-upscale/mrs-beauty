@@ -14,9 +14,9 @@ use App\Agent\Guardrails\Weiche;
 use App\Enums\AgentAction;
 use App\Enums\AgentIntent;
 use App\Enums\AgentMode;
-use App\Enums\BookingState;
 use App\Enums\GuardrailHit;
 use App\Kanaele\Nachrichtenversand;
+use App\Leads\Leadverwaltung;
 use App\Models\AgentDialog;
 use App\Models\AgentRun;
 use App\Models\Conversation;
@@ -54,6 +54,7 @@ final class Agentenlauf
         private readonly Buchungsdialog $dialog,
         private readonly Kennzeichnung $kennzeichnung,
         private readonly Nachrichtenversand $versand,
+        private readonly Leadverwaltung $leads,
     ) {}
 
     /**
@@ -259,6 +260,10 @@ final class Agentenlauf
         // Ueber dieselbe Warteschlange wie jede andere Nachricht (Regel 4):
         // der Agent bekommt keinen eigenen Weg nach draussen.
         $this->versand->stelleEin($gespraech, $text);
+
+        // Eine automatische Antwort ist eine Reaktion der Praxis (WP-17) --
+        // der Kanal der Praxis, im Namen der Praxis.
+        $this->leads->beiAntwort($gespraech);
     }
 
     /**
@@ -270,13 +275,18 @@ final class Agentenlauf
      */
     private function gehoertInDenDialog(Conversation $gespraech, Klassifikation $einordnung): bool
     {
-        if ($einordnung->absicht === AgentIntent::BookingRequest) {
+        // Absagen und Verschieben laufen ueber denselben Automaten (offen
+        // seit WP-24) -- mit Rueckfrage, und nur fuer genau einen Termin.
+        if (in_array($einordnung->absicht, [AgentIntent::BookingRequest, AgentIntent::CancelRequest, AgentIntent::RescheduleRequest], true)) {
             return true;
         }
 
         $dialog = AgentDialog::query()->where('conversation_id', $gespraech->getKey())->first();
 
-        return $dialog instanceof AgentDialog && $dialog->state !== BookingState::Gebucht;
+        // Ein abgeschlossener Vorgang -- gebucht oder auf der Warteliste --
+        // nimmt keine Antwort mehr als Fortsetzung: "danke!" ist dann keine
+        // Antwort auf die letzte Frage.
+        return $dialog instanceof AgentDialog && ! $dialog->state->abgeschlossen();
     }
 
     /**

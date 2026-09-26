@@ -5,34 +5,38 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Betrieb;
 
 use App\Betrieb\Betriebslage;
+use App\Enums\Ability;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Support\QrCode;
 use App\Tenancy\TenantContext;
+use App\Warteliste\Klaerung;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
  * Das Dashboard.
  *
- * Es zeigt vorerst eines: **den oeffentlichen Buchungslink**. Der war bis
- * jetzt nirgends im Produkt zu finden -- eine Praxis, die ihn auf die eigene
- * Website oder in die Instagram-Biografie setzen will, musste ihn raten.
- *
- * Was sonst hier steht, entscheidet sich mit WP-32: die Kette von der Anzeige
- * bis zum Umsatz ist die Zahl, die das Abo rechtfertigt, und sie gehoert an
- * diese Stelle.
+ * Drei Dinge, in dieser Reihenfolge: **was nicht laeuft** (Regel 4), **was
+ * ein Mensch entscheiden muss** (die wackeligen Termine der Warteliste) und
+ * **der oeffentliche Buchungslink**, der bis WP-19 nirgends im Produkt zu
+ * finden war. Die Kette von der Anzeige bis zum Umsatz steht unter
+ * Auswertung (WP-32b).
  */
 final class DashboardController extends Controller
 {
-    public function __construct(private readonly Betriebslage $lage) {}
+    public function __construct(
+        private readonly Betriebslage $lage,
+        private readonly Klaerung $klaerung,
+    ) {}
 
     public function __invoke(TenantContext $mandant): Response
     {
         $organisation = $mandant->current();
 
         if (! $organisation instanceof Organization) {
-            return Inertia::render('Dashboard', ['booking' => null, 'betrieb' => null]);
+            return Inertia::render('Dashboard', ['booking' => null, 'betrieb' => null, 'aufgaben' => null]);
         }
 
         $adresse = route('buchung.zeigen', ['praxis' => $organisation->slug]);
@@ -56,6 +60,12 @@ final class DashboardController extends Controller
             // nicht nur im Log. Das Dashboard ist die Stelle, an der jemand
             // ihn sieht, ohne ihn zu suchen.
             'betrieb' => $this->lage->fuerMandant(),
+
+            // Was ein Mensch entscheiden muss, bevor es weitergeht -- nur fuer
+            // die, die es entscheiden duerfen.
+            'aufgaben' => Gate::allows(Ability::ManageWaitlist->value)
+                ? ['klaerungen' => $this->klaerung->offene()->count()]
+                : null,
         ]);
     }
 }

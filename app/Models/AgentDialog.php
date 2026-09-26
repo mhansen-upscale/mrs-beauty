@@ -23,9 +23,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $treatment_id
  * @property string|null $appointment_type_id
  * @property string|null $location_id
- * @property string|null $practitioner_id
+ * @property string|null $practitioner_id Bei wem der gehaltene Slot liegt
+ * @property string|null $requested_practitioner_id Der geaeusserte Wunsch -- schraenkt die Vorschlaege ein
  * @property string|null $slot_hold_id
- * @property string|null $appointment_id
+ * @property string|null $appointment_id Den dieser Vorgang gebucht hat (G9)
+ * @property string|null $change_appointment_id Der abgesagt oder verschoben werden soll
  * @property string|null $name
  * @property string|null $offered
  * @property CarbonImmutable|null $consent_at
@@ -45,6 +47,8 @@ class AgentDialog extends TenantModel implements HasPersonalData
         'practitioner_id',
         'slot_hold_id',
         'appointment_id',
+        'requested_practitioner_id',
+        'change_appointment_id',
     ];
 
     /**

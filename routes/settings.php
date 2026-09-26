@@ -9,6 +9,7 @@ use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PostfachController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TrackingController;
+use App\Http\Controllers\Settings\WhatsAppController;
 use App\Http\Controllers\Whitelabel\ErscheinungsbildController;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,11 @@ Route::middleware('auth')->group(function () {
         Route::get('settings/postfach', [PostfachController::class, 'edit'])->name('postfach.edit');
         Route::put('settings/postfach', [PostfachController::class, 'update'])->name('postfach.update');
         Route::post('settings/postfach/probe', [PostfachController::class, 'pruefen'])->name('postfach.pruefen');
+
+        // WhatsApp (offen seit WP-20b): eintragen, in der Warteschlange pruefen.
+        Route::get('settings/whatsapp', [WhatsAppController::class, 'edit'])->name('whatsapp.edit');
+        Route::put('settings/whatsapp', [WhatsAppController::class, 'update'])->name('whatsapp.update');
+        Route::post('settings/whatsapp/pruefen', [WhatsAppController::class, 'pruefen'])->name('whatsapp.pruefen');
     });
 
     // Das Erscheinungsbild der Buchungsseite (WP-07). Eigene Faehigkeit:

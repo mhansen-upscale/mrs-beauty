@@ -69,7 +69,11 @@ const pixel = () => {
     if (!w.fbq) {
         const fbq = function (...args: unknown[]) {
             const f = fbq as unknown as { callMethod?: (...a: unknown[]) => void; queue: unknown[] };
-            f.callMethod ? f.callMethod.apply(f, args) : f.queue.push(args);
+            if (f.callMethod) {
+                f.callMethod(...args);
+            } else {
+                f.queue.push(args);
+            }
         } as unknown as { queue: unknown[]; loaded: boolean; version: string; push: unknown };
 
         fbq.queue = [];

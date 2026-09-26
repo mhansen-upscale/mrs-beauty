@@ -49,6 +49,25 @@ final class Antwortdeutung
     }
 
     /**
+     * Ist es egal, bei wem? Dann gibt es keinen Behandlerwunsch.
+     *
+     * Wie Ja und Nein eine Wortliste, kein Modellaufruf: "wer frei ist" ist
+     * eine Antwort, die niemand anders meint.
+     */
+    public function gleichgueltig(Message $nachricht): bool
+    {
+        $text = $this->text($nachricht);
+
+        foreach ((array) config('mrs.agent.indifference', []) as $wort) {
+            if (is_string($wort) && preg_match('/(^|\W)'.preg_quote(mb_strtolower($wort), '/').'(\W|$)/u', $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Welchen der angebotenen Termine meint die Antwort?
      *
      * Erkannt werden die Nummer ("2", "die zweite") und die Uhrzeit

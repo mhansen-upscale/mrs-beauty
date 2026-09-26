@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace App\Agent\Buchung;
 
+use App\Agent\Behandlerzuordnung;
 use App\Agent\Klassifikation;
 use App\Datenschutz\Einwilligungen;
+use App\Enums\AgentIntent;
 use App\Enums\AppointmentStatus;
 use App\Enums\BookingChannel;
 use App\Enums\BookingState;
+use App\Enums\CancellationReason;
 use App\Enums\ConsentType;
 use App\Enums\GuardrailHit;
 use App\Enums\HoldPurpose;
+use App\Enums\WaitlistStatus;
 use App\Kontakte\Kontaktsuche;
 use App\Models\AgentDialog;
 use App\Models\Appointment;
@@ -23,8 +27,11 @@ use App\Models\Message;
 use App\Models\Practitioner;
 use App\Models\SlotHold;
 use App\Models\Treatment;
+use App\Models\WaitlistEntry;
+use App\Termine\TerminNichtAenderbar;
 use App\Termine\Terminplaner;
 use App\Verfuegbarkeit\SlotHalter;
+use App\Verfuegbarkeit\SlotNichtVerfuegbar;
 use App\Verfuegbarkeit\Slotvorschlag;
 use App\Verfuegbarkeit\Verfuegbarkeit;
 use Carbon\CarbonImmutable;
@@ -57,6 +64,7 @@ final class Buchungsdialog
         private readonly Terminplaner $planer,
         private readonly Einwilligungen $einwilligungen,
         private readonly Kontaktsuche $kontakte,
+        private readonly Behandlerzuordnung $zuordnung,
     ) {}
 
     /**
@@ -96,6 +104,27 @@ final class Buchungsdialog
     {
         $dialog = $this->vorgang($gespraech);
 
+        // **Ein Termin, der schon steht** (offen seit WP-24): absagen oder
+        // verschieben. Nicht mitten in einer Buchung -- wer einen Slot haelt,
+        // meint mit "lieber doch nicht" den Slot und nicht einen anderen
+        // Termin.
+        if ($this->willAendern($einordnung) && ! $dialog->state->haeltSlot()) {
+            return $this->aenderungBeginnen($dialog, $gespraech, $einordnung->absicht);
+        }
+
+        if ($dialog->state->aendertTermin()) {
+            return $this->schritt($dialog, $gespraech, $nachricht);
+        }
+
+        // Nach einem abgeschlossenen Vorgang beginnt eine neue Terminanfrage
+        // einen neuen -- es sei denn, der gebuchte Termin steht noch. Dann
+        // gilt G9.
+        if ($dialog->state->abgeschlossen()
+            && $einordnung->absicht === AgentIntent::BookingRequest
+            && ! $this->terminDesVorgangsSteht($dialog)) {
+            $this->neuerVorgang($dialog);
+        }
+
         // **Ein Termin je Vorgang** (G9): ein zweiter Versuch fuehrt zur
         // Rueckfrage, nicht zu einem zweiten Termin.
         if ($dialog->appointment_id !== null) {
@@ -103,6 +132,14 @@ final class Buchungsdialog
         }
 
         $this->uebernimm($dialog, $einordnung);
+
+        // **Genannt, aber nicht zu finden:** fragen, nicht raten -- und auch
+        // nicht bei jemand anderem vorschlagen, als waere nichts gesagt worden.
+        if ($einordnung->behandlerUnklar && $dialog->requested_practitioner_id === null) {
+            $this->gibHoldFrei($dialog);
+
+            return $this->frage($dialog, BookingState::BehandlerKlaeren, $this->texte->behandlerFragen($this->behandlerFuer($dialog)));
+        }
 
         // Ein abgelaufener Hold ist kein Fehler, sondern ein neuer Vorschlag.
         $this->pruefeHold($dialog);
@@ -127,11 +164,23 @@ final class Buchungsdialog
         return match ($dialog->state) {
             BookingState::Start, BookingState::TreatmentKlaeren => $this->behandlung($dialog),
             BookingState::StandortKlaeren => $this->standort($dialog, $nachricht),
-            BookingState::BehandlerKlaeren, BookingState::SlotsVorschlagen => $this->slots($dialog, $nachricht),
+            BookingState::BehandlerKlaeren => $this->behandlerWahl($dialog, $nachricht),
+            BookingState::SlotsVorschlagen => $this->slots($dialog, $nachricht),
             BookingState::DatenErheben => $this->daten($dialog, $gespraech, $nachricht),
             BookingState::Einwilligung => $this->einwilligung($dialog, $gespraech, $nachricht),
             BookingState::Bestaetigen => $this->bestaetigen($dialog, $gespraech, $nachricht),
             BookingState::Gebucht => $this->rueckfrageZumBestehenden($dialog),
+            BookingState::WartelisteAnbieten => $this->warteliste($dialog, $gespraech, $nachricht),
+
+            // Eingetragen ist eingetragen. Was danach kommt, liest ein Mensch
+            // -- ein zweiter Eintrag oder eine Buchung am Team vorbei waere
+            // die falsche Antwort auf "und, gibt es schon was?".
+            BookingState::AufWarteliste => Dialogantwort::uebergibt(GuardrailHit::LowConfidence),
+
+            BookingState::AbsageBestaetigen => $this->absageBestaetigen($dialog, $nachricht),
+            BookingState::VerschiebenVorschlagen => $this->verschiebenWahl($dialog, $nachricht),
+            BookingState::VerschiebenBestaetigen => $this->verschiebenBestaetigen($dialog, $nachricht),
+            BookingState::Geaendert => Dialogantwort::uebergibt(GuardrailHit::LowConfidence),
         };
     }
 
@@ -210,6 +259,31 @@ final class Buchungsdialog
         return $this->frage($dialog, BookingState::StandortKlaeren, $this->texte->standortFragen($standorte->values()->all()));
     }
 
+    /**
+     * Die Antwort auf "bei wem?" (behandler_klaeren).
+     *
+     * Ein Name aus der Liste wird zum Wunsch, "egal" zu keinem. Danach geht es
+     * weiter, wo der Dialog ohne die Frage waere.
+     */
+    private function behandlerWahl(AgentDialog $dialog, Message $nachricht): Dialogantwort
+    {
+        if ($dialog->requested_practitioner_id === null) {
+            $kandidaten = $this->behandlerFuer($dialog);
+            $gewaehlt = $this->zuordnung->ausText((string) $nachricht->body, collect($kandidaten));
+
+            if ($gewaehlt instanceof Practitioner) {
+                $dialog->requested_practitioner_id = $gewaehlt->getKey();
+                $dialog->save();
+            } elseif (! $this->deutung->gleichgueltig($nachricht)) {
+                return $this->frage($dialog, BookingState::BehandlerKlaeren, $this->texte->behandlerFragen($kandidaten));
+            }
+        }
+
+        $dialog->wechsleNach(BookingState::Start);
+
+        return $this->behandlung($dialog);
+    }
+
     private function slots(AgentDialog $dialog, Message $nachricht): Dialogantwort
     {
         $gewaehlt = $this->deutung->wahl($nachricht, $dialog->angebote());
@@ -256,6 +330,7 @@ final class Buchungsdialog
             art: $art,
             von: $jetzt,
             bis: $jetzt->addDays($tage),
+            nurBehandler: $this->wunsch($dialog),
             nurStandort: $dialog->location_id === null
                 ? null
                 : Location::query()->whereKey($dialog->location_id)->first(),
@@ -265,9 +340,9 @@ final class Buchungsdialog
         $vorschlaege = array_slice($vorschlaege, 0, (int) config('mrs.agent.proposal_count', 3));
 
         if ($vorschlaege === []) {
-            // **Keine Sackgasse**, aber auch keine Erfindung: ein Mensch
-            // uebernimmt. Das Wartelistenangebot kommt mit WP-25.
-            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keineSlots());
+            // **Keine Sackgasse** (Testfall 14): die Warteliste statt einer
+            // Uebergabe. Wer sie ablehnt, bekommt dann einen Menschen.
+            return $this->frage($dialog, BookingState::WartelisteAnbieten, $this->texte->wartelisteAnbieten($art));
         }
 
         $dialog->setzeAngebote(array_map(
@@ -354,6 +429,379 @@ final class Buchungsdialog
         return $this->buche($dialog, $gespraech);
     }
 
+    /**
+     * Die Antwort auf das Wartelistenangebot (Testfall 14).
+     *
+     * **Das Ja ist zugleich die Einwilligung in den Kanal** (K11) -- der Satz,
+     * dem zugestimmt wurde, sagt es ausdruecklich und wird im Wortlaut
+     * festgehalten. `consent_at` am Vorgang merkt sich, dass es schon kam,
+     * falls danach noch der Name fehlt.
+     */
+    private function warteliste(AgentDialog $dialog, Conversation $gespraech, Message $nachricht): Dialogantwort
+    {
+        $art = $this->art($dialog);
+
+        if (! $art instanceof AppointmentType) {
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keineSlots());
+        }
+
+        if ($dialog->consent_at === null) {
+            if ($this->deutung->ablehnung($nachricht)) {
+                return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keineSlots());
+            }
+
+            if (! $this->deutung->zustimmung($nachricht)) {
+                return $this->frage($dialog, BookingState::WartelisteAnbieten, $this->texte->wartelisteAnbieten($art));
+            }
+
+            $this->einwilligungen->erteile(
+                $gespraech->channelIdentity,
+                ConsentType::ServiceMessages,
+                'agent-warteliste',
+                $this->texte->wartelisteAnbieten($art),
+            );
+
+            $dialog->consent_at = CarbonImmutable::now();
+            $dialog->save();
+        }
+
+        // Die Zustimmung selbst ist kein Name; erst die naechste Nachricht
+        // darf einer sein.
+        $name = $this->name($dialog, $gespraech, $nachricht, frisch: $dialog->wasChanged('consent_at'));
+
+        if ($name === null) {
+            return $this->frage($dialog, BookingState::WartelisteAnbieten, $this->texte->nameFuerWarteliste());
+        }
+
+        $dialog->name = $name;
+        $dialog->save();
+
+        $this->trageEin($dialog, $art, $this->kontakt($dialog, $gespraech));
+
+        $dialog->wechsleNach(BookingState::AufWarteliste);
+
+        return Dialogantwort::sagt($this->texte->aufWarteliste($art));
+    }
+
+    /**
+     * Legt den Wartelisteneintrag an -- mit dem, was gesagt wurde, und sonst
+     * ohne Einschraenkung (config mrs.agent.waitlist).
+     *
+     * **Kein zweiter Eintrag** fuer dieselbe Person und Terminart: wer zweimal
+     * fragt, soll nicht zweimal Angebote bekommen.
+     */
+    private function trageEin(AgentDialog $dialog, AppointmentType $art, Contact $kontakt): void
+    {
+        $vorhanden = WaitlistEntry::query()
+            ->wartend()
+            ->where('contact_id', $kontakt->getKey())
+            ->where('appointment_type_id', $art->getKey())
+            ->exists();
+
+        if ($vorhanden) {
+            return;
+        }
+
+        $heute = CarbonImmutable::now();
+        $tage = (int) config('mrs.agent.waitlist.days', 60);
+
+        $eintrag = new WaitlistEntry;
+        $eintrag->contact_id = $kontakt->getKey();
+        $eintrag->appointment_type_id = $art->getKey();
+        $eintrag->practitioner_id = $dialog->requested_practitioner_id;
+        $eintrag->status = WaitlistStatus::Active;
+        $eintrag->all_locations = $dialog->location_id === null;
+        $eintrag->earliest_date = $heute->startOfDay();
+        $eintrag->latest_date = $heute->addDays($tage)->startOfDay();
+        $eintrag->weekday_mask = 127;
+        $eintrag->time_windows = null;
+        $eintrag->min_notice_hours = (int) config('mrs.agent.waitlist.min_notice_hours', 24);
+        $eintrag->priority = 0;
+        $eintrag->expires_at = $heute->addDays($tage);
+        $eintrag->save();
+
+        if ($dialog->location_id !== null) {
+            $eintrag->locations()->sync([$dialog->location_id]);
+        }
+    }
+
+    /* Ein Termin, der schon steht (offen seit WP-24) ------------------------- */
+
+    private function willAendern(Klassifikation $einordnung): bool
+    {
+        return $einordnung->absicht === AgentIntent::CancelRequest
+            || $einordnung->absicht === AgentIntent::RescheduleRequest;
+    }
+
+    /**
+     * Welcher Termin gemeint ist -- **eindeutig oder gar nicht**.
+     *
+     * Die Person muss bekannt sein, und sie darf genau einen anstehenden
+     * Termin haben. Sonst uebernimmt ein Mensch: eine Absage am falschen Tag
+     * ist schlimmer als eine, die fuenf Minuten spaeter kommt (Regel 6).
+     */
+    private function aenderungBeginnen(AgentDialog $dialog, Conversation $gespraech, AgentIntent $absicht): Dialogantwort
+    {
+        $this->gibHoldFrei($dialog);
+
+        $kontakt = $gespraech->contact;
+
+        if (! $kontakt instanceof Contact) {
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->wenMeinenSie());
+        }
+
+        $termine = Appointment::query()
+            ->where('contact_id', $kontakt->getKey())
+            ->where('starts_at', '>', CarbonImmutable::now())
+            ->whereIn('status', [AppointmentStatus::Pending->value, AppointmentStatus::Confirmed->value])
+            ->with(['appointmentType', 'practitioner', 'location'])
+            ->orderBy('starts_at')
+            ->get();
+
+        if ($termine->isEmpty()) {
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keinTerminGefunden());
+        }
+
+        if ($termine->count() > 1) {
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->mehrereTermine());
+        }
+
+        $termin = $termine->firstOrFail();
+
+        $dialog->change_appointment_id = $termin->getKey();
+        $dialog->setzeAngebote([]);
+        $dialog->save();
+
+        if ($absicht === AgentIntent::CancelRequest) {
+            return $this->frage($dialog, BookingState::AbsageBestaetigen, $this->texte->absageFragen(Slotvorschlag::ausTermin($termin)));
+        }
+
+        $dialog->wechsleNach(BookingState::VerschiebenVorschlagen);
+
+        return $this->verschiebenVorschlagen($dialog, $termin);
+    }
+
+    private function absageBestaetigen(AgentDialog $dialog, Message $nachricht): Dialogantwort
+    {
+        $termin = $this->zuAendern($dialog);
+
+        if (! $termin instanceof Appointment) {
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keinTerminGefunden());
+        }
+
+        $slot = Slotvorschlag::ausTermin($termin);
+
+        if ($this->deutung->ablehnung($nachricht)) {
+            $dialog->wechsleNach(BookingState::Geaendert);
+
+            return Dialogantwort::sagt($this->texte->bleibtBestehen($slot));
+        }
+
+        if (! $this->deutung->zustimmung($nachricht)) {
+            return $this->frage($dialog, BookingState::AbsageBestaetigen, $this->texte->absageFragen($slot));
+        }
+
+        // **Die Person sagt ab, nicht die Praxis** -- und die Zeit geht sofort
+        // an die Warteliste (Terminplaner::sageAb, WP-25).
+        $this->planer->sageAb($termin, CancellationReason::Contact);
+
+        $dialog->wechsleNach(BookingState::Geaendert);
+
+        return Dialogantwort::sagt($this->texte->abgesagt($slot));
+    }
+
+    /**
+     * Freie Zeiten fuer denselben Termin: dieselbe Terminart, derselbe
+     * Standort, dieselbe Behandlerin -- es sei denn, es wurde eine andere
+     * gewuenscht.
+     */
+    private function verschiebenVorschlagen(AgentDialog $dialog, Appointment $termin): Dialogantwort
+    {
+        $jetzt = CarbonImmutable::now();
+
+        $vorschlaege = array_values(array_filter(
+            $this->verfuegbarkeit->freieStartzeiten(
+                art: $termin->appointmentType,
+                von: $jetzt,
+                bis: $jetzt->addDays((int) config('mrs.agent.proposal_days', 14)),
+                nurBehandler: $this->wunsch($dialog) ?? $termin->practitioner,
+                nurStandort: $termin->location,
+                jetzt: $jetzt,
+            ),
+            fn (Slotvorschlag $vorschlag): bool => ! $vorschlag->startsAt->equalTo($termin->starts_at),
+        ));
+
+        $vorschlaege = array_slice($vorschlaege, 0, (int) config('mrs.agent.proposal_count', 3));
+
+        if ($vorschlaege === []) {
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keineAlternative());
+        }
+
+        $dialog->setzeAngebote(array_map(
+            fn (Slotvorschlag $vorschlag): string => $vorschlag->startsAt->toIso8601String(),
+            $vorschlaege,
+        ));
+        $dialog->save();
+
+        return $this->frage(
+            $dialog,
+            BookingState::VerschiebenVorschlagen,
+            $this->texte->verschiebenVorschlagen(Slotvorschlag::ausTermin($termin), $vorschlaege),
+        );
+    }
+
+    private function verschiebenWahl(AgentDialog $dialog, Message $nachricht): Dialogantwort
+    {
+        $termin = $this->zuAendern($dialog);
+
+        if (! $termin instanceof Appointment) {
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keinTerminGefunden());
+        }
+
+        $gewaehlt = $this->deutung->wahl($nachricht, $dialog->angebote());
+        $ziel = $gewaehlt === null ? null : $this->zielFuer($dialog, $termin, CarbonImmutable::parse($gewaehlt));
+
+        if (! $ziel instanceof Slotvorschlag) {
+            return $this->verschiebenVorschlagen($dialog, $termin);
+        }
+
+        // Gehalten, bis bestaetigt ist -- wie beim Buchen.
+        $hold = $this->halter->halte($ziel, HoldPurpose::AgentDialog);
+
+        $dialog->slot_hold_id = $hold->getKey();
+        $dialog->save();
+        $dialog->wechsleNach(BookingState::VerschiebenBestaetigen);
+
+        return Dialogantwort::sagt($this->texte->verschiebenFragen(Slotvorschlag::ausTermin($termin), $ziel));
+    }
+
+    private function verschiebenBestaetigen(AgentDialog $dialog, Message $nachricht): Dialogantwort
+    {
+        $termin = $this->zuAendern($dialog);
+        $hold = $dialog->hold;
+        $ziel = $this->vorschlagAusHold($dialog);
+
+        if (! $termin instanceof Appointment) {
+            $this->gibHoldFrei($dialog);
+
+            return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->keinTerminGefunden());
+        }
+
+        if (! $hold instanceof SlotHold || ! $ziel instanceof Slotvorschlag || ! $hold->giltNoch()) {
+            $this->gibHoldFrei($dialog);
+            $dialog->wechsleNach(BookingState::VerschiebenVorschlagen);
+
+            return $this->verschiebenVorschlagen($dialog, $termin);
+        }
+
+        if ($this->deutung->ablehnung($nachricht)) {
+            $this->gibHoldFrei($dialog);
+            $dialog->wechsleNach(BookingState::Geaendert);
+
+            return Dialogantwort::sagt($this->texte->bleibtBestehen(Slotvorschlag::ausTermin($termin)));
+        }
+
+        if (! $this->deutung->zustimmung($nachricht)) {
+            return $this->frage(
+                $dialog,
+                BookingState::VerschiebenBestaetigen,
+                $this->texte->verschiebenFragen(Slotvorschlag::ausTermin($termin), $ziel),
+            );
+        }
+
+        // **Dieselbe Zeile, neue Zeit** (Terminplaner::verschiebe). Der Hold
+        // wird in derselben Transaktion frei, in der die Zeilen belegt werden
+        // -- dazwischen kommt niemand an sie heran.
+        try {
+            DB::transaction(function () use ($dialog, $termin, $ziel): void {
+                $this->gibHoldFrei($dialog);
+                $this->planer->verschiebe($termin, $ziel);
+            });
+        } catch (SlotNichtVerfuegbar|TerminNichtAenderbar) {
+            $dialog->wechsleNach(BookingState::VerschiebenVorschlagen);
+
+            return $this->verschiebenVorschlagen($dialog, $termin->refresh());
+        }
+
+        $dialog->wechsleNach(BookingState::Geaendert);
+
+        return Dialogantwort::sagt($this->texte->verschoben($ziel));
+    }
+
+    /**
+     * Der Termin, um den es geht -- und nur, solange er noch zu aendern ist
+     * und der Person gehoert, die schreibt.
+     */
+    private function zuAendern(AgentDialog $dialog): ?Appointment
+    {
+        if ($dialog->change_appointment_id === null) {
+            return null;
+        }
+
+        $termin = Appointment::query()
+            ->whereKey($dialog->change_appointment_id)
+            ->with(['appointmentType', 'practitioner', 'location'])
+            ->first();
+
+        $kontakt = $dialog->conversation?->contact;
+
+        if (! $termin instanceof Appointment
+            || ! $termin->istAenderbar()
+            || ! $kontakt instanceof Contact
+            || $termin->contact_id !== $kontakt->getKey()) {
+            return null;
+        }
+
+        return $termin;
+    }
+
+    private function zielFuer(AgentDialog $dialog, Appointment $termin, CarbonImmutable $start): ?Slotvorschlag
+    {
+        foreach ($this->verfuegbarkeit->freieStartzeiten(
+            art: $termin->appointmentType,
+            von: $start->startOfDay(),
+            bis: $start->endOfDay(),
+            nurBehandler: $this->wunsch($dialog) ?? $termin->practitioner,
+            nurStandort: $termin->location,
+        ) as $vorschlag) {
+            if ($vorschlag->startsAt->equalTo($start)) {
+                return $vorschlag;
+            }
+        }
+
+        return null;
+    }
+
+    /** Steht der Termin, den dieser Vorgang gebucht hat, noch? */
+    private function terminDesVorgangsSteht(AgentDialog $dialog): bool
+    {
+        if ($dialog->appointment_id === null) {
+            return false;
+        }
+
+        $termin = Appointment::query()->whereKey($dialog->appointment_id)->first();
+
+        return $termin instanceof Appointment && $termin->istAenderbar() && $termin->ends_at->isFuture();
+    }
+
+    /** Ein neuer Vorgang an derselben Zeile -- G9 gilt je Konversation. */
+    private function neuerVorgang(AgentDialog $dialog): void
+    {
+        $this->gibHoldFrei($dialog);
+
+        $dialog->treatment_id = null;
+        $dialog->appointment_type_id = null;
+        $dialog->location_id = null;
+        $dialog->practitioner_id = null;
+        $dialog->requested_practitioner_id = null;
+        $dialog->appointment_id = null;
+        $dialog->change_appointment_id = null;
+        $dialog->consent_at = null;
+        $dialog->setzeAngebote([]);
+        $dialog->save();
+        $dialog->wechsleNach(BookingState::Start);
+    }
+
     private function buche(AgentDialog $dialog, Conversation $gespraech): Dialogantwort
     {
         $hold = $dialog->hold;
@@ -434,6 +882,25 @@ final class Buchungsdialog
             }
         }
 
+        // **Ein neuer Behandlerwunsch setzt die Vorschlaege zurueck** -- wer
+        // nach drei Terminen fragt "geht das auch bei Frau Dr. Sauer?", will
+        // ihre sehen, nicht die alten.
+        if ($einordnung->practitionerId !== null) {
+            $behandler = Practitioner::query()->whereUuid($einordnung->practitionerId)->first();
+
+            if ($behandler instanceof Practitioner && $behandler->getKey() !== $dialog->requested_practitioner_id) {
+                $dialog->requested_practitioner_id = $behandler->getKey();
+                $dialog->save();
+
+                if ($dialog->state->haeltSlot()) {
+                    $this->gibHoldFrei($dialog);
+                    $dialog->setzeAngebote([]);
+                    $dialog->save();
+                    $dialog->wechsleNach(BookingState::SlotsVorschlagen);
+                }
+            }
+        }
+
         if ($einordnung->locationId !== null) {
             $standort = Location::query()->whereUuid($einordnung->locationId)->first();
 
@@ -497,9 +964,7 @@ final class Buchungsdialog
             return Dialogantwort::uebergibt(GuardrailHit::LowConfidence);
         }
 
-        $vorschlag = Slotvorschlag::ab($termin->appointmentType, $termin->practitioner, $termin->location, $termin->starts_at);
-
-        return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->bereitsGebucht($vorschlag));
+        return Dialogantwort::uebergibt(GuardrailHit::LowConfidence, $this->texte->bereitsGebucht(Slotvorschlag::ausTermin($termin)));
     }
 
     private function name(AgentDialog $dialog, Conversation $gespraech, Message $nachricht, bool $frisch): ?string
@@ -559,6 +1024,31 @@ final class Buchungsdialog
         return $kontakt;
     }
 
+    /** Der geaeusserte Behandlerwunsch -- oder keiner. */
+    private function wunsch(AgentDialog $dialog): ?Practitioner
+    {
+        return $dialog->requested_practitioner_id === null
+            ? null
+            : Practitioner::query()->whereKey($dialog->requested_practitioner_id)->where('is_active', true)->first();
+    }
+
+    /**
+     * Wer fuer die Frage "bei wem?" in Betracht kommt: wer diese Terminart
+     * anbietet, sonst alle.
+     *
+     * @return list<Practitioner>
+     */
+    private function behandlerFuer(AgentDialog $dialog): array
+    {
+        $art = $this->art($dialog);
+
+        $abfrage = $art instanceof AppointmentType
+            ? $art->practitioners()->where('practitioners.is_active', true)
+            : Practitioner::query()->where('is_active', true);
+
+        return array_values($abfrage->orderBy('last_name')->get()->all());
+    }
+
     private function art(AgentDialog $dialog): ?AppointmentType
     {
         return $dialog->appointment_type_id === null
@@ -580,6 +1070,9 @@ final class Buchungsdialog
             art: $art,
             von: $start->startOfDay(),
             bis: $start->endOfDay(),
+            // Dieselbe Einschraenkung wie beim Vorschlagen: um 10 Uhr koennen
+            // zwei frei sein, und gemeint ist die, nach der gefragt wurde.
+            nurBehandler: $this->wunsch($dialog),
             nurStandort: $dialog->location_id === null
                 ? null
                 : Location::query()->whereKey($dialog->location_id)->first(),

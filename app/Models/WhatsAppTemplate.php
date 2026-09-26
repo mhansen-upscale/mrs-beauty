@@ -9,6 +9,7 @@ use App\Enums\TemplateStatus;
 use App\Models\Concerns\Auditable;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 /**
  * Ein bei Meta genehmigtes WhatsApp-Template.
@@ -60,6 +61,18 @@ class WhatsAppTemplate extends TenantModel
     public function auditableValues(): array
     {
         return ['name', 'language', 'category', 'status'];
+    }
+
+    /**
+     * Die juengste HWG-Pruefung des Rumpfs (WP-30). Ein Hinweis im
+     * Posteingang, keine Sperre: genehmigt hat Meta, und Meta prueft kein HWG.
+     *
+     * @return MorphOne<ComplianceCheck, $this>
+     */
+    public function pruefung(): MorphOne
+    {
+        return $this->morphOne(ComplianceCheck::class, 'checkable')
+            ->ofMany(['checked_at' => 'max', 'id' => 'max'], 'max');
     }
 
     /**

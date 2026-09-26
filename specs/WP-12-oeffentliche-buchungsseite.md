@@ -248,6 +248,10 @@ steht in der Reservierung.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Preis und Beschreibung erscheinen, sobald die
+> HWG-Prüfung sie freigibt (C11, `tests/Feature/Compliance/VeroeffentlichungTest.php`).
+> Logo und Markenfarbe kamen mit WP-07. Offen bleibt die eigene Domain.
+
 Die Seite liegt unter unserer Domain. Eigene Domain, Logo und die Prüfung der
 Markenfarbe bei der Eingabe kommen mit WP-07.
 

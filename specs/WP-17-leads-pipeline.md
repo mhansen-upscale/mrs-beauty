@@ -206,6 +206,12 @@ eine Tautologie.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Attribution (WP-32) und Aufbewahrung (WP-18)
+> stehen. **Der Statuswechsel aus Nachrichten** auch: eine Antwort im
+> Posteingang — von einem Menschen oder dem Assistenten — vermerkt die
+> Reaktion selbst (`Leadverwaltung::beiAntwort`, `tests/Feature/Leads/ReaktionTest.php`).
+> Speed-to-Lead misst damit, was geschah.
+
 **Attribution.** Besucher, Touches, Kampagnenzuordnung und
 `attribution_snapshot` sind WP-32. Die grobe Herkunft sagt *wie*, nicht
 *woher*.

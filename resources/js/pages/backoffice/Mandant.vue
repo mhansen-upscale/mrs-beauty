@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
-import { AlertTriangle } from 'lucide-vue-next';
+import { AlertTriangle, Eye } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 const props = defineProps<{
@@ -38,8 +38,24 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const sperrenOffen = ref(false);
 const gutschriftOffen = ref(false);
+const hineinsehenOffen = ref(false);
 
 const sperre = useForm({ grund: '' });
+
+/**
+ * Hineinsehen geht über die Impersonation aus WP-05 — **immer maskiert**.
+ * Vollzugriff ist ein zweiter Schritt, den nur eine Inhaberin der Praxis
+ * freigibt (Entscheidung C4). Die Begründung steht im Protokoll, das auch
+ * die Praxis lesen kann.
+ */
+const hineinsehen = useForm({ organization: props.mandant.uuid, reason: '' });
+
+const hineinsehenStarten = () =>
+    hineinsehen.post(route('impersonation.store'), {
+        onSuccess: () => {
+            hineinsehenOffen.value = false;
+        },
+    });
 const gutschrift = useForm({ art: 'nachrichten', menge: 250, grund: '' });
 
 const sperren = () =>
@@ -76,6 +92,10 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 <span v-if="mandant.periodeEndet" class="text-sm text-muted-foreground">Periode bis {{ datum(mandant.periodeEndet) }}</span>
 
                 <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+                    <Button type="button" variant="outline" @click="hineinsehenOffen = true">
+                        <Eye />
+                        In die Praxis sehen
+                    </Button>
                     <Button type="button" variant="outline" @click="gutschriftOffen = true">Kontingent gutschreiben</Button>
                     <Button type="button" :variant="mandant.gesperrt ? 'outline' : 'destructive'" @click="sperrenOffen = true">
                         {{ mandant.gesperrt ? 'Entsperren' : 'Sperren' }}
@@ -141,6 +161,21 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 <Label for="grund">Grund</Label>
                 <Input id="grund" v-model="sperre.grund" placeholder="Zahlungsausfall, Missbrauch, auf Wunsch der Praxis …" />
                 <InputError :message="sperre.errors.grund" />
+            </div>
+        </FormularDialog>
+
+        <FormularDialog
+            v-model:offen="hineinsehenOffen"
+            titel="In die Praxis sehen"
+            beschreibung="Maskiert: Namen, Kontaktwege und Inhalte bleiben verdeckt. Vollzugriff gibt nur eine Inhaberin der Praxis frei. Die Sitzung ist befristet, die Begründung steht im Protokoll der Praxis."
+            :laeuft="hineinsehen.processing"
+            absende-text="Sitzung starten"
+            @absenden="hineinsehenStarten"
+        >
+            <div class="grid gap-2">
+                <Label for="begruendung">Begründung</Label>
+                <Input id="begruendung" v-model="hineinsehen.reason" placeholder="Rückfrage der Praxis zur Warteliste, Ticket 4711" />
+                <InputError :message="hineinsehen.errors.reason ?? hineinsehen.errors.organization" />
             </div>
         </FormularDialog>
 

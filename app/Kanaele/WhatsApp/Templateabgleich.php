@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Kanaele\WhatsApp;
 
+use App\Compliance\Veroeffentlichungspruefung;
 use App\Enums\MessageCostCategory;
 use App\Enums\TemplateStatus;
 use App\Kanaele\Kanalfehler;
@@ -29,6 +30,8 @@ use Throwable;
  */
 final class Templateabgleich
 {
+    public function __construct(private readonly Veroeffentlichungspruefung $hwg) {}
+
     /**
      * @return array{angelegt: int, geaendert: int}
      */
@@ -68,7 +71,15 @@ final class Templateabgleich
             $template->synced_at = $jetzt;
 
             $veraendert = $template->isDirty();
+            $rumpfNeu = $neu || $template->isDirty('body');
             $template->save();
+
+            // Ein Template ist Werbung, sobald es eine Behandlung bewirbt --
+            // Meta prueft kein HWG. Die Ampel ist ein Hinweis im Posteingang,
+            // keine Sperre (WP-30).
+            if ($rumpfNeu) {
+                $this->hwg->template($template);
+            }
 
             $angelegt += $neu ? 1 : 0;
             $geaendert += ! $neu && $veraendert ? 1 : 0;

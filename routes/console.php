@@ -71,6 +71,14 @@ Schedule::command('mrs:whatsapp-templates')
     ->onOneServer()
     ->withoutOverlapping();
 
+// Antworten im WhatsApp-Service-Fenster (Entscheidung B14). Zum Monatsersten,
+// fuer den Vormonat: der Preis steht an jeder Antwort schon fest, der Lauf
+// fasst nur zusammen. Bei null Euro geht nichts zu Stripe.
+Schedule::command('mrs:servicefenster-abrechnen')
+    ->monthlyOn(1, '03:45')
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // Wartelistenangebote (WP-25). Alle fuenf Minuten: ein Angebot gilt 30
 // Minuten, und der naechste Kandidat soll nicht eine Stunde auf seine Runde
 // warten. Der Lauf gibt abgelaufene Holds frei -- ohne ihn bliebe ein Slot

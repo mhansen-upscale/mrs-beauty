@@ -8,6 +8,7 @@ use App\Attribution\Beruehrungen;
 use App\Attribution\Besucherkennung;
 use App\Attribution\Zuordnung;
 use App\Buchung\OeffentlicheVerfuegbarkeit;
+use App\Compliance\Veroeffentlichungspruefung;
 use App\Datenschutz\Anhangspeicher;
 use App\Enums\BookingChannel;
 use App\Enums\HoldPurpose;
@@ -24,6 +25,7 @@ use App\Models\Location;
 use App\Models\Organization;
 use App\Models\Practitioner;
 use App\Models\SlotHold;
+use App\Models\Treatment;
 use App\Support\Markenstil;
 use App\Support\Uuid;
 use App\Tenancy\TenantContext;
@@ -64,6 +66,7 @@ final class PublicBookingController extends Controller
         private readonly Besucherkennung $besucher,
         private readonly Beruehrungen $beruehrungen,
         private readonly Zuordnung $zuordnung,
+        private readonly Veroeffentlichungspruefung $hwg,
     ) {}
 
     /**
@@ -125,8 +128,13 @@ final class PublicBookingController extends Controller
                     'uuid' => $art->uuid,
                     'name' => $art->name,
                     'duration_minutes' => $art->duration_minutes,
-                    // **Kein Preis, keine Beschreibung.** Beides steht im
-                    // Katalog und wartet auf die HWG-Pruefung (WP-30).
+
+                    // **Preis und Beschreibung nur nach der HWG-Pruefung**
+                    // (WP-12, WP-30): gruen oder begruendet uebersteuert, und
+                    // die Pruefung muss dem jetzigen Text gelten. Sonst fehlt
+                    // beides -- ein Preis allein kann Werbung sein.
+                    ...$this->beschreibung($art),
+
                     'locations' => $art->locations->map(fn (Location $ort): string => (string) $ort->uuid)->values(),
 
                     // Wer sie macht. Ein Name und ein Gesicht nehmen einer
@@ -490,6 +498,20 @@ final class PublicBookingController extends Controller
      * organizations.settings -- zwei Orte fuer dieselbe Farbe waeren zwei
      * Farben, sobald jemand einen davon aendert.
      */
+    /**
+     * @return array{description: string|null, price: string|null}
+     */
+    private function beschreibung(AppointmentType $art): array
+    {
+        $behandlung = $art->treatment;
+
+        if (! $behandlung instanceof Treatment || ! $this->hwg->freigegeben($behandlung)) {
+            return ['description' => null, 'price' => null];
+        }
+
+        return ['description' => $behandlung->description, 'price' => $behandlung->preistext()];
+    }
+
     private function erscheinungsbild(): ?Branding
     {
         return Branding::query()->first();

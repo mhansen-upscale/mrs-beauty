@@ -4,8 +4,9 @@
 > mittlerweile in verbindlicher Fassung vor und legt in den Abschnitten
 > Architektur und Datenmodell (A1–A14, D1–D14) mehr fest, als hier steht.
 > Die Briefings verweisen zudem auf **Abschnitt 0** (Konsequenzen von MySQL 8)
-> und **Abschnitt 11** (Notizen, Anhänge, Einwilligungen), die hier fehlen.
-> Dieses Dokument ist damit ein Platzhalter bis zur echten Fassung.
+> und **Abschnitt 11** (Notizen, Anhänge, Einwilligungen). Abschnitt 0 steht
+> seit WP-03, Abschnitt 11 seit dem 26.09.2026 — beide aus dem tatsächlichen
+> Schema geschrieben, nicht erfunden.
 >
 > **Rekonstruktion.** Dieses Dokument fehlte im Repository, wird aber von
 > `specs/WP-30-hwg-compliance.md` (Abschnitt 9) referenziert. Es ist hier
@@ -475,3 +476,90 @@ eine Änderung am Wortlaut gilt ab dann, nicht rückwirkend.
 Startregelsatz: `before_after`, `missing_risk_notice`, `healing_promise`,
 `fear_advertising`, `testimonial`, `risk_free_claims`, `superlatives`,
 `brand_violation`.
+
+**Seit dem 26.09.2026 auch Buchungsseite und Template** (C11). Jede Prüfung
+trägt `content_hash` — den SHA-256 des geprüften Texts, als Rohbytes. Die
+Buchungsseite zeigt Beschreibung und Preis nur, wenn die jüngste Prüfung
+**diesem** Text gilt; der Zeitstempel des Datensatzes wäre das falsche Maß, er
+springt auch bei einer geänderten Umsatzschätzung.
+
+---
+
+## 10 · Änderungen vom 26.09.2026
+
+| Tabelle | Spalte | Wofür |
+|---|---|---|
+| `messages` | `charge_tenth_cents` | Was eine Antwort im Service-Fenster einzeln kostet, festgehalten beim Eintreffen der Kategorie (B14). Leer heißt: nicht einzeln berechnet |
+| `subscriptions` | `service_window_billed_period` | Der letzte Monat (`Y-m`), dessen Antworten auf einer Rechnung stehen. Stripes Idempotenzschlüssel gilt 24 Stunden; das hier gilt immer |
+| `agent_dialogs` | `requested_practitioner_id` | Der geäußerte Behandlerwunsch — schränkt die Vorschläge ein. **Nicht** `practitioner_id`: die hält fest, bei wem der gehaltene Slot liegt |
+| `agent_dialogs` | `change_appointment_id` | Der Termin, der abgesagt oder verschoben werden soll (G12). **Nicht** `appointment_id`: die trägt G9 |
+| `compliance_checks` | `content_hash` | Siehe Abschnitt 9 |
+
+Zwei Tabellen haben dabei keine neue Spalte bekommen, obwohl es nahelag:
+
+- **`waitlist_offers.cost_micros`** stand seit WP-25 und bleibt die Quelle der
+  Wartelistenkosten. Gefüllt wird sie jetzt aus `charge_tenth_cents` der
+  Angebotsnachricht; zugeordnet über den Idempotenzschlüssel `warteliste-…`.
+- **Der wackelige Termin** (Auslöser 3) braucht keinen eigenen Zustand: eine
+  offene Klärung ist ein Angebot mit `trigger = no_response`,
+  `status = accepted` und ohne `appointment_id`.
+
+---
+
+## 11 · Notizen, Anhänge, Einwilligungen
+
+> Von WP-18 als Pflichtlektüre genannt, bis zum 26.09.2026 nicht vorhanden.
+> Geschrieben aus `0001_01_01_001400_create_datenschutz_tables.php` und den
+> Modellen; es beschreibt, was steht, nicht was sein sollte.
+
+| Tabelle | Besonderheit |
+|---|---|
+| `notes` | polymorph (`notable_*`), Rumpf **verschlüsselt**, Verfasser als Verweis — kein Freitext im Klartext |
+| `tags`, `taggables` | Schlagworte je Mandant, eindeutig im Namen; polymorph zuordenbar |
+| `attachments` | polymorph (`attachable_*`), Datei **außerhalb der Datenbank, verschlüsselt unter dem Schlüssel der Organisation** (A6); Dateiname verschlüsselt, Typ aus dem Inhalt erkannt, `checksum` als SHA-256 |
+| `consents` | an der **Kanalidentität**, nicht am Kontakt (D8); jede Erteilung und jeder Widerruf eine eigene Zeile mit `text_version` und **Wortlaut** (`text_snapshot`) |
+| `retention_policies` | Fristen je Mandant und Gegenstand, mit Aktion (löschen, anonymisieren); Vorgaben aus C7 |
+| `data_subject_requests` | Auskunft und Löschung nach DSGVO, mit Ergebnis und Abschlusszeitpunkt |
+
+### Anhänge
+
+**`context`** entscheidet über Frist und Weg:
+
+| Kontext | Ablaufdatum | Woher |
+|---|---|---|
+| `chat` | **Pflicht** (C6), als CHECK in der Datenbank | ungefragt zugesandt — Gesundheitsdatum nach Art. 9 DSGVO |
+| `document` | keines | vom Team hochgeladen |
+| `brand_reference` | keines | Material der Marke (WP-29), nie Patientenmaterial |
+
+**`scan_result`** ist `clean`, `infected` oder `unscanned`. **Nur `clean` gibt
+frei** — auch ohne angebundenen Prüfer steht dann überall `unscanned`, und es
+geht nichts hinaus. Die eine Ausnahme ist das Logo (WP-07, eigene Route): dort
+blockiert nur ein Befund.
+
+**Ausgeliefert wird über eine Route** (`anhang.zeigen`, C12). Wer ihn sehen darf,
+hängt am Träger — Nachricht: Posteingang, Referenz: Brand Guide, Kontakt:
+Kontakte. Bilder erscheinen in einer Sandbox, alles andere als Download. Das
+Öffnen eines Chat-Anhangs steht im Protokoll (`attachment.opened`).
+
+**Löschen heißt beides**, Datensatz und Datei (`Anhangspeicher::entferne`). Der
+Datensatz allein ließe Fotos auf dem Speicher liegen.
+
+### Einwilligungen
+
+Drei Arten (`ConsentType`): `service_messages` (Terminnachrichten, Angebote
+der Warteliste — K11), `marketing` und `whatsapp` (das Opt-in für Templates
+außerhalb des Fensters). **Der Stand ist die jüngste Zeile je Art**, nicht ein
+Schalter: ein Widerruf überschreibt nichts, er kommt dazu.
+
+Der Wortlaut wird **kopiert**, nicht referenziert — wie bei der Erklärung zum
+Referenzmaterial. Wer in zwei Jahren fragt, was jemand zugesagt hat, braucht
+den Satz von damals.
+
+### Aufbewahrung
+
+Gegenstände (`RetentionSubject`): Lead ohne Termin, Chat-Anhang, Konversation
+(**anonymisiert**, nicht gelöscht), Protokoll, Zusammenführungs-Snapshot,
+Rohereignis, Werbezahlen je Anzeige, Attributionsberührung. Durchgesetzt von
+`mrs:aufbewahrung` — nachts **als Vorschau**, scharf von Hand
+(`docs/betrieb.md`).
+

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Datenschutz\Anhangspeicher;
+use App\Enums\AttachmentContext;
 use App\Enums\ChannelType;
 use App\Enums\MessageCostCategory;
 use App\Enums\MessageDirection;
@@ -9,11 +11,15 @@ use App\Enums\MessageStatus;
 use App\Kanaele\Eingangsverarbeitung;
 use App\Kanaele\Konversationen;
 use App\Kanaele\Rohereignisse;
+use App\Models\Attachment;
 use App\Models\ChannelIdentity;
 use App\Models\ChannelRawEvent;
 use App\Models\Conversation;
 use App\Models\Message;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\travelTo;
 
@@ -108,6 +114,10 @@ it('liest den Zeitstempel als Sekunden, nicht als Millisekunden', function (): v
 it('nimmt ein Bild mit Medientyp und Bildunterschrift auf', function (): void {
     $aufbau = new WhatsAppAufbau;
 
+    // Die Datei selbst holt ein eigener Auftrag -- hier gibt Meta sie nicht
+    // heraus, und die Nachricht steht trotzdem.
+    Http::fake(['*' => Http::response(['error' => ['code' => 100]], 404)]);
+
     verarbeite($aufbau, WhatsAppAufbau::zustellung([
         'id' => 'wamid.1',
         'timestamp' => '1800000000',
@@ -119,6 +129,81 @@ it('nimmt ein Bild mit Medientyp und Bildunterschrift auf', function (): void {
 
     expect($nachricht->media_type)->toBe('image/jpeg')
         ->and($nachricht->body)->toBe('So sieht es aus');
+});
+
+/* Medien (offen seit WP-20a) ------------------------------------------------ */
+
+/** Metas zwei Schritte: Auskunft zur Kennung, dann die Datei. */
+function metaMedien(int $groesse = 8, string $adresse = 'https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=1'): void
+{
+    Http::fake([
+        'graph.facebook.com/*/media-1' => Http::response([
+            'id' => 'media-1',
+            'url' => $adresse,
+            'mime_type' => 'image/jpeg',
+            'file_size' => $groesse,
+        ]),
+        'lookaside.fbsbx.com/*' => Http::response('JPEGDATA', 200, ['Content-Type' => 'image/jpeg']),
+        '*' => Http::response('', 500),
+    ]);
+}
+
+/** @return array<string, mixed> */
+function bildnachricht(): array
+{
+    return WhatsAppAufbau::zustellung([
+        'id' => 'wamid.bild',
+        'timestamp' => '1800000000',
+        'type' => 'image',
+        'image' => ['id' => 'media-1', 'mime_type' => 'image/jpeg'],
+    ]);
+}
+
+it('holt ein Bild ueber den Media-Endpunkt und legt es als Chat-Anhang ab', function (): void {
+    Storage::fake('local');
+    $aufbau = new WhatsAppAufbau;
+    metaMedien();
+
+    verarbeite($aufbau, bildnachricht());
+
+    $anhang = Attachment::query()->firstOrFail();
+
+    // Ueber den Anhangspeicher: Chat-Kontext, Pflicht-Ablaufdatum (C6), und
+    // angezeigt wird erst nach der Virenpruefung.
+    expect($anhang->context)->toBe(AttachmentContext::Chat)
+        ->and($anhang->attachable_type)->toBe(Message::class)
+        ->and($anhang->expires_at)->not->toBeNull()
+        ->and(app(Anhangspeicher::class)->rohinhalt($anhang))->toBe('JPEGDATA');
+
+    // Beide Schritte mit dem Token der Verbindung.
+    Http::assertSent(fn (HttpRequest $anfrage): bool => str_contains($anfrage->url(), 'lookaside.fbsbx.com')
+        && $anfrage->hasHeader('Authorization', 'Bearer systembenutzer-token'));
+});
+
+it('schickt das Token nicht an eine fremde Adresse', function (): void {
+    Storage::fake('local');
+    $aufbau = new WhatsAppAufbau;
+
+    // Die Adresse der Datei kommt aus einer Antwort. Wer sie faelschen
+    // koennte, bekaeme sonst das Zugangstoken der Praxis.
+    metaMedien(adresse: 'https://boese.example/datei');
+
+    verarbeite($aufbau, bildnachricht());
+
+    expect(Attachment::query()->count())->toBe(0);
+    Http::assertNotSent(fn (HttpRequest $anfrage): bool => str_contains($anfrage->url(), 'boese.example'));
+});
+
+it('holt keine Datei ueber der Grenze', function (): void {
+    Storage::fake('local');
+    $aufbau = new WhatsAppAufbau;
+    metaMedien(groesse: (int) config('mrs.channels.whatsapp.max_media_bytes') + 1);
+
+    verarbeite($aufbau, bildnachricht());
+
+    expect(Attachment::query()->count())->toBe(0)
+        ->and(Message::query()->firstOrFail()->media_type)->toBe('image/jpeg');
+    Http::assertNotSent(fn (HttpRequest $anfrage): bool => str_contains($anfrage->url(), 'lookaside'));
 });
 
 it('zeigt eine Reaktion mit ihrem Emoji statt als leere Nachricht', function (): void {

@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, CircleSlash, Pencil, Plus, Power, PowerOff } from 'lucide-vue-next';
+import { CheckCircle2, CircleSlash, Pencil, Plus, Power, PowerOff, ShieldAlert, ShieldCheck } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface TreatmentItem extends Record<string, unknown> {
@@ -29,6 +29,12 @@ interface TreatmentItem extends Record<string, unknown> {
     practitioners: string[];
     practitioner_names: string[];
     appointment_types: number;
+    hwg: {
+        ampel: 'green' | 'yellow' | 'red' | null;
+        befunde: { code: string; titel: string; fundstelle: string; ampel: string; stelle: string | null; vorschlag: string | null }[];
+        uebersteuert: boolean;
+        sichtbar: boolean;
+    } | null;
 }
 
 interface Behandler {
@@ -47,8 +53,36 @@ const spalten: Spalte<TreatmentItem>[] = [
     { schluessel: 'avg_revenue_cents', titel: 'Ø Umsatz', klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'practitioner_names', titel: 'Wer macht das?', sortierbar: false, ab: 'lg' },
     { schluessel: 'appointment_types', titel: 'Terminarten', klasse: 'text-right tabular-nums', ab: 'lg' },
+    { schluessel: 'hwg', titel: 'Buchungsseite', sortierbar: false, ab: 'md' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
+
+/*
+ * Beschreibung und Preis auf der Buchungsseite (WP-30). Sie erscheinen nur bei
+ * Grün oder nach einer begründeten Übersteuerung (C3) — gelb heißt, jemand
+ * muss hinsehen. Die Praxis soll hier sehen, warum etwas dort fehlt.
+ */
+const pruefungOffen = ref(false);
+const geprueft = ref<TreatmentItem | null>(null);
+const uebersteuerung = useForm({ grund: '' });
+
+const pruefungZeigen = (eintrag: TreatmentItem) => {
+    geprueft.value = eintrag;
+    uebersteuerung.reset();
+    uebersteuerung.clearErrors();
+    pruefungOffen.value = true;
+};
+
+const uebersteuern = () => {
+    if (!geprueft.value) {
+        return;
+    }
+
+    uebersteuerung.post(route('treatments.hwg.uebersteuern', { treatment: geprueft.value.uuid }), {
+        preserveScroll: true,
+        onSuccess: () => (pruefungOffen.value = false),
+    });
+};
 
 const formularOffen = ref(false);
 const bearbeitet = ref<TreatmentItem | null>(null);
@@ -151,6 +185,25 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
 
                 <template #zelle-appointment_types="{ zeile }">
                     {{ zeile.appointment_types }}
+                </template>
+
+                <template #zelle-hwg="{ zeile }">
+                    <span v-if="!zeile.hwg" class="text-xs text-muted-foreground">ohne Text</span>
+                    <button v-else type="button" class="text-left" @click="pruefungZeigen(zeile)">
+                        <Badge v-if="zeile.hwg.sichtbar" variant="success">
+                            <ShieldCheck />
+                            {{ zeile.hwg.uebersteuert ? 'Sichtbar (übersteuert)' : 'Sichtbar' }}
+                        </Badge>
+                        <Badge v-else-if="zeile.hwg.ampel === 'yellow'" variant="warning">
+                            <ShieldAlert />
+                            Bitte prüfen
+                        </Badge>
+                        <Badge v-else-if="zeile.hwg.ampel === 'red'" variant="destructive">
+                            <ShieldAlert />
+                            Beanstandet
+                        </Badge>
+                        <Badge v-else variant="secondary">Nicht geprüft</Badge>
+                    </button>
                 </template>
 
                 <template #zelle-is_active="{ zeile }">
@@ -257,6 +310,31 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
                     </div>
                     <InputError :message="formular.errors.all_practitioners" />
                 </div>
+            </div>
+        </FormularDialog>
+        <FormularDialog
+            v-model:offen="pruefungOffen"
+            :titel="geprueft ? `HWG-Prüfung · ${geprueft.name}` : 'HWG-Prüfung'"
+            beschreibung="Beschreibung und Preis erscheinen auf der Buchungsseite erst bei Grün oder nach einer begründeten Übersteuerung. Die Prüfung ist eine Hilfe, keine Rechtsberatung."
+            :laeuft="uebersteuerung.processing"
+            absende-text="Übersteuern und veröffentlichen"
+            :absenden-aus="!geprueft?.hwg || geprueft.hwg.sichtbar"
+            @absenden="uebersteuern"
+        >
+            <ul v-if="geprueft?.hwg?.befunde.length" class="space-y-3 text-sm">
+                <li v-for="befund in geprueft.hwg.befunde" :key="befund.code" class="rounded-md border p-3">
+                    <p class="font-medium">{{ befund.titel }}</p>
+                    <p class="text-xs text-muted-foreground">{{ befund.fundstelle }}</p>
+                    <p v-if="befund.stelle" class="mt-1">„{{ befund.stelle }}“</p>
+                    <p v-if="befund.vorschlag" class="mt-1 text-muted-foreground">{{ befund.vorschlag }}</p>
+                </li>
+            </ul>
+            <p v-else class="text-sm text-muted-foreground">Keine Befunde.</p>
+
+            <div v-if="geprueft?.hwg && !geprueft.hwg.sichtbar" class="grid gap-2">
+                <Label for="hwg-grund">Warum trifft das hier nicht zu?</Label>
+                <Input id="hwg-grund" v-model="uebersteuerung.grund" placeholder="Der Risikohinweis steht im Rahmen der Buchungsseite." />
+                <InputError :message="uebersteuerung.errors.grund" />
             </div>
         </FormularDialog>
     </AppLayout>

@@ -152,6 +152,8 @@ Rohereignisse werden 14 Tage aufbewahrt, damit fehlgeschlagene Verarbeitungen er
 
 **Kostenmodell.** Ab 01.10.2026 berechnet Meta auch Service-Nachrichten und Utility-Templates innerhalb des 24-Stunden-Fensters, die bis dahin kostenlos waren. Marketing-Templates nach Deutschland liegen ohne Volumenrabatt bei über 0,12 USD je Nachricht. Nachrichten des Meta Business Agent werden seit 01.08.2026 nach Token abgerechnet.
 
+*Nachtrag 26.09.2026:* Ob die Berechnung im Fenster wirklich kommt, ist offen — B12 ging vom Gegenteil aus. **Das Produkt ist auf beides vorbereitet (B14):** Antworten im Fenster werden gezählt, getrennt von den Templates (die gegen das Kontingent laufen), und mit `WHATSAPP_SERVICEFENSTER_CENT` bepreist, vorerst 0. Der Preis steht an jeder Nachricht (`messages.charge_tenth_cents`), sobald die Statusrückmeldung die Kategorie `service` meldet, und geht am Monatsersten als ein Sammelposten zu Stripe. Gesperrt wird eine Antwort nie.
+
 Folge: WhatsApp darf im Abo nicht unbegrenzt sein. Die Kategorie wird je Nachricht **aus der API-Antwort** übernommen, nie geschätzt.
 
 **Und zwar aus der Statusrückmeldung, nicht aus der Sendeantwort** (gefunden in WP-20a). Die Antwort auf den Versand trägt `messages[0].id` und sonst nichts; `pricing.category` kommt Minuten später als eigenes Webhook-Ereignis. Eine frisch gesendete Nachricht hat deshalb **keine** Kategorie — nicht `none`. `none` wäre die Schätzung mit der Aussage „kostenlos", und die fällt nie auf.
@@ -163,6 +165,10 @@ Folge: WhatsApp darf im Abo nicht unbegrenzt sein. Die Kategorie wird je Nachric
 **Opt-in** ist nachweisbar erforderlich. `consents` mit `channel_identity_id`, `text_snapshot` und Zeitpunkt. Es gilt für das **Template außerhalb** des Fensters: wer uns schreibt, hat sich damit gemeldet, und die Antwort im Fenster braucht keinen weiteren Nachweis.
 
 **Qualitätsbewertung.** Meta bewertet Rufnummern nach Nutzerreaktionen. Zu viele Blockierungen senken das Versandlimit. Die Frequenzbremse bei Wartelistenangeboten schützt auch davor.
+
+**Einrichtung** (seit 26.09.2026 im Produkt, *Einstellungen → WhatsApp*). Eingetragen werden WABA-ID, Rufnummern-ID und das Token eines Systembenutzers mit `whatsapp_business_messaging` und `whatsapp_business_management`. Gespeichert wird sofort, geprüft in der Warteschlange (`WhatsAppPruefen`, B2): Rufnummer lesen, **`POST /{waba}/subscribed_apps`** — ohne dieses Abonnement kommt keine einzige Nachricht an —, Templates abgleichen. Eine WABA gehört genau einer Praxis; die Zustellung findet ihre Praxis über diese Kennung.
+
+**Medien.** Die Zustellung trägt nur eine Kennung. Die Datei kommt in zwei Schritten, beide mit Token: `GET /{media-id}` liefert eine kurzlebige Adresse, erst die liefert die Datei (`MedienHolen`, `WhatsAppMedien`). **Das Token geht nur an Meta** — die zweite Adresse wird gegen `mrs.channels.whatsapp.media_hosts` geprüft, bevor es mitgeht. Über 10 MB wird nicht geholt. Abgelegt wird über den Anhangspeicher: Virenprüfung, Pflicht-Ablaufdatum (C6), angezeigt erst nach der Prüfung (C12).
 
 ## Instagram und Messenger — zurückgestellt
 

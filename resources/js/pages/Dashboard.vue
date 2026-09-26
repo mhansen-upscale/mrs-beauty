@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head } from '@inertiajs/vue3';
-import { AlertTriangle, Check, Copy, ExternalLink } from 'lucide-vue-next';
+import { Head, Link } from '@inertiajs/vue3';
+import { AlertTriangle, Check, ClipboardCheck, Copy, ExternalLink } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Booking {
@@ -24,6 +24,7 @@ interface Betrieb {
 const props = defineProps<{
     booking: Booking | null;
     betrieb: Betrieb | null;
+    aufgaben: { klaerungen: number } | null;
 }>();
 
 /**
@@ -81,6 +82,25 @@ const kopieren = async (adresse: string) => {
                     {{ betrieb.liegengebliebeneEreignisse }} eingegangene Nachricht(en) konnten nicht verarbeitet werden. Wir sehen uns das an.
                 </p>
             </div>
+
+            <!--
+                Was ein Mensch entscheiden muss, bevor es weitergeht: eine
+                Zusage der Warteliste für einen Termin, der noch belegt ist.
+            -->
+            <Link
+                v-if="aufgaben && aufgaben.klaerungen > 0"
+                :href="route('waitlist.index')"
+                class="flex items-center gap-3 rounded-md border bg-card p-4 text-sm hover:bg-muted/40"
+            >
+                <ClipboardCheck class="size-5 shrink-0 text-primary" />
+                <span class="min-w-0 flex-1">
+                    <span class="font-medium">
+                        {{ aufgaben.klaerungen === 1 ? 'Eine Zusage der Warteliste' : `${aufgaben.klaerungen} Zusagen der Warteliste` }} warten auf
+                        Ihre Entscheidung.
+                    </span>
+                    <span class="block text-xs text-muted-foreground">Der Termin ist noch belegt — wer ihn bekommt, entscheiden Sie.</span>
+                </span>
+            </Link>
 
             <!--
                 Der öffentliche Buchungslink war bis WP-19 nirgends im Produkt

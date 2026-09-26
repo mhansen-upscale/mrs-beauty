@@ -17,11 +17,22 @@ const props = defineProps<{
     testphaseEndet: string | null;
     periodeEndet: string | null;
     gekuendigtAm: string | null;
-    verbrauch: { zeitraum: string; nachrichten: number; kostenpflichtig: number; agentenlaeufe: number; angebote: number; bilder: number };
+    verbrauch: {
+        zeitraum: string;
+        nachrichten: number;
+        kostenpflichtig: number;
+        servicefenster: number;
+        agentenlaeufe: number;
+        angebote: number;
+        bilder: number;
+    };
     enthalten: { nachrichten: number; agentenlaeufe: number; bilder: number };
     rest: { nachrichten: number; agentenlaeufe: number; bilder: number };
     aufgestockt: { nachrichten: number; agentenlaeufe: number; bilder: number };
     bildpreisCent: number;
+    blockpreisCent: number;
+    blockmengen: { nachrichten: number; agentenlaeufe: number };
+    servicefensterpreisZehntelCent: number;
     stripeAngebunden: boolean;
     hatKunden: boolean;
 }>();
@@ -41,6 +52,10 @@ const anteil = (verbraucht: number, gesamt: number): number => (gesamt <= 0 ? 10
 const bildmenge = ref(5);
 
 const euro = (cent: number): string => new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(cent / 100);
+
+/** Zehntel-Cent, mit bis zu drei Nachkommastellen: 15 → 0,015 €. */
+const zehntelCent = (wert: number): string =>
+    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 3 }).format(wert / 1000);
 
 const zurKasse = (was: string, menge = 1) => router.post(route('abo.kasse'), { was, menge }, { preserveScroll: true });
 const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: true });
@@ -94,7 +109,7 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                 <div class="space-y-4">
                     <HeadingSmall
                         :title="`Verbrauch · ${monat}`"
-                        description="Gezählt wird, was Geld kostet. Antworten im offenen Fenster sind frei."
+                        description="Gegen das Kontingent zählt, was Geld kostet. Antworten im offenen Fenster zählen nie dagegen."
                     />
 
                     <div class="space-y-4">
@@ -149,6 +164,25 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                         </div>
                     </div>
 
+                    <!--
+                        Entscheidung B14: gezählt ab dem 26.09.2026, berechnet
+                        mit dem Preis aus der Umgebung — vorerst null Euro.
+                        Gesperrt wird eine Antwort nie (B12).
+                    -->
+                    <div class="space-y-1">
+                        <div class="flex items-baseline justify-between text-sm">
+                            <span>Antworten im offenen Fenster</span>
+                            <span class="tabular-nums text-muted-foreground">{{ verbrauch.servicefenster }}</span>
+                        </div>
+                        <p class="text-xs text-muted-foreground">
+                            <template v-if="servicefensterpreisZehntelCent > 0">
+                                Je {{ zehntelCent(servicefensterpreisZehntelCent) }}, zusammengefasst auf der nächsten Rechnung. Gesperrt wird eine
+                                Antwort nie.
+                            </template>
+                            <template v-else>Gezählt, derzeit ohne Berechnung. Gesperrt wird eine Antwort nie.</template>
+                        </p>
+                    </div>
+
                     <p class="text-sm text-muted-foreground">
                         Insgesamt {{ verbrauch.nachrichten }} verschickte Nachrichten und {{ verbrauch.angebote }} Wartelistenangebote in diesem
                         Monat.
@@ -162,6 +196,10 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                     <div v-if="stripeAngebunden && hatKunden" class="flex flex-wrap items-center gap-3">
                         <Button type="button" variant="outline" @click="zurKasse('nachrichten')">Nachrichten aufstocken</Button>
                         <Button type="button" variant="outline" @click="zurKasse('agentenlaeufe')">Assistenzläufe aufstocken</Button>
+                        <span v-if="blockpreisCent > 0" class="text-xs text-muted-foreground">
+                            je Block {{ euro(blockpreisCent) }} — {{ blockmengen.nachrichten }} Nachrichten oder
+                            {{ blockmengen.agentenlaeufe }} Assistenzläufe
+                        </span>
 
                         <div class="flex flex-wrap items-center gap-2">
                             <Input v-model="bildmenge" type="number" min="1" max="100" class="w-20 shrink-0" />

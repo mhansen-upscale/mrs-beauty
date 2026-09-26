@@ -49,6 +49,15 @@ final class Angebotstexte
             .'Wir klären das und melden uns gleich bei Ihnen.';
     }
 
+    public function dochVergeben(Slotvorschlag $slot): string
+    {
+        // Ausloeser 3, zweiter Ausgang: der bestehende Termin bleibt. Die
+        // Person wartet weiter -- das muss sie erfahren, sonst haelt sie die
+        // Warteliste fuer erledigt.
+        return 'Der Termin am '.$this->zeitpunkt($slot).' bleibt vergeben — das tut uns leid. '
+            .'Sie bleiben auf der Warteliste, und wir melden uns beim nächsten freien Termin.';
+    }
+
     private function zeitpunkt(Slotvorschlag $slot): string
     {
         $ortszeit = $slot->ortszeit();

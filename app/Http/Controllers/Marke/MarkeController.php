@@ -88,6 +88,13 @@ final class MarkeController extends Controller
                     // leeren Menge ist wahr.
                     'freigegeben' => $referenz->attachments->isNotEmpty()
                         && $referenz->attachments->every(fn (Attachment $anhang): bool => $anhang->istFreigegeben()),
+
+                    // Die Vorschau (offen seit WP-29): ueber dieselbe Route
+                    // wie jeder andere Anhang -- und wie dort nur, was
+                    // geprueft ist.
+                    'vorschau' => $referenz->attachments
+                        ->first(fn (Attachment $anhang): bool => $anhang->istBild() && $anhang->istFreigegeben())
+                        ?->uuid,
                 ])
                 ->values(),
 

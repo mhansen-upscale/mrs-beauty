@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Agent\Buchung;
 
+use App\Models\AppointmentType;
 use App\Models\Location;
+use App\Models\Practitioner;
 use App\Models\Treatment;
 use App\Verfuegbarkeit\Slotvorschlag;
 
@@ -64,13 +66,54 @@ final class Dialogtexte
             ."\n\nPasst einer davon? Antworten Sie gern mit der Nummer.";
     }
 
+    /**
+     * Uebergabe ohne Termin -- wenn die Warteliste abgelehnt wurde oder
+     * keine Terminart feststeht.
+     */
     public function keineSlots(): string
     {
-        // **Keine Sackgasse** (Schritt 6): nicht abbrechen, sondern anbieten.
-        // Das Wartelistenangebot kommt mit WP-25; bis dahin uebernimmt ein
-        // Mensch, und das sagen wir auch.
         return 'Im gewünschten Zeitraum ist gerade nichts frei. Jemand aus dem Team meldet sich bei Ihnen '
             .'und findet einen Termin für Sie.';
+    }
+
+    /**
+     * **Keine Sackgasse** (Schritt 6, Testfall 14): nicht abbrechen, sondern
+     * die Warteliste anbieten.
+     *
+     * Die Frage ist zugleich die nach dem Kanal (K11): ein Eintrag ohne
+     * Einwilligung bekaeme nie ein Angebot. Deshalb nennt sie, was hierueber
+     * kommt, und nicht nur, dass es eine Liste gibt.
+     */
+    public function wartelisteAnbieten(AppointmentType $art): string
+    {
+        return 'In den nächsten Wochen ist für '.$art->name.' leider nichts frei. Soll ich Sie auf unsere '
+            .'Warteliste setzen? Wird ein Termin frei, schicken wir Ihnen hier ein Angebot — Sie entscheiden '
+            .'dann, ob er passt. Antworten Sie mit Ja, dann trage ich Sie ein.';
+    }
+
+    public function nameFuerWarteliste(): string
+    {
+        return 'Gern. Wie ist Ihr Name? Dann trage ich Sie ein.';
+    }
+
+    public function aufWarteliste(AppointmentType $art): string
+    {
+        return 'Sie stehen auf der Warteliste für '.$art->name.'. Sobald ein Termin frei wird, melden wir '
+            .'uns hier bei Ihnen.';
+    }
+
+    /**
+     * Wer genannt wurde, laesst sich keinem zuordnen -- also fragen, nicht
+     * raten (Schritt 6, behandler_klaeren).
+     *
+     * @param  list<Practitioner>  $behandler
+     */
+    public function behandlerFragen(array $behandler): string
+    {
+        $namen = array_map(fn (Practitioner $person): string => '- '.$person->name(), $behandler);
+
+        return "Wen meinen Sie? Bei uns behandeln:\n\n".implode("\n", $namen)
+            ."\n\nSchreiben Sie gern den Namen — oder „egal“, dann schlage ich vor, was frei ist.";
     }
 
     public function nameFragen(): string
@@ -102,6 +145,69 @@ final class Dialogtexte
         // zu einem zweiten Termin.
         return 'Sie haben bereits einen Termin am '.$this->zeitpunkt($vorschlag)
             .'. Soll der bestehen bleiben, oder möchten Sie ihn ändern? Ich gebe das an unser Team weiter.';
+    }
+
+    /* Ein Termin, der schon steht (offen seit WP-24) ------------------------- */
+
+    public function absageFragen(Slotvorschlag $termin): string
+    {
+        return 'Soll ich Ihren Termin am '.$this->zeitpunkt($termin).' ('.$termin->art->name.') absagen? '
+            .'Antworten Sie mit Ja, dann trage ich die Absage ein.';
+    }
+
+    public function abgesagt(Slotvorschlag $termin): string
+    {
+        return 'Ihr Termin am '.$this->zeitpunkt($termin).' ist abgesagt. Wenn Sie einen neuen möchten, '
+            .'schreiben Sie uns einfach.';
+    }
+
+    public function bleibtBestehen(Slotvorschlag $termin): string
+    {
+        return 'Gut, Ihr Termin am '.$this->zeitpunkt($termin).' bleibt bestehen.';
+    }
+
+    /**
+     * @param  list<Slotvorschlag>  $vorschlaege
+     */
+    public function verschiebenVorschlagen(Slotvorschlag $termin, array $vorschlaege): string
+    {
+        return 'Ihr Termin ist bisher am '.$this->zeitpunkt($termin).'. '.$this->slotsVorschlagen($vorschlaege);
+    }
+
+    public function verschiebenFragen(Slotvorschlag $alt, Slotvorschlag $neu): string
+    {
+        return 'Soll ich Ihren Termin vom '.$this->zeitpunkt($alt).' auf '.$this->zeitpunkt($neu)
+            .' verschieben? Antworten Sie mit Ja, dann trage ich es ein.';
+    }
+
+    public function verschoben(Slotvorschlag $neu): string
+    {
+        return 'Ihr Termin ist verschoben: '.$neu->art->name.' am '.$this->zeitpunkt($neu)
+            .'. Sie bekommen die Bestätigung gleich noch einmal schriftlich.';
+    }
+
+    /** Die Person ist nicht bekannt -- wer absagen will, muss es sein. */
+    public function wenMeinenSie(): string
+    {
+        return 'Damit ich den richtigen Termin finde, übernimmt jemand aus dem Team und meldet sich gleich bei Ihnen.';
+    }
+
+    public function keinTerminGefunden(): string
+    {
+        return 'Ich finde gerade keinen anstehenden Termin. Jemand aus dem Team schaut nach und meldet sich bei Ihnen.';
+    }
+
+    /** Zwei Termine: welcher gemeint ist, klaert ein Mensch -- raten waere eine Absage am falschen Tag. */
+    public function mehrereTermine(): string
+    {
+        return 'Sie haben mehrere Termine bei uns. Damit es der richtige ist, übernimmt jemand aus dem Team '
+            .'und meldet sich gleich bei Ihnen.';
+    }
+
+    public function keineAlternative(): string
+    {
+        return 'In den nächsten Wochen finde ich keinen anderen freien Termin. Jemand aus dem Team meldet sich '
+            .'bei Ihnen und findet einen.';
     }
 
     public function nichtVerstanden(): string

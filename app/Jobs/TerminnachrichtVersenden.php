@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Jobs;
 
+use App\Benachrichtigung\Mailmarke;
 use App\Models\Appointment;
 use App\Models\AppointmentNotification;
 use App\Models\Organization;
@@ -87,7 +88,7 @@ final class TerminnachrichtVersenden implements ShouldQueue
             }
 
             Notification::route('mail', [$kontakt->email => $kontakt->name()])
-                ->notify(new Terminnachricht($termin, $zeile->kind, $organisation->name));
+                ->notify(new Terminnachricht($termin, $zeile->kind, $organisation->name, Mailmarke::fuer($organisation)));
         });
     }
 

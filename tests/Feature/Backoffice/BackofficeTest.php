@@ -7,13 +7,16 @@ use App\Audit\AuditLogger;
 use App\Enums\AuditEvent;
 use App\Enums\ChannelType;
 use App\Enums\ConnectionStatus;
+use App\Enums\ImpersonationMode;
 use App\Enums\Role;
 use App\Kanaele\Konversationen;
 use App\Models\ChannelIdentity;
 use App\Models\Contact;
+use App\Models\ImpersonationSession;
 use App\Models\Organization;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -247,4 +250,39 @@ it('haelt einen Protokolleintrag zu einer Organisation ueberhaupt fest', functio
 
     expect($eintrag)->not->toBeNull()
         ->and($eintrag?->reason)->toBe('Gegenprobe');
+});
+
+/* Hineinsehen -------------------------------------------------------------- */
+
+it('fuehrt aus dem Mandantenblatt in eine maskierte Sitzung', function (): void {
+    // Die Mechanik steht seit WP-05; der Weg dahin fehlte bis zum 26.09.2026.
+    $praxis = organisation('Demo-Praxis');
+
+    actingAs(betreiber())
+        ->from(route('backoffice.show', ['organisation' => $praxis->uuid]))
+        ->post(route('impersonation.store'), [
+            'organization' => $praxis->uuid,
+            'reason' => 'Rueckfrage zur Warteliste, Ticket 4711',
+        ])
+        ->assertRedirect(route('dashboard'));
+
+    $sitzung = app(TenantContext::class)->runAs(
+        $praxis,
+        fn () => ImpersonationSession::query()->first(),
+    );
+
+    assert($sitzung instanceof ImpersonationSession);
+
+    expect($sitzung->mode)->toBe(ImpersonationMode::Masked)
+        ->and($sitzung->reason)->toBe('Rueckfrage zur Warteliste, Ticket 4711');
+});
+
+it('verlangt zum Hineinsehen eine Begruendung', function (): void {
+    $praxis = organisation('Demo-Praxis');
+
+    actingAs(betreiber())
+        ->from(route('backoffice.show', ['organisation' => $praxis->uuid]))
+        ->post(route('impersonation.store'), ['organization' => $praxis->uuid, 'reason' => 'kurz'])
+        ->assertRedirect(route('backoffice.show', ['organisation' => $praxis->uuid]))
+        ->assertSessionHasErrors('reason');
 });

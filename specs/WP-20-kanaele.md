@@ -341,6 +341,12 @@ daneben, und bleibt bei WhatsApp leer.
 
 ## Offen nach Session b
 
+> **Nachtrag 26.09.2026.** **Medien bei WhatsApp** werden geholt
+> (`MedienHolen`, `WhatsAppMedien`; das Token geht nur an Meta), die
+> **Einrichtung** steht unter *Einstellungen → WhatsApp* samt Abonnement der
+> Zustellungen. Offen: die Qualitätsbewertung der Rufnummer, SPF/DKIM je Kunde
+> (Betrieb).
+
 **Medien bei WhatsApp** — der Weg über den Anhangspeicher steht jetzt und
 wäre für WhatsApp derselbe; es fehlt der Media-Endpunkt.
 

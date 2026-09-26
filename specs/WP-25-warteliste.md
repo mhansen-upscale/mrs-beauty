@@ -139,6 +139,12 @@ und niemand antwortet darauf.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** `cost_micros` wird gefüllt, aus dem Preis der
+> Angebotsnachricht (B14). **Der wackelige Termin** hat seine Aufgabe im
+> Produkt — auf der Warteliste und im Dashboard, mit „an sie geben" oder
+> „bisherigen behalten" (`App\Warteliste\Klaerung`, `KlaerungTest.php`).
+> **Der Agent trägt ein**, wenn nichts frei ist (G13).
+
 **`cost_micros` bleibt leer.** Die Spalte steht, die Quelle fehlt: WhatsApp
 meldet in der Statusrückmeldung die **Kategorie**, nicht den Betrag. Für Euro
 und Cent braucht es die Preisliste je Land und Kategorie — das gehört zu

@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, ArrowLeft, Clock, Mail, MessageCircle, Paperclip, Search, Sparkles, UserPlus } from 'lucide-vue-next';
+import { AlertTriangle, ArrowLeft, Clock, Mail, MessageCircle, NotebookPen, Paperclip, Search, Sparkles, Trash2, UserPlus, X } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Kopfzeile extends Record<string, unknown> {
@@ -31,6 +31,7 @@ interface Anhang {
     uuid: string;
     name: string;
     groesse: number;
+    bild: boolean;
 }
 
 interface Nachricht {
@@ -55,6 +56,9 @@ interface Template {
     kostet: boolean;
     rumpf: string | null;
     variablen: number;
+    /** HWG-Ampel (WP-30): ein Hinweis, keine Sperre. */
+    ampel: 'green' | 'yellow' | 'red' | null;
+    befunde: string[];
 }
 
 interface Agentenstand {
@@ -81,7 +85,13 @@ interface Verlauf {
     agentModus: string;
     kennung: string;
     anzeigename: string | null;
-    kontakt: { uuid: string; name: string } | null;
+    kontakt: {
+        uuid: string;
+        name: string;
+        /** Nur für contacts.manage (offen seit WP-18). */
+        notizen?: { uuid: string; text: string; von: string | null; wann: string | null }[];
+        schlagworte?: { uuid: string; name: string }[];
+    } | null;
     anfrage: { uuid: string; status: string; statusLabel: string } | null;
     vorschlag: { uuid: string; name: string } | null;
     fenster: { gilt: boolean; offen: boolean; restminuten: number | null; brauchtTemplate: boolean };
@@ -220,6 +230,46 @@ const wiederOeffnen = () =>
 
 const zuordnenOffen = ref(false);
 const kontaktbegriff = ref('');
+
+/*
+ * Notizen und Schlagworte am Kontakt (offen seit WP-18) — hier, wo die Person
+ * gerade schreibt. Als Text gesetzt, nie als Auszeichnung (Regel 5).
+ */
+const notizenOffen = ref(false);
+const notiz = useForm({ text: '' });
+const schlagwort = useForm({ name: '' });
+
+const notieren = () => {
+    const kontakt = props.conversation?.kontakt;
+
+    if (!kontakt) return;
+
+    notiz.post(route('contacts.notes.store', { contact: kontakt.uuid }), { preserveScroll: true, onSuccess: () => notiz.reset() });
+};
+
+const notizStreichen = (uuid: string) => {
+    const kontakt = props.conversation?.kontakt;
+
+    if (!kontakt) return;
+
+    router.delete(route('contacts.notes.destroy', { contact: kontakt.uuid, note: uuid }), { preserveScroll: true });
+};
+
+const schlagwortVergeben = () => {
+    const kontakt = props.conversation?.kontakt;
+
+    if (!kontakt || !schlagwort.name.trim()) return;
+
+    schlagwort.post(route('contacts.tags.store', { contact: kontakt.uuid }), { preserveScroll: true, onSuccess: () => schlagwort.reset() });
+};
+
+const schlagwortEntziehen = (uuid: string) => {
+    const kontakt = props.conversation?.kontakt;
+
+    if (!kontakt) return;
+
+    router.delete(route('contacts.tags.destroy', { contact: kontakt.uuid, tag: uuid }), { preserveScroll: true });
+};
 
 let kontaktTimer: number | undefined;
 
@@ -366,6 +416,14 @@ const zuordnen = (kontakt: string) => {
                             Zuordnen
                         </Button>
 
+                        <Button v-if="conversation.kontakt?.notizen" variant="outline" @click="notizenOffen = true">
+                            <NotebookPen />
+                            Notizen
+                            <Badge v-if="conversation.kontakt.notizen.length" variant="secondary" groesse="klein">
+                                {{ conversation.kontakt.notizen.length }}
+                            </Badge>
+                        </Button>
+
                         <Select
                             v-if="conversation.agent.darfSchalten"
                             :model-value="conversation.agent.modus"
@@ -401,14 +459,33 @@ const zuordnen = (kontakt: string) => {
                                 <p v-if="nachricht.inhalt" class="whitespace-pre-wrap break-words">{{ nachricht.inhalt }}</p>
                                 <p v-else-if="nachricht.medientyp" class="italic text-muted-foreground">{{ nachricht.medientyp }}</p>
 
-                                <p
+                                <!--
+                                    Nur Geprüftes steht hier (WP-18). Bilder
+                                    als Vorschau, alles andere zum
+                                    Herunterladen — geöffnet wird über die
+                                    eine Route, die prüft, wer es sehen darf,
+                                    und es festhält.
+                                -->
+                                <a
                                     v-for="anhang in nachricht.anhaenge"
                                     :key="anhang.uuid"
-                                    class="flex items-center gap-1 text-xs text-muted-foreground"
+                                    :href="route('anhang.zeigen', { attachment: anhang.uuid })"
+                                    target="_blank"
+                                    rel="noopener"
+                                    class="block w-fit text-xs text-muted-foreground hover:text-foreground"
                                 >
-                                    <Paperclip class="size-3" />
-                                    {{ anhang.name }}
-                                </p>
+                                    <img
+                                        v-if="anhang.bild"
+                                        :src="route('anhang.zeigen', { attachment: anhang.uuid })"
+                                        :alt="anhang.name"
+                                        loading="lazy"
+                                        class="mb-1 max-h-48 max-w-full rounded border object-contain"
+                                    />
+                                    <span class="flex items-center gap-1">
+                                        <Paperclip class="size-3" />
+                                        {{ anhang.name }}
+                                    </span>
+                                </a>
 
                                 <p class="flex items-center gap-2 text-[0.7rem] text-muted-foreground">
                                     <span>{{ zeitpunkt(nachricht.zeitpunkt) }}</span>
@@ -514,6 +591,8 @@ const zuordnen = (kontakt: string) => {
                                         <Badge :variant="vorlage.kostet ? 'warning' : 'secondary'" groesse="klein" class="ml-2">
                                             {{ vorlage.kategorie }}
                                         </Badge>
+                                        <Badge v-if="vorlage.ampel === 'red'" variant="destructive" groesse="klein">HWG</Badge>
+                                        <Badge v-else-if="vorlage.ampel === 'yellow'" variant="warning" groesse="klein">HWG prüfen</Badge>
                                     </Button>
                                 </div>
                             </div>
@@ -548,7 +627,71 @@ const zuordnen = (kontakt: string) => {
                 <p class="whitespace-pre-wrap">{{ vorschau }}</p>
             </div>
 
+            <!--
+                Meta hat das Template genehmigt — HWG prüft Meta nicht. Die
+                Ampel ist ein Hinweis vor dem Absenden, keine Sperre.
+            -->
+            <div
+                v-if="gewaehltesTemplate?.ampel === 'red' || gewaehltesTemplate?.ampel === 'yellow'"
+                class="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-warning"
+            >
+                <p class="font-medium">Die HWG-Prüfung hat etwas gefunden:</p>
+                <p>{{ gewaehltesTemplate.befunde.join(' · ') }}</p>
+                <p class="mt-1 text-xs">Eine Prüfhilfe, keine Rechtsberatung.</p>
+            </div>
+
             <InputError :message="templateFormular.errors.template" />
+        </FormularDialog>
+
+        <!-- Notizen und Schlagworte am Kontakt -->
+        <FormularDialog
+            v-model:offen="notizenOffen"
+            :titel="`Notizen · ${conversation?.kontakt?.name ?? ''}`"
+            beschreibung="Für das Team, nicht für die Person. Keine Behandlungsdokumentation — die gehört in die Patientenakte."
+            :laeuft="notiz.processing"
+            absende-text="Notiz speichern"
+            :absenden-aus="!notiz.text.trim()"
+            @absenden="notieren"
+        >
+            <div class="space-y-2">
+                <Label for="schlagwort">Schlagworte</Label>
+                <div class="flex flex-wrap items-center gap-2">
+                    <Badge v-for="eintrag in conversation?.kontakt?.schlagworte ?? []" :key="eintrag.uuid" variant="secondary" class="gap-1">
+                        {{ eintrag.name }}
+                        <button type="button" :aria-label="`Schlagwort ${eintrag.name} entfernen`" @click="schlagwortEntziehen(eintrag.uuid)">
+                            <X class="size-3" />
+                        </button>
+                    </Badge>
+                    <Input
+                        id="schlagwort"
+                        v-model="schlagwort.name"
+                        class="h-8 w-40"
+                        placeholder="Neues Schlagwort"
+                        @keydown.enter.prevent="schlagwortVergeben"
+                    />
+                </div>
+                <InputError :message="schlagwort.errors.name" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="notiz">Neue Notiz</Label>
+                <Textarea id="notiz" v-model="notiz.text" rows="3" placeholder="Ruft lieber nachmittags an." />
+                <InputError :message="notiz.errors.text" />
+            </div>
+
+            <ul v-if="conversation?.kontakt?.notizen?.length" class="max-h-64 space-y-2 overflow-y-auto">
+                <li v-for="eintrag in conversation.kontakt.notizen" :key="eintrag.uuid" class="flex items-start gap-2 rounded-md border p-2 text-sm">
+                    <div class="min-w-0 flex-1">
+                        <p class="whitespace-pre-wrap break-words">{{ eintrag.text }}</p>
+                        <p class="mt-1 text-xs text-muted-foreground">
+                            {{ eintrag.von ?? 'Unbekannt' }}<template v-if="eintrag.wann"> · {{ zeitpunkt(eintrag.wann) }}</template>
+                        </p>
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" aria-label="Notiz löschen" @click="notizStreichen(eintrag.uuid)">
+                        <Trash2 />
+                    </Button>
+                </li>
+            </ul>
         </FormularDialog>
 
         <!-- Kontakt zuordnen -->

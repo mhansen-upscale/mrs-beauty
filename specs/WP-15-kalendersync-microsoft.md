@@ -274,6 +274,11 @@ Microsoft-Endpunkt einlösen.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Was für den echten Lauf einzurichten ist — App-
+> Registrierung, Berechtigungen, Herausgeberüberprüfung, erreichbare
+> Zustellung —, steht jetzt in `docs/integrationen/kalender.md`,
+> „Einrichtung Microsoft".
+
 **Gegen die echte Graph-API geprüft ist nichts.** WP-14 ist inzwischen mit
 echten Google-Zugangsdaten gelaufen; für Microsoft steht das aus und braucht
 eine Azure-App-Registrierung. Zwei Stellen würde ich dabei zuerst ansehen:

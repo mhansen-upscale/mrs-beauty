@@ -31,7 +31,7 @@ verbindlich** — nicht als Empfehlung, sondern als Kontextgrenze.
 | Frontend | Inertia 2, Vue 3.5, TypeScript, Tailwind 3, Vite 6 |
 | Datenbank | MySQL 8.4 (Laradock-Service `mysql`) |
 | Queue, Cache, Session | Redis über phpredis (Laradock-Service `redis`), eigene Datenbanknummern |
-| Betrieb | Horizon, Pulse, Sentry |
+| Betrieb | Warteschlange von Laravel Cloud, Pulse, Sentry (`docs/betrieb.md`) |
 | Tests | Pest, **gegen MySQL**, nicht gegen SQLite |
 | Statik | PHPStan/Larastan, **Stufe 8** (Entscheidung S10) |
 | Format | Pint (PHP), Prettier + ESLint (Frontend) |
@@ -94,19 +94,25 @@ npm run dev
 ```
 
 ```bash
-php artisan horizon
+php artisan queue:listen --queue=realtime,default,sync,maintenance --tries=1
 ```
 
-Horizon fährt die vier Queues aus WP-33 mit eigenen Profilen: `realtime` für
-eingehende Webhooks und Agent-Läufe, `default` für alles Übrige, `sync` für
-Kalender- und Meta-Abgleich, `maintenance` für Aufbewahrung und Aggregation.
-Eine Nachricht, die zehn Minuten hinter einem Insights-Sync wartet, ist für den
-Kontakt eine unbeantwortete Nachricht.
+```bash
+php artisan schedule:work
+```
+
+Lokal genügt **ein** Arbeiter über alle vier Warteschlangen, in der
+Reihenfolge ihres Vorrangs: `realtime` für eingehende Webhooks und
+Agent-Läufe, `default` für alles Übrige, `sync` für Kalender- und
+Meta-Abgleich, `maintenance` für Aufbewahrung, Aggregation und
+Bilderzeugung. Im Betrieb läuft je Warteschlange ein eigener Arbeiter mit
+eigenem Profil (`docs/betrieb.md`) — Horizon ist seit dem 22.09.2026 nicht
+mehr im Projekt. Der Scheduler stößt die geplanten Läufe an (Erinnerungen,
+Warteliste, Abgleiche, Abrechnung des Service-Fensters).
 
 | Dienst | Adresse vom Host aus |
 |---|---|
 | Anwendung | http://mrs-beauty.test |
-| Horizon | http://mrs-beauty.test/horizon |
 | Pulse | http://mrs-beauty.test/pulse |
 | Vite-Dev-Server | http://localhost:5173 |
 | Mailhog | http://localhost:8025 |
@@ -128,6 +134,9 @@ Vollständig, so wie es die CI fährt — im Workspace-Container:
 ```bash
 composer check
 ```
+
+`composer test` ruft `vendor/bin/pest` **ohne Argumente** auf, genau wie die
+CI: alle Suiten aus `phpunit.xml`, also `tests/Feature` und `tests/Parallel`.
 
 Einzeln:
 
@@ -184,10 +193,12 @@ php artisan tinker
 ```
 
 ```php
-app(App\Tenancy\TenantContext::class)->acrossTenants(fn () => /* ... */);
+app(App\Tenancy\TenantContext::class)->acrossTenants('Warum ich quer lese', fn () => /* ... */);
 ```
 
 Der Ausstieg gilt nur innerhalb des Aufrufs und endet auch bei einer Ausnahme.
+**Die Begründung ist Pflicht** und landet im Protokoll — ohne sie wirft der
+Aufruf.
 
 Personenbezogene Felder liegen feldverschlüsselt, mit einem eigenen Schlüssel
 je Organisation (Envelope Encryption). Suchbar sind sie nur über blinde

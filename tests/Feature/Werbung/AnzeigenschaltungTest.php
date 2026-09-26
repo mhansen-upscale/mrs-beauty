@@ -17,8 +17,10 @@ use App\Werbung\Verwaltung\Anzeigenschaltung;
 use App\Werbung\Verwaltung\Kampagnenname;
 use App\Werbung\Werbefehler;
 use Carbon\CarbonImmutable;
+use Illuminate\Bus\UniqueLock;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -777,6 +779,68 @@ it('stellt auch eine wartende Anzeige auf Verlangen erneut ein', function (): vo
     // hinaus, wartet die Anzeige fuer immer -- und dann muss ein Mensch sie
     // anstossen koennen, ohne das ganze Werbekonto neu zu verbinden.
     expect($anzeige->sync_state)->toBe(SyncState::Pending);
+
+    Queue::fake();
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->post(route('anzeigen.erneut', ['anzeige' => $anzeige->uuid]))
+        ->assertSessionHas('erfolg');
+
+    Queue::assertPushed(AnzeigeUebertragen::class);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Eine Uebertragung, von der nichts mehr kommt
+|--------------------------------------------------------------------------
+|
+| Am 26.09.2026 stand eine Anzeige auf Staging eine Viertelstunde auf "wird
+| uebertragen". Der Auftrag hatte weder einen Grund vermerkt noch
+| aufgegeben -- er war nie angelaufen. Genau in diesem Zustand blendete die
+| Seite den Knopf aus, und es gab keinen Weg zurueck.
+|
+*/
+
+it('meldet eine wartende Anzeige ohne Grund nach Ablauf der Frist als haengend', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    travelTo(CarbonImmutable::now()->addMinutes((int) config('mrs.ads.uebertragung_timeout_minutes') + 1));
+
+    // Ein Grund macht die Anzeige zu "wartet" statt "wird uebertragen" --
+    // und damit erscheint der Knopf.
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite
+            ->where('vorschlaege.0.uebertragung.anzeige', (string) $anzeige->uuid)
+            ->where('vorschlaege.0.uebertragung.zustand', 'pending')
+            ->where('vorschlaege.0.uebertragung.fehler', fn (?string $fehler): bool => is_string($fehler) && $fehler !== ''));
+});
+
+it('laesst eine wartende Anzeige innerhalb der Frist unterwegs', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $aufbau->geplanteAnzeige();
+
+    travelTo(CarbonImmutable::now()->addMinutes((int) config('mrs.ads.uebertragung_timeout_minutes') - 1));
+
+    actingAs(Werbeaufbau::leitung($aufbau->werbung->organisation))
+        ->get(route('anzeigen.index'))
+        ->assertInertia(fn ($seite) => $seite
+            ->where('vorschlaege.0.uebertragung.zustand', 'pending')
+            ->where('vorschlaege.0.uebertragung.fehler', null));
+});
+
+it('stellt erneut ein, auch wenn ein verlorener Auftrag seine Sperre zurueckliess', function (): void {
+    $aufbau = new Anzeigenaufbau;
+    $anzeige = $aufbau->geplanteAnzeige();
+
+    // Ohne `uniqueFor` laeuft die Sperre nie ab. Jeder weitere Dispatch
+    // wuerde stillschweigend verworfen -- der Knopf meldete Erfolg und
+    // taete nichts.
+    Cache::lock(UniqueLock::getKey(new AnzeigeUebertragen(
+        (string) $aufbau->werbung->organisation->uuid,
+        (string) $anzeige->uuid,
+    )))->get();
 
     Queue::fake();
 

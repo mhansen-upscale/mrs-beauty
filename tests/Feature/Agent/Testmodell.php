@@ -75,12 +75,14 @@ final class Testmodell implements Sprachmodell
         ?string $standort = null,
         ?string $zeitwunsch = null,
         ?string $name = null,
+        ?string $behandler = null,
     ): string {
         return (string) json_encode([
             'absicht' => $absicht,
             'sicherheit' => $sicherheit,
             'behandlung' => $behandlung,
             'standort' => $standort,
+            'behandler' => $behandler,
             'zeitwunsch' => $zeitwunsch,
             'name' => $name,
         ]);

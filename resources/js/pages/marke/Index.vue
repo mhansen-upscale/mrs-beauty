@@ -36,6 +36,7 @@ interface Referenz {
     erklaert: string;
     erklaerung: string;
     freigegeben: boolean;
+    vorschau: string | null;
 }
 
 const props = defineProps<{
@@ -279,6 +280,20 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
 
                     <ul v-else class="divide-y">
                         <li v-for="stueck in referenzen" :key="stueck.uuid" class="flex flex-wrap items-start gap-3 py-3 text-sm">
+                            <a
+                                v-if="stueck.vorschau"
+                                :href="route('anhang.zeigen', { attachment: stueck.vorschau })"
+                                target="_blank"
+                                rel="noopener"
+                                class="shrink-0"
+                            >
+                                <img
+                                    :src="route('anhang.zeigen', { attachment: stueck.vorschau })"
+                                    :alt="stueck.titel"
+                                    loading="lazy"
+                                    class="size-16 rounded border object-cover"
+                                />
+                            </a>
                             <Badge variant="secondary">{{ stueck.artText }}</Badge>
                             <div class="min-w-48 flex-1">
                                 <p class="font-medium">{{ stueck.titel }}</p>

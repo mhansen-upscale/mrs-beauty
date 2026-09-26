@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { AlertTriangle, ArrowUp, Plus, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
@@ -38,6 +38,7 @@ interface Eintrag extends Record<string, unknown> {
 const props = defineProps<{
     entries: Eintrag[];
     offers: { uuid: string; name: string; status: string; statusLabel: string; ausloeser: string; beginn: string; wann: string | null }[];
+    klaerungen: { uuid: string; name: string; bisher: string | null; beginn: string; zugesagt: string | null }[];
     metrics: {
         zeitraum: string;
         angebote: number;
@@ -135,6 +136,14 @@ const rangErhoehen = (eintrag: Eintrag) =>
 
 const entfernen = (eintrag: Eintrag) => router.delete(route('waitlist.destroy', { entry: eintrag.uuid }), { preserveScroll: true });
 
+/* Klären (Auslöser 3) ------------------------------------------------------ */
+
+const seite = usePage();
+const klaerungsfehler = computed(() => (seite.props.errors as Record<string, string | undefined>).klaerung);
+
+const uebergeben = (uuid: string) => router.post(route('waitlist.klaerung.uebergeben', { offer: uuid }), {}, { preserveScroll: true });
+const behalten = (uuid: string) => router.post(route('waitlist.klaerung.behalten', { offer: uuid }), {}, { preserveScroll: true });
+
 const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) : '');
 </script>
 
@@ -147,6 +156,41 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
                 title="Warteliste"
                 description="Wird ein Termin frei, fragen wir der Reihe nach — einen nach dem anderen, nicht alle auf einmal."
             />
+
+            <!--
+                Auslöser 3: parallel angeboten, zugesagt. Wem der Slot gehört,
+                entscheidet ein Mensch — und dafür muss er es sehen. Steht
+                deshalb über allem anderen.
+            -->
+            <div v-if="klaerungen.length" class="space-y-3 rounded-md border border-warning/40 bg-warning/5 p-4">
+                <p class="flex items-center gap-2 text-sm font-medium text-warning">
+                    <AlertTriangle class="size-4 shrink-0" />
+                    Zu klären: {{ klaerungen.length === 1 ? 'eine Zusage' : `${klaerungen.length} Zusagen` }} für einen Termin, der noch belegt ist
+                </p>
+
+                <div
+                    v-for="klaerung in klaerungen"
+                    :key="klaerung.uuid"
+                    class="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card p-3 text-sm"
+                >
+                    <div class="min-w-0 space-y-0.5">
+                        <p class="font-medium">{{ zeitpunkt(klaerung.beginn) }}</p>
+                        <p class="text-xs text-muted-foreground">
+                            {{ klaerung.name }} hat zugesagt<template v-if="klaerung.zugesagt"> ({{ zeitpunkt(klaerung.zugesagt) }})</template>.
+                            <template v-if="klaerung.bisher">
+                                Gebucht ist bisher {{ klaerung.bisher }} — ohne Reaktion auf die Erinnerung. Am besten kurz anrufen.
+                            </template>
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        <Button size="sm" @click="uebergeben(klaerung.uuid)">Termin an {{ klaerung.name }} geben</Button>
+                        <Button size="sm" variant="outline" @click="behalten(klaerung.uuid)">Bisherigen Termin behalten</Button>
+                    </div>
+                </div>
+
+                <InputError :message="klaerungsfehler" />
+            </div>
 
             <!-- Kennzahlen: das Verkaufsargument gehört ins Produkt. -->
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">

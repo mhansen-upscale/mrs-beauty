@@ -30,6 +30,7 @@ use App\Models\User;
 use App\Tenancy\TenantContext;
 use App\Werbung\Verwaltung\Anzeigenschaltung;
 use Carbon\CarbonImmutable;
+use Illuminate\Bus\UniqueLock;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -98,18 +99,31 @@ final class AnzeigenController extends Controller
         // **Eine Anzeige, die nicht bei Meta ankam, sieht aus wie eine, die
         // laeuft.** Der Fehler stand bisher nur in der Datenbank. Gemeldet
         // wird die erste, die haengt -- wartend oder abgelehnt.
+        //
+        // **Wartend ohne Grund, und das seit der Frist: verloren.** Ein
+        // Auftrag, der nie anlaeuft, vermerkt nichts und gibt nicht auf. Die
+        // Seite drehte dann ohne Ende und blendete den Knopf aus (26.09.2026,
+        // Staging). Liegt er noch oder ist er fort -- wieder zwei
+        // verschiedene Fehler, wie bei der Grafik.
+        $uebertragungsfrist = CarbonImmutable::now()->subMinutes((int) config('mrs.ads.uebertragung_timeout_minutes'));
+        $uebertragungSteht = Queue::size('default') > 0;
+
         $uebertragung = Ad::query()
             ->whereIn('ad_suggestion_id', $vorschlaege->modelKeys())
             ->whereIn('sync_state', [SyncState::Pending->value, SyncState::Failed->value])
             ->get()
             ->groupBy(fn (Ad $a): string => (string) $a->ad_suggestion_id)
-            ->map(function (Collection $anzeigen): ?array {
+            ->map(function (Collection $anzeigen) use ($uebertragungsfrist, $uebertragungSteht): ?array {
                 $haengt = $anzeigen->firstWhere('sync_state', SyncState::Failed) ?? $anzeigen->first();
 
                 return $haengt instanceof Ad ? [
                     'anzeige' => (string) $haengt->uuid,
                     'zustand' => $haengt->sync_state->value,
-                    'fehler' => $haengt->sync_error,
+                    'fehler' => $haengt->sync_error ?? ($this->verloren($haengt, $uebertragungsfrist)
+                        ? ($uebertragungSteht
+                            ? 'Der Auftrag wartet noch — die Warteschlange wird gerade nicht abgearbeitet.'
+                            : 'Die Übertragung ist nicht angekommen. Bitte stoßen Sie sie noch einmal an.')
+                        : null),
                 ] : null;
             });
 
@@ -245,6 +259,21 @@ final class AnzeigenController extends Controller
     }
 
     /**
+     * Eine Uebertragung, von der nichts mehr kommt.
+     *
+     * Wartend, kein Grund, und seit der Frist unberuehrt. Jeder Schritt des
+     * Auftrags speichert die Anzeige -- steht `updated_at` still, hat ihn
+     * niemand ausgefuehrt.
+     */
+    private function verloren(Ad $anzeige, CarbonImmutable $frist): bool
+    {
+        return $anzeige->sync_state === SyncState::Pending
+            && $anzeige->sync_error === null
+            && $anzeige->updated_at !== null
+            && $anzeige->updated_at->lessThanOrEqualTo($frist);
+    }
+
+    /**
      * Eine Anzeige, die jemand selbst schreibt.
      *
      * **Der woechentliche Lauf schlaegt vor, er verwaltet nicht.** Eine
@@ -341,7 +370,7 @@ final class AnzeigenController extends Controller
      * dies der einzige Weg zurueck: erneut schalten geht nicht, weil es die
      * Anzeige schon gibt.
      */
-    public function erneutUebertragen(Ad $anzeige, TenantContext $mandant): RedirectResponse
+    public function erneutUebertragen(Ad $anzeige, TenantContext $mandant, UniqueLock $sperren): RedirectResponse
     {
         Gate::authorize(Ability::ManageCampaigns->value);
 
@@ -356,6 +385,13 @@ final class AnzeigenController extends Controller
         $anzeige->sync_state = SyncState::Pending;
         $anzeige->sync_error = null;
         $anzeige->save();
+
+        // **Eine liegengebliebene Sperre verschluckt den Auftrag.** Ohne
+        // `uniqueFor` laeuft sie nie ab: ein Auftrag, der verlorenging,
+        // hinterlaesst sie fuer immer, und dieser Dispatch wuerde
+        // stillschweigend verworfen (26.09.2026). Freigeben ist vertretbar,
+        // weil die Uebertragung per Merkmal nachsieht, bevor sie anlegt.
+        $sperren->release(new AnzeigeUebertragen((string) $organisation->uuid, (string) $anzeige->uuid));
 
         AnzeigeUebertragen::dispatch((string) $organisation->uuid, (string) $anzeige->uuid);
 

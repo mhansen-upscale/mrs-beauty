@@ -16,6 +16,7 @@ use App\Models\Practitioner;
 use App\Models\WaitlistEntry;
 use App\Models\WaitlistOffer;
 use App\Warteliste\Kandidatensuche;
+use App\Warteliste\Klaerung;
 use App\Warteliste\Wartelistenkennzahlen;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +24,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 
 /**
  * Die Warteliste im Produkt.
@@ -37,6 +39,7 @@ final class WaitlistController extends Controller
         private readonly Wartelistenkennzahlen $kennzahlen,
         private readonly Kandidatensuche $suche,
         private readonly Kontaktsuche $kontakte,
+        private readonly Klaerung $klaerung,
     ) {}
 
     public function index(Request $request): Response
@@ -68,6 +71,18 @@ final class WaitlistController extends Controller
                     'ausloeser' => $angebot->trigger->label(),
                     'beginn' => $angebot->starts_at->toIso8601String(),
                     'wann' => $angebot->created_at?->toIso8601String(),
+                ])
+                ->values(),
+
+            // **Ausloeser 3**: parallel angeboten, zugesagt -- und jetzt muss
+            // ein Mensch entscheiden, wem der Slot gehoert.
+            'klaerungen' => $this->klaerung->offene()
+                ->map(fn (WaitlistOffer $angebot): array => [
+                    'uuid' => $angebot->uuid,
+                    'name' => $angebot->entry->contact->name(),
+                    'bisher' => $this->klaerung->wackeligerTermin($angebot)?->contact?->name(),
+                    'beginn' => $angebot->starts_at->toIso8601String(),
+                    'zugesagt' => $angebot->answered_at?->toIso8601String(),
                 ])
                 ->values(),
 
@@ -152,6 +167,36 @@ final class WaitlistController extends Controller
             $eintrag->locations()->sync(
                 Location::query()->whereIn('id', Location::query()->whereUuidIn($standorte)->pluck('id'))->pluck('id')->all()
             );
+        }
+
+        return back();
+    }
+
+    /** Ausloeser 3: der Slot geht an die Wartende, der bisherige Termin wird abgesagt. */
+    public function uebergeben(WaitlistOffer $offer): RedirectResponse
+    {
+        Gate::authorize(Ability::ManageWaitlist->value);
+
+        try {
+            $this->klaerung->uebergib($offer);
+        } catch (RuntimeException $fehler) {
+            // Auch "nicht buchbar" und "Slot nicht verfuegbar" -- beide sind
+            // RuntimeExceptions und gehoeren als Satz an die Seite.
+            return back()->withErrors(['klaerung' => $fehler->getMessage()]);
+        }
+
+        return back();
+    }
+
+    /** Ausloeser 3: der bisherige Termin bleibt, die Wartende wartet weiter. */
+    public function behalten(WaitlistOffer $offer): RedirectResponse
+    {
+        Gate::authorize(Ability::ManageWaitlist->value);
+
+        try {
+            $this->klaerung->behalte($offer);
+        } catch (RuntimeException $fehler) {
+            return back()->withErrors(['klaerung' => $fehler->getMessage()]);
         }
 
         return back();

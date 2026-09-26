@@ -75,12 +75,29 @@ final class Stripeclient
          * Nachrichten.
          */
         ?string $artikel = null,
+
+        /**
+         * Eine einmalige Einrichtung zum Abschluss (docs/produkt.md,
+         * Preismodell). Stripe nimmt einen einmaligen Preis neben dem
+         * wiederkehrenden in dieselbe Kasse und stellt ihn mit der ersten
+         * Rechnung.
+         */
+        ?string $einrichtung = null,
     ): ?string {
+        $posten = [
+            'line_items[0][price]' => $preis,
+            'line_items[0][quantity]' => max(1, $menge),
+        ];
+
+        if ($modus === 'subscription' && is_string($einrichtung) && $einrichtung !== '') {
+            $posten['line_items[1][price]'] = $einrichtung;
+            $posten['line_items[1][quantity]'] = 1;
+        }
+
         $antwort = $this->anfrage()->asForm()->post($this->adresse('checkout/sessions'), [
             'customer' => $kunde,
             'mode' => $modus,
-            'line_items[0][price]' => $preis,
-            'line_items[0][quantity]' => max(1, $menge),
+            ...$posten,
             'success_url' => $zurueck.'?abo=ok',
             'cancel_url' => $zurueck,
 
@@ -109,6 +126,39 @@ final class Stripeclient
         $adresse = data_get($antwort->json(), 'url');
 
         return $antwort->successful() && is_string($adresse) ? $adresse : null;
+    }
+
+    /**
+     * Ein Posten fuer die naechste Rechnung des Abos (Entscheidung B14).
+     *
+     * **Nicht im Anfragezyklus** (Regel 4) -- anders als Kasse und Portal
+     * wartet hier niemand am Bildschirm. Aufgerufen wird aus einem Auftrag,
+     * mit Idempotenzschluessel: eine Wiederholung nach verlorener Antwort
+     * legt keinen zweiten Posten an.
+     *
+     * @return string|null Die Kennung des Postens bei Stripe
+     */
+    public function rechnungsposten(
+        string $kunde,
+        string $abo,
+        int $betragCent,
+        string $beschreibung,
+        string $idempotenz,
+    ): ?string {
+        $antwort = $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('invoiceitems'), [
+                'customer' => $kunde,
+                'subscription' => $abo,
+                'amount' => $betragCent,
+                'currency' => 'eur',
+                'description' => $beschreibung,
+            ]);
+
+        $kennung = data_get($antwort->json(), 'id');
+
+        return $antwort->successful() && is_string($kennung) ? $kennung : null;
     }
 
     private function adresse(string $pfad): string

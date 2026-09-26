@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Verfuegbarkeit;
 
+use App\Models\Appointment;
 use App\Models\AppointmentType;
 use App\Models\Location;
 use App\Models\Practitioner;
@@ -44,6 +45,24 @@ final class Slotvorschlag
             blockedUntil: $blockBeginn->addMinutes($art->belegteDauer()),
             startsAt: $start,
             endsAt: $start->addMinutes($art->duration_minutes),
+        );
+    }
+
+    /**
+     * Die Strecke eines bestehenden Termins -- mit seinen eigenen Zeiten,
+     * nicht aus der Terminart neu gerechnet. `ab()` mit dem Beginn des
+     * Termins verschoebe die Anzeige um die Ruestzeit davor.
+     */
+    public static function ausTermin(Appointment $termin): self
+    {
+        return new self(
+            art: $termin->appointmentType,
+            behandler: $termin->practitioner,
+            standort: $termin->location,
+            blockedFrom: $termin->blocked_from,
+            blockedUntil: $termin->blocked_until,
+            startsAt: $termin->starts_at,
+            endsAt: $termin->ends_at,
         );
     }
 

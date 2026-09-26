@@ -123,6 +123,10 @@ statt sie abzuschreiben.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Die Aufstockung wird bei Stripe abgerechnet
+> (WP-06), die Kennzeichnung und `too_many_auto_replies` greifen seit WP-24.
+> Offen: Anthropic in den Datenschutzunterlagen (WP-01, extern).
+
 **Die Abrechnung der Aufstockungen** (WP-06). Bestellt und protokolliert wird
 sie hier, in Rechnung gestellt dort.
 

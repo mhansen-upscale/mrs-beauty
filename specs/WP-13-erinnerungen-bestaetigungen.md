@@ -204,6 +204,9 @@ Mailgerüst trägt bis dahin noch unseren Namen.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Erledigt: Kopf, Fuß und `<title>` der Mail tragen
+> die Praxis, samt Logo, Impressum und Datenschutz (`Mailmarke`).
+
 Das Mailgerüst (Kopf und Fuß der Nachricht) trägt `config('app.name')`. Für
 die Buchungsseite ist das gelöst, für die Mail nicht — sie gehört mit zum
 Whitelabel (WP-07).

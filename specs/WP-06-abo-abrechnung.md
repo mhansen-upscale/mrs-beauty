@@ -140,6 +140,14 @@ eine Antwort im offenen Fenster derselben Praxis (geht hinaus).
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Die Preise stehen (B15, `docs/produkt.md`):
+> 790 €/Monat, 1.490 € Einrichtung (`STRIPE_SETUP_PRICE_ID`, beim ersten
+> Abschluss in derselben Kasse), 59 € je Block, 2 € je Bild. Angelegt werden
+> müssen sie bei Stripe noch. **Antworten im Service-Fenster** zählten bis
+> dahin versehentlich gegen das Template-Kontingent (Meta meldet sie als
+> `service`, ausgenommen war nur `none`); sie laufen jetzt getrennt, mit Preis
+> aus `WHATSAPP_SERVICEFENSTER_CENT` (B14) — `tests/Feature/Abrechnung/ServicefensterTest.php`, `PreiseTest.php`.
+
 **Die Preise selbst.** `STRIPE_PRICE_ID`, `STRIPE_TOPUP_PRICE_ID` und
 `STRIPE_IMAGE_PRICE_ID` zeigen auf Produkte, die im Stripe-Konto angelegt
 werden müssen. **Ein Preis steht seit dem 20.09.2026 fest:** **30**

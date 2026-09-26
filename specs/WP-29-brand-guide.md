@@ -204,6 +204,9 @@ eingetragen, und Text wird kopiert.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Das Referenzmaterial hat eine Vorschau, über
+> dieselbe Route wie jeder Anhang (C12) und wie dort nur, was geprüft ist.
+
 - **Die Bildprüfung.** WP-30. Bis dahin ist die Erklärung alles, was zwischen
   dem Produkt und einem Vorher-Nachher-Bild steht — und die Oberfläche sagt
   das auch so.

@@ -240,6 +240,11 @@ bereits eine Telefonnummer. Die Tests waren falsch, nicht der Code.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Alle drei Punkte sind erledigt: Kanalidentitäten
+> entstehen aus Nachrichten (WP-19/WP-20), der Aufräumjob für Snapshots läuft
+> über `mrs:aufbewahrung` (WP-18), der Auskunftsexport steht
+> (`contacts.export`).
+
 **Kanalidentitäten entstehen hier nur von Hand.** Aus Nachrichten füllen sie
 sich mit WP-19 und WP-20; welche Signale von Meta ein Zusammenführen
 rechtfertigen, entscheidet sich dort.

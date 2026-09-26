@@ -88,6 +88,21 @@ Regeln:
 - **Sackgasse vermeiden:** Gibt es keinen passenden Slot, wird nicht abgebrochen, sondern die Warteliste angeboten.
 - **Meinungsänderung mitten im Ablauf** (andere Behandlung, anderer Standort) setzt den Automaten auf den passenden Zustand zurück und gibt den Hold frei.
 
+*Nachtrag 26.09.2026 — was der Automat seitdem zusätzlich kann (G12, G13):*
+
+```
+slots_vorschlagen → (nichts frei) → warteliste_anbieten → auf_warteliste
+behandler_klaeren                  (ein Name wurde genannt, aber keinem zugeordnet)
+
+cancel_request     → absage_bestaetigen      → geaendert
+reschedule_request → verschieben_vorschlagen → verschieben_bestaetigen → geaendert
+```
+
+- **Warteliste statt Übergabe** (Testfall 14). Das Ja ist zugleich die Einwilligung in den Kanal (K11).
+- **Behandlerwunsch** („geht das auch bei Frau Dr. Sauer?"): aufgelöst gegen die aktiven Behandler, eindeutig oder gar nicht. Ein Name, der sich nicht zuordnen lässt, führt zur Frage, nicht zu Vorschlägen bei jemand anderem.
+- **Absagen und Verschieben** nur für eine bekannte Person mit **genau einem** anstehenden Termin, immer mit Rückfrage, die Tag und Uhrzeit nennt. Sonst Übergabe (Regel 6). Eine Absage gibt die Zeit an die Warteliste.
+- Ein abgeschlossener Vorgang (gebucht, auf der Warteliste, geändert) nimmt eine neue Terminanfrage als neuen Vorgang an — es sei denn, der gebuchte Termin steht noch (G9).
+
 ## Schritt 7 — Nachprüfung der Antwort
 
 Jede erzeugte Antwort wird vor dem Senden geprüft. Bei einem Treffer wird nicht gesendet, sondern eskaliert:

@@ -7,6 +7,7 @@ namespace App\Kanaele;
 use App\Datenschutz\Anhangspeicher;
 use App\Enums\AttachmentContext;
 use App\Enums\ChannelType;
+use App\Jobs\MedienHolen;
 use App\Jobs\NachrichtEinordnen;
 use App\Models\ChannelIdentity;
 use App\Models\ChannelRawEvent;
@@ -98,6 +99,18 @@ final class Eingangsverarbeitung
         }
 
         $this->legeAnhaengeAb($nachricht, $eingang);
+
+        // Bei WhatsApp kommt nur die Kennung der Datei. Geholt wird sie in
+        // einem eigenen Auftrag -- der Media-Endpunkt ist ein Aufruf nach
+        // draussen und hat in der Zustellung nichts verloren.
+        if (is_string($eingang->medienKennung) && $eingang->medienKennung !== '') {
+            MedienHolen::dispatch(
+                (string) $nachricht->uuid,
+                Uuid::toString($nachricht->organization_id),
+                $eingang->medienKennung,
+                $eingang->dateiname,
+            );
+        }
 
         // **Ein offenes Wartelistenangebot geht der Einordnung vor** (WP-25).
         // Wer auf "Es ist ein Termin frei geworden" mit "Ja" antwortet, meint

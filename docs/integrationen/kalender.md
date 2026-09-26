@@ -80,8 +80,8 @@ Wiederholt werden Verbindungsfehler und 5xx, sonst nichts.
 `.env` als `GOOGLE_REDIRECT_URI` vorgegeben. Er steht in der Google Cloud
 Console; ihn später zu ändern heißt, jede bestehende Verbindung anzufassen.
 
-Offen bleibt Microsoft Graph (WP-15) — und **erst danach** die gemeinsame
-Abstraktion.
+~~Offen bleibt Microsoft Graph (WP-15) — und **erst danach** die gemeinsame
+Abstraktion.~~ Beides steht, siehe unten.
 
 ---
 
@@ -135,3 +135,70 @@ würde bei jedem Lauf.
 **Gegen die echte Graph-API geprüft ist noch nichts.** Zwei Punkte zuerst
 ansehen: Zonennamen in Windows-Schreibweise und die tatsächliche
 Höchstlaufzeit eines Abonnements.
+
+---
+
+## Einrichtung Microsoft — was außerhalb des Codes zu tun ist
+
+*Stand 26.09.2026. Der Code steht (WP-15), gegen die echte Graph-API ist er
+noch nicht gelaufen — dafür fehlt genau das Folgende.*
+
+**1 · App-Registrierung in Microsoft Entra ID** (portal.azure.com →
+App-Registrierungen → Neue Registrierung)
+
+- **Unterstützte Kontotypen:** Konten in einem beliebigen Organisations­
+  verzeichnis **und** persönliche Microsoft-Konten. Praxen nutzen beides —
+  Microsoft 365 der Praxis und Outlook.com auf dem Privathandy. Dazu passt
+  `MICROSOFT_TENANT_ID=common`.
+- **Umleitungs-URI (Plattform „Web"):** `https://<APP_URL>/oauth/microsoft/callback`
+  — je Umgebung (Staging, Produktion) eine eigene. Später ändern heißt, jede
+  Verbindung neu herzustellen.
+- **Geheimer Clientschlüssel** unter „Zertifikate & Geheimnisse". Er läuft
+  **höchstens 24 Monate** — das Ablaufdatum gehört in den Betriebskalender,
+  sonst verlieren alle Praxen am selben Tag ihren Sync.
+
+**2 · API-Berechtigungen** (Microsoft Graph, **delegiert**) — genau die aus
+`App\Kalender\Microsoft\MicrosoftZugang`:
+
+| Berechtigung | wofür |
+|---|---|
+| `offline_access` | Aktualisierungstoken — ohne ihn endet der Sync nach einer Stunde |
+| `openid`, `email` | wer sich verbunden hat |
+| `Calendars.ReadWrite` | Blocker lesen, Termine schreiben |
+| `MailboxSettings.Read` | Zeitzone des Postfachs (Rückfall für Windows-Zonennamen) |
+
+Keine davon braucht grundsätzlich eine Administratorzustimmung. **Manche
+Organisationen verbieten Nutzern aber die Zustimmung zu fremden Apps** — dann
+muss die IT der Praxis einmal zustimmen. Das gehört als Satz in die
+Einrichtungshilfe.
+
+**3 · Herausgeberüberprüfung** (Branding & Eigenschaften → Verifizierter
+Herausgeber, über eine Microsoft-Partner-ID). Ohne sie zeigt der Zustimmungs­
+dialog „nicht überprüft", und in vielen Organisationen ist die Zustimmung
+zu nicht überprüften mandantenübergreifenden Apps gesperrt. Dazu Name, Logo,
+Datenschutz- und Nutzungsbedingungen-Adresse eintragen — sie stehen im
+Dialog, den die Praxis sieht.
+
+**4 · Umgebung**
+
+```
+MICROSOFT_CLIENT_ID=<Anwendungs-ID>
+MICROSOFT_CLIENT_SECRET=<Geheimnis>
+MICROSOFT_TENANT_ID=common
+MICROSOFT_REDIRECT_URI="${APP_URL}/oauth/microsoft/callback"
+```
+
+**5 · Erreichbarkeit der Zustellung.** Graph ruft beim Anlegen jedes
+Abonnements `POST https://<APP_URL>/kalender/microsoft/zustellung` auf und
+erwartet den `validationToken` **binnen zehn Sekunden als reinen Text**.
+Die Adresse muss also öffentlich, mit gültigem Zertifikat und ohne
+vorgeschaltete Anmeldung erreichbar sein — eine Staging-Umgebung hinter
+HTTP-Basic-Auth bekommt kein einziges Abonnement.
+
+**6 · Planer und Warteschlange.** `mrs:kalender-abos-erneuern` läuft
+stündlich; Graph-Abonnements leben keine drei Tage und werden 6 Stunden vor
+Ablauf verlängert (`mrs.calendar.renew_before_expiry_hours.microsoft`).
+
+**Danach zuerst ansehen** (WP-15, „Offen"): ob Graph Zonennamen in
+Windows-Schreibweise liefert (der Rückfall ist gebaut, aber nicht belegt) und
+wie lange ein Abonnement tatsächlich lebt.

@@ -118,6 +118,12 @@ php artisan queue:failed        # oder ist er gelaufen und gescheitert?
 | 05:15 | `mrs:werbung-abgleichen` | Kampagnenstruktur holen, Zugänge vor Ablauf melden |
 | 05:45 | `mrs:werbung-zahlen` | Metas Kennzahlen über das nachlaufende Fenster |
 | Mo 06:15 | `mrs:anzeigen-vorschlagen` | Anzeigenentwürfe der Woche |
+| 1. des Monats 03:45 | `mrs:servicefenster-abrechnen` | Antworten im WhatsApp-Service-Fenster des Vormonats als Sammelposten zu Stripe (B14) — bei 0 € geht nichts hinaus |
+
+Der Abrechnungsauftrag (`ServicefensterAbrechnen`, Warteschlange
+`maintenance`) versucht es **fünfmal** statt einmal: er trägt Stripes
+Idempotenzschlüssel, und der abgerechnete Monat steht am Abo. Eine
+Wiederholung legt keinen zweiten Posten an.
 
 ## Überwachung
 
@@ -157,27 +163,65 @@ CLAMAV_PORT=3310
 Ein nicht erreichbarer Prüfer gibt **nichts** frei. Ein Dienst, der gerade neu
 startet, darf keine Datei durchlassen.
 
+## Sicherung und Wiederherstellung
+
+**Regelt Laravel Cloud** (S7): Datenbank-Sicherungen der verwalteten MySQL-
+Instanz und der Objektspeicher der Anhänge liegen bei der Plattform. Im
+Produkt gibt es dafür keinen Code, und es soll keinen geben.
+
+Was trotzdem bei uns liegt:
+
+- **Der Schlüsselsatz gehört zur Sicherung.** Nachrichten, Kontakte und
+  Anhänge sind je Organisation verschlüsselt (A5, A6). Eine Sicherung der
+  Datenbank ohne die Schlüssel ist wertlos, eine mit ihnen vollständig —
+  beides gehört in dieselbe Aufbewahrung.
+- **Krypto-Löschung wirkt auch auf Sicherungen** (A5): wird der Schlüssel einer
+  gekündigten Praxis gelöscht, sind ihre Daten auch in alten Sicherungen nicht
+  mehr lesbar. Die Aufbewahrungsdauer der Sicherungen darf deshalb länger sein
+  als die Fristen aus C7, ohne sie zu unterlaufen.
+- **Eine Wiederherstellung wird geprobt**, nicht angenommen: einmal im Quartal
+  eine Sicherung in eine leere Umgebung einspielen und `mrs:betrieb` laufen
+  lassen.
+
 ## Was je Kunde einzurichten ist
 
 - **SPF und DKIM** der Praxisdomain, wenn der Versand über die Plattform läuft
   (`docs/integrationen/email.md`). Ohne das landet die Post im Spam, und die
   Praxis merkt es daran, dass niemand antwortet.
 - **Weiterleitung** des Praxispostfachs auf die Eingangsadresse.
-- **Meta:** Systembenutzer-Token, Rufnummern-ID, WABA-Kennung, Webhook.
-- **Kalender:** je Behandler eine Verbindung.
+- **WhatsApp:** WABA-ID, Rufnummern-ID und Systembenutzer-Token — die Praxis
+  trägt sie selbst unter *Einstellungen → WhatsApp* ein. Die Prüfung läuft in
+  der Warteschlange und abonniert die Zustellungen (`subscribed_apps`) gleich
+  mit; ein Webhook muss nicht mehr von Hand gesetzt werden.
+- **Kalender:** je Behandler eine Verbindung. Für Microsoft einmalig die
+  App-Registrierung (`docs/integrationen/kalender.md`, „Einrichtung Microsoft").
+
+## Einmalig je Installation
+
+- **Stripe:** vier Preise anlegen — Abo 790 €/Monat, Aufstockung 59 €, Bild
+  2 €, Einrichtung 1.490 € (einmalig) — und die IDs setzen (B15,
+  `docs/produkt.md`).
+- **Microsoft Entra ID:** App-Registrierung, Geheimnis mit Ablaufdatum im
+  Betriebskalender.
+- **Meta:** App Review und Business-Verifizierung (WP-00).
 
 ## Umgebungsvariablen, die im Betrieb gesetzt sein müssen
 
 ```
 APP_ENV=production           APP_DEBUG=false
-QUEUE_CONNECTION=redis       CACHE_STORE=redis        SESSION_DRIVER=redis
+QUEUE_CONNECTION=cloud       CACHE_STORE=redis        SESSION_DRIVER=redis
 TRUSTED_PROXIES=*
 
 META_APP_SECRET=…            META_WEBHOOK_VERIFY_TOKEN=…
 META_LOGIN_CONFIG_ID=…       META_REDIRECT_URI=…
 META_CAPI_TOKEN=…
 KIE_API_KEY=…
-STRIPE_IMAGE_PRICE_ID=…
+STRIPE_SECRET=…              STRIPE_WEBHOOK_SECRET=…
+STRIPE_PRICE_ID=…            STRIPE_TOPUP_PRICE_ID=…
+STRIPE_IMAGE_PRICE_ID=…      STRIPE_SETUP_PRICE_ID=…
+WHATSAPP_SERVICEFENSTER_CENT=0
+GOOGLE_CLIENT_ID=…           GOOGLE_CLIENT_SECRET=…
+MICROSOFT_CLIENT_ID=…        MICROSOFT_CLIENT_SECRET=…
 ANTHROPIC_API_KEY=…          AGENT_KILL_SWITCH=false
 MAIL_INBOUND_TOKEN=…         MAIL_INBOUND_DOMAIN=…
 CLAMAV_HOST=…
@@ -218,6 +262,15 @@ Auf der lokalen Platte war das selten; mit einem Bucket ist es der Normalfall
 eines Fehlers — falsche Region, fehlende Berechtigung, gelöschtes Objekt. Seit
 dem 22.09.2026 wirft er stattdessen, mit dem Pfad im Text.
 
+**`WHATSAPP_SERVICEFENSTER_CENT`** ist der Preis je Antwort im offenen
+Service-Fenster, in Cent, Nachkommastelle erlaubt (B14). `0` heißt gezählt,
+nicht berechnet. Ein neuer Wert gilt für Antworten ab dann — der Preis wird an
+jeder Nachricht festgehalten, nicht bei der Rechnung ausgerechnet.
+
+**`QUEUE_CONNECTION=cloud`** setzt Laravel Cloud selbst, sobald die verwaltete
+Warteschlange angehängt ist (siehe oben). Bis zum 26.09.2026 stand hier noch
+`redis` aus der Zeit vor dem 22.09.2026.
+
 **`AGENT_KILL_SWITCH=true`** hält den Assistenten in der ganzen Installation
 an, sofort und über jede Mandanteneinstellung hinweg. Das ist der Schalter für
 den Fall, in dem etwas grundsätzlich schiefgeht.
@@ -231,6 +284,14 @@ den Fall, in dem etwas grundsätzlich schiefgeht.
 4. Rohereignisse bleiben **14 Tage** wiedereinspielbar (WP-19). Danach ist die
    Nachricht weg — das ist die Frist, innerhalb derer eine kaputte
    Verarbeitung repariert werden muss.
+5. **Eine Anzeige hängt auf „wird übertragen“:**
+   `mrs:anzeige-uebertragen <uuid> --nur-zeigen` zeigt, wie weit der Auftrag
+   kam (Bild, Creative, Anzeige), Werbekonto, Warteschlange `default` und den
+   letzten Abbruch aus `failed_jobs`. Ohne `--nur-zeigen` überträgt er
+   synchron, am Worker vorbei, und gibt eine liegengebliebene Sperre frei.
+   Ein einzelnes Kommando — läuft auch in der Cloud-Konsole, wo mehrzeiliges
+   tinker nicht geht. Die UUID steht in der Seite unter
+   `props.vorschlaege[].uebertragung.anzeige`.
 
 
 ## Das Zeichen

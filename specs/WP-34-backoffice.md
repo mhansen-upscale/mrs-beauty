@@ -154,6 +154,9 @@ sie als Pflichtfeld — sonst wäre das Protokoll eine Liste von Zeitstempeln.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** „In die Praxis sehen" steht im Mandantenblatt —
+> maskiert, mit Pflichtbegründung, befristet (C4). Offen: Historie.
+
 - **Impersonation aus dem Backoffice heraus starten.** Die Mechanik steht in
   WP-05, der Knopf im Mandantenblatt fehlt noch.
 - **Historie.** Sichtbar ist immer der Jetzt-Zustand. Wie sich eine Praxis

@@ -48,6 +48,10 @@ enum AuditEvent: string
     case EncryptionKeyIssued = 'encryption_key.issued';
     case EncryptionKeyRevoked = 'encryption_key.revoked';
 
+    /* Anhaenge (offen seit WP-21). Ein Foto aus dem Chat ist ein
+       Gesundheitsdatum nach Artikel 9 DSGVO -- wer es oeffnet, steht hier. */
+    case AttachmentOpened = 'attachment.opened';
+
     public function label(): string
     {
         return match ($this) {
@@ -70,6 +74,7 @@ enum AuditEvent: string
             self::TenantCredited => 'Kontingent gutgeschrieben',
             self::EncryptionKeyIssued => 'Schlüsselsatz angelegt',
             self::EncryptionKeyRevoked => 'Schlüssel widerrufen',
+            self::AttachmentOpened => 'Anhang geöffnet',
         };
     }
 }

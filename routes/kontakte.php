@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Kontakte\ContactController;
+use App\Http\Controllers\Kontakte\NotizController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,5 +31,11 @@ Route::middleware(['auth', 'verified', 'can:contacts.manage'])->group(function (
     Route::delete('kontakte/{contact}/kanaele/{identity}', [ContactController::class, 'destroyIdentity'])->name('identities.destroy');
 
     Route::post('kontakte/{contact}/zusammenfuehren', [ContactController::class, 'merge'])->name('contacts.merge');
+
+    // Notizen und Schlagworte (offen seit WP-18), bedient aus dem Posteingang.
+    Route::post('kontakte/{contact}/notizen', [NotizController::class, 'store'])->name('contacts.notes.store');
+    Route::delete('kontakte/{contact}/notizen/{note}', [NotizController::class, 'destroy'])->name('contacts.notes.destroy');
+    Route::post('kontakte/{contact}/schlagworte', [NotizController::class, 'schlagwortStore'])->name('contacts.tags.store');
+    Route::delete('kontakte/{contact}/schlagworte/{tag}', [NotizController::class, 'schlagwortDestroy'])->name('contacts.tags.destroy');
     Route::post('zusammenfuehrungen/{merge}/rueckgaengig', [ContactController::class, 'revert'])->name('merges.revert');
 });

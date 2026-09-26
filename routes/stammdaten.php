@@ -54,6 +54,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('behandlungen/{treatment}', [TreatmentController::class, 'update'])->name('treatments.update');
         Route::delete('behandlungen/{treatment}', [TreatmentController::class, 'deactivate'])->name('treatments.deactivate');
         Route::put('behandlungen/{treatment}/aktivieren', [TreatmentController::class, 'activate'])->name('treatments.activate');
+        // Buchungsseite als Pruefgegenstand (WP-30): uebersteuern mit Begruendung (C3).
+        Route::post('behandlungen/{treatment}/hwg-uebersteuern', [TreatmentController::class, 'uebersteuern'])->name('treatments.hwg.uebersteuern');
 
         Route::get('terminarten', [AppointmentTypeController::class, 'index'])->name('appointmenttypes.index');
         Route::post('terminarten', [AppointmentTypeController::class, 'store'])->name('appointmenttypes.store');

@@ -109,6 +109,13 @@ eine Asymmetrie zum Verlierer, der bewusst ohne Fremdschlüssel steht.
 
 ## Offen
 
+> **Nachtrag 26.09.2026.** Konversationen gibt es (WP-19/20), der Zweig der
+> Aufbewahrung anonymisiert sie. **Notizen und Schlagworte** haben eine
+> Oberfläche im Posteingang, nur für `contacts.manage`
+> (`tests/Feature/Kontakte/NotizenTest.php`); **Anhänge** werden ausgeliefert
+> (C12). `docs/datenmodell.md`, **Abschnitt 11** steht. Der Virenprüfer kam mit
+> WP-33.
+
 **Konversationen gibt es noch nicht** (WP-19, WP-20). Die Frist steht, der
 Lauf zählt null und sagt es nicht — das ist die schwächste Stelle dieses
 Pakets. Wenn die Tabelle kommt, gehört der Zweig ausgefüllt und getestet.

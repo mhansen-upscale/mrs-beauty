@@ -29,6 +29,8 @@ export interface Nachricht {
 
 export interface Termin {
     uuid: string;
+    /** Der Tag in Ortszeit des Standorts, YYYY-MM-DD. */
+    date: string;
     practitioner: string;
     practitioner_name: string;
     contact: string;
