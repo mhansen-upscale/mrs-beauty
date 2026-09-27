@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Backoffice;
 
+use App\Abrechnung\Aboeingriffe;
 use App\Abrechnung\Kontingente;
 use App\Audit\AuditLogger;
 use App\Backoffice\Mandantenuebersicht;
-use App\Betrieb\Betriebslage;
 use App\Enums\AuditEvent;
+use App\Enums\SubscriptionChangeAction;
+use App\Enums\SubscriptionChangeStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
+use App\Models\User;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -31,9 +35,17 @@ use Inertia\Response;
  */
 final class BackofficeController extends Controller
 {
+    /**
+     * **Das eigene Passwort vor jeder wirksamen Handlung** (WP-34a, C14) --
+     * der Ausgleich fuer den fehlenden zweiten Faktor. Als Feld im Dialog,
+     * nicht als `password.confirm`: dessen Mittelschicht merkt sich bei POST
+     * die POST-Adresse als Ziel und fuehrt nach der Bestaetigung auf einen
+     * 405, und `auth.password_timeout` betraegt drei Stunden.
+     */
+    public const PASSWORT = ['current_password' => ['required', 'current_password']];
+
     public function __construct(
         private readonly Mandantenuebersicht $uebersicht,
-        private readonly Betriebslage $lage,
         private readonly AuditLogger $protokoll,
     ) {}
 
@@ -43,8 +55,12 @@ final class BackofficeController extends Controller
 
         return Inertia::render('backoffice/Index', [
             'suche' => $suche,
+            // Die Kennzahlen der Installation stehen auf dem Dashboard des
+            // Betreibers; hier nur die Liste.
             'mandanten' => $this->uebersicht->liste($suche),
-            'installation' => $this->lage->fuerInstallation(),
+
+            // Fuer den Filter "Testphase endet bald" (WP-34c).
+            'warnungTage' => (int) config('mrs.backoffice.testphase_warnung_tage'),
         ]);
     }
 
@@ -54,6 +70,7 @@ final class BackofficeController extends Controller
 
         return Inertia::render('backoffice/Mandant', [
             'mandant' => $this->uebersicht->blatt($praxis),
+            'maxTestphaseTage' => (int) config('mrs.billing.trial_verlaengerung_max_tage'),
         ]);
     }
 
@@ -67,6 +84,7 @@ final class BackofficeController extends Controller
     {
         $daten = $request->validate([
             'grund' => ['required', 'string', 'min:5', 'max:200'],
+            ...self::PASSWORT,
         ]);
 
         $praxis = $this->praxis($organisation);
@@ -83,6 +101,7 @@ final class BackofficeController extends Controller
     {
         $daten = $request->validate([
             'grund' => ['required', 'string', 'min:5', 'max:200'],
+            ...self::PASSWORT,
         ]);
 
         $praxis = $this->praxis($organisation);
@@ -108,6 +127,7 @@ final class BackofficeController extends Controller
             'art' => ['required', 'in:nachrichten,agentenlaeufe'],
             'menge' => ['required', 'integer', 'between:1,5000'],
             'grund' => ['required', 'string', 'min:5', 'max:200'],
+            ...self::PASSWORT,
         ]);
 
         $praxis = $this->praxis($organisation);
@@ -123,6 +143,63 @@ final class BackofficeController extends Controller
         );
 
         return back();
+    }
+
+    /**
+     * Ein Eingriff in das Abo (WP-34c, `abo.eingreifen`): pausieren,
+     * fortsetzen, kuendigen, Kuendigung zuruecknehmen, Gratismonat.
+     *
+     * **Beauftragt, nicht erledigt.** Stripe bekommt den Auftrag ueber die
+     * Warteschlange, den Zustand meldet der Webhook. Im Testbetrieb ohne
+     * Stripe wirkt er sofort -- und die Meldung sagt es.
+     */
+    public function abo(Request $request, string $organisation, Aboeingriffe $eingriffe): RedirectResponse
+    {
+        $daten = $request->validate([
+            'aktion' => ['required', Rule::in(array_map(
+                fn (SubscriptionChangeAction $aktion): string => $aktion->value,
+                array_filter(SubscriptionChangeAction::cases(), fn (SubscriptionChangeAction $aktion): bool => $aktion->beiStripe()),
+            ))],
+            // Nur fuer die Pause: wann Stripe den Einzug von selbst fortsetzt.
+            'bis' => ['nullable', 'date_format:Y-m-d', 'after:today'],
+            'grund' => ['required', 'string', 'min:5', 'max:200'],
+            ...self::PASSWORT,
+        ]);
+
+        $betreiber = $request->user();
+        abort_unless($betreiber instanceof User, 403);
+
+        $aktion = SubscriptionChangeAction::from((string) $daten['aktion']);
+        $bis = $aktion === SubscriptionChangeAction::Pause && is_string($daten['bis'] ?? null) ? ['bis' => $daten['bis']] : [];
+
+        $eingriff = $eingriffe->beauftrage($this->praxis($organisation), $aktion, (string) $daten['grund'], $betreiber, $bis);
+
+        return back()->with('erfolg', match (true) {
+            $eingriff->ohneStripe() => "{$aktion->label()}: ohne Stripe (Testbetrieb) sofort wirksam.",
+            $eingriff->status === SubscriptionChangeStatus::Failed => "{$aktion->label()}: Stripe hat abgelehnt. Der Grund steht unten bei den Eingriffen.",
+            $eingriff->status === SubscriptionChangeStatus::Done => "{$aktion->label()}: Stripe hat den Auftrag angenommen. Den neuen Zustand meldet Stripe gleich.",
+            default => "{$aktion->label()}: beauftragt.",
+        });
+    }
+
+    /**
+     * Verlaengert die Testphase (WP-34c, `testphase.verlaengern`) -- lokal und
+     * sofort, hoechstens um `trial_verlaengerung_max_tage`.
+     */
+    public function testphase(Request $request, string $organisation, Aboeingriffe $eingriffe): RedirectResponse
+    {
+        $daten = $request->validate([
+            'tage' => ['required', 'integer', 'min:1', 'max:'.(int) config('mrs.billing.trial_verlaengerung_max_tage')],
+            'grund' => ['required', 'string', 'min:5', 'max:200'],
+            ...self::PASSWORT,
+        ]);
+
+        $betreiber = $request->user();
+        abort_unless($betreiber instanceof User, 403);
+
+        $eingriffe->verlaengereTestphase($this->praxis($organisation), (int) $daten['tage'], (string) $daten['grund'], $betreiber);
+
+        return back()->with('erfolg', "Testphase um {$daten['tage']} Tage verlängert.");
     }
 
     private function praxis(string $uuid): Organization

@@ -297,7 +297,7 @@ it('sperrt ein Template bei leerem Kontingent, aber nie eine Antwort im Fenster'
     $aufbau = new WhatsAppAufbau;
     antwortetMitKennung();
 
-    config()->set('mrs.billing.included.messages', 0);
+    neuesPaket(['included_messages' => 0]);
 
     $geschlossen = whatsappGespraech(imFenster: false);
 

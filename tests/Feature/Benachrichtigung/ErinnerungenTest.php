@@ -36,8 +36,10 @@ use Tests\Feature\Termine\Szenario;
 */
 
 beforeEach(function (): void {
-    alsMandant();
+    // Erst die Zeit, dann die Praxis: sonst entsteht sie heute und ist am
+    // 12.01.2027 laengst aus der Testphase -- die seit WP-34c sperrt (B18).
     travelTo(CarbonImmutable::parse('2027-01-12 08:00:00', 'UTC'));
+    alsMandant();
 });
 
 /** @return array{Szenario, Appointment} */

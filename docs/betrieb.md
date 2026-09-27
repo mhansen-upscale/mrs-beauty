@@ -125,11 +125,31 @@ Der Abrechnungsauftrag (`ServicefensterAbrechnen`, Warteschlange
 Idempotenzschlüssel, und der abgerechnete Monat steht am Abo. Eine
 Wiederholung legt keinen zweiten Posten an.
 
+## Stripe im Testbetrieb
+
+Ohne `STRIPE_SECRET` **scheitert nichts**, es geschieht nur nichts bei
+Stripe (WP-34c, WP-06b):
+
+- Die Kasse sagt „Die Abrechnung ist nicht eingerichtet". Jede Praxis läuft
+  in der Testphase.
+- Abo-Eingriffe im Mandantenblatt wirken **sofort lokal** und tragen „ohne
+  Stripe".
+- Eine neue Paketfassung gilt **sofort**, ohne Preise bei Stripe. „Auch den
+  Bestand" stellt sofort um.
+
+**Beim Anbinden** hat die geltende Fassung keine Preise bei Stripe. Die
+Paketseite warnt dann. Eine Fassung speichern, auch unverändert, legt
+Produkt und Preise an. Bis dahin meldet die Kasse „Für dieses Paket fehlt
+der Preis bei Stripe".
+
 ## Überwachung
 
 **`mrs:betrieb`** ist für eine Überwachung von außen gedacht: Exit-Code `1`
 heißt, jemand sollte hinsehen — fehlgeschlagene Aufträge, liegengebliebene
-Rohereignisse oder eine **stehende Warteschlange**. Mit `--json` für
+Rohereignisse, eine **stehende Warteschlange**, ein gescheiterter
+Abo-Eingriff (WP-34c), eine bei Stripe gescheiterte Paketfassung oder ein
+Paket-Hinweis: ein Abo, das nicht umgestellt werden konnte, oder ein Preis,
+den keine Fassung kennt (WP-06b). Mit `--json` für
 Werkzeuge, ohne für Menschen.
 
 Im Produkt selbst steht die Lage **auf dem Dashboard** (Regel 4): gestörte
@@ -141,11 +161,34 @@ Dazu die Warteschlangen-Ansicht der Laravel-Cloud-Oberfläche, Pulse
 
 **`/backoffice`** ist die Betreibersicht über alle Praxen (WP-34): Zahlen,
 Abo-Zustand und Störungen je Mandant, dazu Sperre, Entsperrung und Gutschrift.
-Zugang hat nur, wer das Kennzeichen `is_super_admin` trägt. Inhalte —
-Kontaktnamen, Nachrichten, Termine — erscheinen dort nicht; wer in eine Praxis
-hineinsehen muss, geht über die Impersonation mit deren Freigabe (WP-05).
-Jeder Zugriff über Mandantengrenzen trägt eine Begründung und landet im
-Protokoll **der betroffenen Praxis**.
+Inhalte — Kontaktnamen, Nachrichten, Termine — erscheinen dort nicht; wer in
+eine Praxis hineinsehen muss, geht über die Impersonation mit deren Freigabe
+(WP-05). Jeder Zugriff über Mandantengrenzen trägt eine Begründung und landet
+im Protokoll **der betroffenen Praxis**. Die Kennzahlen der Installation
+stehen auf dem Dashboard des Betreibers.
+
+**Das Team des Betreibers** (WP-34a, Entscheidung C14) meldet sich unter
+**`/backoffice/anmelden`** an, nicht unter `/login`. Es gibt drei Rollen:
+Super-Admin, Customer Success und Finanzen. Welche Rolle was darf, steht in
+`App\Enums\OperatorRole`. Ohne zweiten Faktor gilt dafür:
+
+- drei Anmeldeversuche, dann eine Viertelstunde Pause,
+- kein „Angemeldet bleiben",
+- Abmeldung nach 30 Minuten ohne Aktivität,
+- vor jeder wirksamen Handlung das eigene Passwort.
+
+Die Werte stehen in `mrs.backoffice`. Konten legt ein Super-Admin unter
+*Betreiberkonten* an; die Person setzt ihr Passwort über den Link aus der
+Mail. **Den ersten Super-Admin einer Installation** und den Notfall, dass der
+letzte sein Passwort verloren hat, erledigt die Konsole:
+
+```bash
+php artisan mrs:betreiber name@mrs-beauty.de --rolle=super_admin --name="Vorname Nachname"
+```
+
+Querzugriffe, Anmeldungen und Handlungen an Betreiberkonten stehen im
+**Betreiberprotokoll** (`/backoffice/protokoll`, nur Super-Admin). Sie gehören
+keiner Praxis, und `mrs:aufbewahrung` löscht sie nach 36 Monaten (C7).
 
 ## Die Virenprüfung
 
@@ -198,9 +241,19 @@ Was trotzdem bei uns liegt:
 
 ## Einmalig je Installation
 
-- **Stripe:** vier Preise anlegen — Abo 790 €/Monat, Aufstockung 59 €, Bild
-  2 €, Einrichtung 1.490 € (einmalig) — und die IDs setzen (B15,
-  `docs/produkt.md`).
+- **Stripe:** `STRIPE_SECRET` und `STRIPE_WEBHOOK_SECRET` setzen, dann im
+  Backoffice unter **Paket** eine Fassung speichern (WP-06b). Sie legt
+  Produkt und alle Preise selbst an; Preise von Hand anlegen ist nicht mehr
+  nötig. Die Startwerte der ersten Fassung (790 €/Monat, Aufstockung 59 €,
+  Bild 2 €, Einrichtung 1.490 €) kommen aus `config/mrs.php` (B15). Dazu
+  einen Gutschein 100 %, einmal, als `STRIPE_FREE_MONTH_COUPON_ID`
+  (Gratismonat, WP-34c), und die API-Version des Webhook-Endpunkts auf
+  `STRIPE_API_VERSION` stellen.
+- **Mit bestehenden Preisen:** Wer die vier Preis-IDs schon vor der
+  Migration `2026_09_27_140000_paketfassungen` in der Umgebung hat, bekommt
+  sie in Fassung 1 übernommen. **Danach liest sie niemand mehr**: Eine
+  später gesetzte `STRIPE_PRICE_ID` ändert nichts, das Paket steht in der
+  Datenbank.
 - **Microsoft Entra ID:** App-Registrierung, Geheimnis mit Ablaufdatum im
   Betriebskalender.
 - **Meta:** App Review und Business-Verifizierung (WP-00).
@@ -217,8 +270,8 @@ META_LOGIN_CONFIG_ID=…       META_REDIRECT_URI=…
 META_CAPI_TOKEN=…
 KIE_API_KEY=…
 STRIPE_SECRET=…              STRIPE_WEBHOOK_SECRET=…
-STRIPE_PRICE_ID=…            STRIPE_TOPUP_PRICE_ID=…
-STRIPE_IMAGE_PRICE_ID=…      STRIPE_SETUP_PRICE_ID=…
+STRIPE_API_VERSION=2025-02-24.acacia
+STRIPE_FREE_MONTH_COUPON_ID=…
 WHATSAPP_SERVICEFENSTER_CENT=0
 GOOGLE_CLIENT_ID=…           GOOGLE_CLIENT_SECRET=…
 MICROSOFT_CLIENT_ID=…        MICROSOFT_CLIENT_SECRET=…

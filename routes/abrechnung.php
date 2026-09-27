@@ -25,6 +25,10 @@ Route::middleware(['auth', 'verified', 'can:billing.manage'])->group(function ()
     Route::post('settings/abo/portal', [AboController::class, 'portal'])->name('abo.portal');
 });
 
+// Die Sperrseite fuer alle, die das Abo nicht loesen koennen (WP-34c). Ohne
+// `billing.manage` -- genau die sollen sie sehen, statt eines 403.
+Route::middleware(['auth', 'verified'])->get('abo-gesperrt', [AboController::class, 'gesperrt'])->name('abo.gesperrt');
+
 Route::post('webhooks/stripe', StripeWebhookController::class)
     ->middleware('throttle:120,1')
     ->name('stripe.webhook');

@@ -18,7 +18,9 @@ use App\Models\Conversation;
 use App\Models\Lead;
 use App\Models\Message;
 use App\Models\RetentionPolicy;
+use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -245,6 +247,27 @@ final class Aufbewahrung
     }
 
     /**
+     * Das Protokoll ohne Mandanten -- Querzugriffe, Anmeldungen und
+     * Betreiberkonten (WP-34a).
+     *
+     * Es gehoert keiner Praxis, also lief es bei keiner mit und blieb ewig.
+     * Die Frist ist die aus Entscheidung C7, nicht die einer Praxis: keine
+     * Praxis kann sie fuer den Betreiber verkuerzen.
+     */
+    public function protokollOhneMandant(bool $vorschau, ?CarbonImmutable $jetzt = null): int
+    {
+        $stichtag = ($jetzt ?? CarbonImmutable::now())->subMonths((int) config('mrs.audit.retention_months'));
+
+        return app(TenantContext::class)->acrossTenants(
+            'Aufbewahrung raeumt das Protokoll ohne Mandanten auf (C7)',
+            fn (): int => $this->loescheProtokoll(
+                AuditLog::query()->whereNull('organization_id')->where('occurred_at', '<=', $stichtag),
+                $vorschau,
+            ),
+        );
+    }
+
+    /**
      * Das Protokoll.
      *
      * `audit_logs` ist append-only: ein Trigger verhindert jedes DELETE --
@@ -255,8 +278,14 @@ final class Aufbewahrung
     {
         // Das Protokoll fuehrt keinen created_at, sondern occurred_at: es
         // haelt fest, **wann etwas geschah**, nicht wann die Zeile entstand.
-        $abfrage = AuditLog::query()->where('occurred_at', '<=', $stichtag);
+        return $this->loescheProtokoll(AuditLog::query()->where('occurred_at', '<=', $stichtag), $vorschau);
+    }
 
+    /**
+     * @param  Builder<AuditLog>  $abfrage
+     */
+    private function loescheProtokoll(Builder $abfrage, bool $vorschau): int
+    {
         if ($vorschau) {
             return $abfrage->count();
         }
@@ -264,7 +293,7 @@ final class Aufbewahrung
         DB::statement('SET @mrs_audit_retention = 1');
 
         try {
-            return $abfrage->delete();
+            return (int) $abfrage->delete();
         } finally {
             DB::statement('SET @mrs_audit_retention = NULL');
         }

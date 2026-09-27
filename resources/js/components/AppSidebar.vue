@@ -17,6 +17,7 @@ import {
     MapPin,
     Megaphone,
     MessagesSquare,
+    Package,
     Palette,
     Scale,
     ScrollText,
@@ -25,6 +26,7 @@ import {
     Stethoscope,
     Syringe,
     TrendingUp,
+    UserCog,
     Users,
 } from 'lucide-vue-next';
 import { computed, watch } from 'vue';
@@ -40,8 +42,12 @@ const einfuehrung = useEinfuehrung();
  */
 const darf = (ability: string): boolean => page.props.abilities?.includes(ability) ?? false;
 
-/** Der Betreiber gehört zu keiner Praxis — das Kennzeichen hängt am Benutzer. */
-const istBetreiber = computed<boolean>(() => page.props.auth?.superAdmin === true);
+/**
+ * Der Betreiber gehört zu keiner Praxis — seine Rolle hängt am Konto, nicht an
+ * einer Praxisrolle (WP-34a). Was er sieht, folgt seinen Fähigkeiten.
+ */
+const betreiberDarf = (faehigkeit: string): boolean => page.props.auth?.betreiber?.faehigkeiten.includes(faehigkeit) ?? false;
+const istBetreiber = computed<boolean>(() => page.props.auth?.betreiber != null);
 
 /**
  * Stammdaten, Katalog, Team und Protokoll sind Arbeitsbereiche, keine
@@ -125,7 +131,16 @@ const gruppen = computed<NavGroup[]>(() =>
                       // Hiess ebenfalls „Betrieb" -- zwei Gruppen mit
                       // demselben Titel in einer Seitenleiste.
                       title: 'Betreiber',
-                      items: [{ title: 'Backoffice', href: '/backoffice', icon: Building2 }],
+                      items: [
+                          ...(betreiberDarf('mandanten.sehen') ? [{ title: 'Backoffice', href: '/backoffice', icon: Building2 }] : []),
+                          ...(betreiberDarf('paket.verwalten') ? [{ title: 'Paket', href: '/backoffice/paket', icon: Package }] : []),
+                          ...(betreiberDarf('betreiber.verwalten')
+                              ? [{ title: 'Betreiberkonten', href: '/backoffice/betreiber', icon: UserCog }]
+                              : []),
+                          ...(betreiberDarf('protokoll.sehen')
+                              ? [{ title: 'Betreiberprotokoll', href: '/backoffice/protokoll', icon: ScrollText }]
+                              : []),
+                      ],
                   },
               ]
             : []),

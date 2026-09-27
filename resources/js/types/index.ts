@@ -5,8 +5,17 @@ export interface Auth {
     user: User;
     role: string | null;
 
-    /** Der Betreiber gehört zu keiner Praxis — das Kennzeichen hängt am Benutzer (WP-34). */
-    superAdmin: boolean;
+    /**
+     * Die Rolle im Team des Betreibers und was sie darf (WP-34a). Null für
+     * jedes Konto einer Praxis — der Betreiber gehört zu keiner.
+     */
+    betreiber: Betreiber | null;
+}
+
+export interface Betreiber {
+    rolle: string;
+    rolleLabel: string;
+    faehigkeiten: string[];
 }
 
 export interface OrganizationSummary {

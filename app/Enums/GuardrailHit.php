@@ -39,6 +39,21 @@ enum GuardrailHit: string
 
     case TenantDisabled = 'tenant_disabled';
 
+    /**
+     * Der Betreiber hat die Praxis gesperrt (WP-34, WP-34a).
+     *
+     * Eingehendes wird gespeichert, aber niemand antwortet in ihrem Namen,
+     * solange sie selbst nicht hineinkommt.
+     */
+    case TenantSuspended = 'tenant_suspended';
+
+    /**
+     * Das Abo sperrt den Zugang: unbezahlt, pausiert, Testphase abgelaufen,
+     * gekuendigt (WP-34c). Wer nicht hineinkommt, saehe weder die Antwort
+     * noch den Termin -- und jeder Lauf kostet.
+     */
+    case SubscriptionLocked = 'subscription_locked';
+
     case Paused = 'paused';
 
     /** Das Kontingent des Monats ist aufgebraucht (Entscheidung G11). */
@@ -70,6 +85,8 @@ enum GuardrailHit: string
             self::TooManyAutoReplies => 'Zu viele automatische Antworten',
             self::KillSwitch => 'Not-Aus der Installation',
             self::TenantDisabled => 'Assistent abgeschaltet',
+            self::TenantSuspended => 'Praxis gesperrt',
+            self::SubscriptionLocked => 'Abo gesperrt',
             self::Paused => 'Assistent pausiert',
             self::BudgetExhausted => 'Kontingent aufgebraucht',
             self::PriceOutsideCatalog => 'Preis außerhalb des Katalogs',

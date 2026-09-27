@@ -7,14 +7,25 @@ import { type NavGroup, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { TriangleAlert } from 'lucide-vue-next';
 
-defineProps<{
+const props = defineProps<{
     gruppen: NavGroup[];
 }>();
 
 const page = usePage<SharedData>();
 
 /** Auch eine Unterseite soll ihren Menüpunkt hervorheben. */
-const aktiv = (href: string): boolean => page.url === href || page.url.startsWith(`${href}/`) || page.url.startsWith(`${href}?`);
+const trifft = (href: string): boolean => page.url === href || page.url.startsWith(`${href}/`) || page.url.startsWith(`${href}?`);
+
+/**
+ * **Der genaueste Punkt gewinnt.** Seit WP-34a stehen `/backoffice` und
+ * `/backoffice/betreiber` nebeneinander im Menü; ohne diese Regel leuchteten
+ * auf der Unterseite beide.
+ */
+const aktiv = (href: string): boolean =>
+    trifft(href) &&
+    !props.gruppen.some((gruppe) =>
+        gruppe.items.some((anderer) => anderer.href !== href && anderer.href.startsWith(`${href}/`) && trifft(anderer.href)),
+    );
 
 /**
  * Die Sprechblase hängt am Menüpunkt, ohne ihn zum Auslöser zu machen —

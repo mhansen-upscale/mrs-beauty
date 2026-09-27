@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AboKasten, { type Abo } from '@/components/AboKasten.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -8,8 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem } from '@/types';
-import { Head, useForm } from '@inertiajs/vue3';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, useForm, usePage } from '@inertiajs/vue3';
 import { AlertTriangle, Eye } from 'lucide-vue-next';
 import { ref } from 'vue';
 
@@ -25,10 +26,14 @@ const props = defineProps<{
         termine30: number;
         abo: string;
         aboLabel: string;
+        zugang: string;
+        zugangLabel: string;
         periodeEndet: string | null;
         verbrauch: { nachrichten: number; kostenpflichtig: number; agentenlaeufe: number; angebote: number };
         stoerungen: { kanaele: { kanal: string; status: string; grund: string | null }[]; kalender: number; werbung: number; ereignisse: number };
+        aboStand: Abo;
     };
+    maxTestphaseTage: number;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -36,11 +41,20 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: props.mandant.name, href: `/backoffice/${props.mandant.uuid}` },
 ];
 
+/**
+ * Was diese Rolle hier darf (WP-34a). Ausgeblendet ist nicht geschützt — die
+ * Tür ist EnsureBetreiber an der Route. Ein Knopf, der nur zu einer 403
+ * führt, ist trotzdem keiner.
+ */
+const page = usePage<SharedData>();
+const darf = (faehigkeit: string): boolean => page.props.auth.betreiber?.faehigkeiten.includes(faehigkeit) ?? false;
+
 const sperrenOffen = ref(false);
 const gutschriftOffen = ref(false);
 const hineinsehenOffen = ref(false);
 
-const sperre = useForm({ grund: '' });
+// Das eigene Passwort vor jeder wirksamen Handlung (C14).
+const sperre = useForm({ grund: '', current_password: '' });
 
 /**
  * Hineinsehen geht über die Impersonation aus WP-05 — **immer maskiert**.
@@ -56,7 +70,7 @@ const hineinsehenStarten = () =>
             hineinsehenOffen.value = false;
         },
     });
-const gutschrift = useForm({ art: 'nachrichten', menge: 250, grund: '' });
+const gutschrift = useForm({ art: 'nachrichten', menge: 250, grund: '', current_password: '' });
 
 const sperren = () =>
     sperre.post(route(props.mandant.gesperrt ? 'backoffice.entsperren' : 'backoffice.sperren', { organisation: props.mandant.uuid }), {
@@ -65,6 +79,7 @@ const sperren = () =>
             sperre.reset();
             sperrenOffen.value = false;
         },
+        onFinish: () => sperre.reset('current_password'),
     });
 
 const gutschreiben = () =>
@@ -74,6 +89,7 @@ const gutschreiben = () =>
             gutschrift.reset();
             gutschriftOffen.value = false;
         },
+        onFinish: () => gutschrift.reset('current_password'),
     });
 
 const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString('de-DE', { dateStyle: 'long' }) : '');
@@ -88,16 +104,25 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
 
             <div class="flex flex-wrap items-center gap-3">
                 <Badge v-if="mandant.gesperrt" variant="destructive">Gesperrt seit {{ datum(mandant.gesperrtSeit) }}</Badge>
-                <Badge :variant="mandant.abo === 'active' ? 'success' : 'secondary'">{{ mandant.aboLabel }}</Badge>
+                <Badge :variant="mandant.zugang === 'open' ? 'success' : mandant.zugang === 'trial' ? 'info' : 'warning'">{{
+                    mandant.zugangLabel
+                }}</Badge>
                 <span v-if="mandant.periodeEndet" class="text-sm text-muted-foreground">Periode bis {{ datum(mandant.periodeEndet) }}</span>
 
                 <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-                    <Button type="button" variant="outline" @click="hineinsehenOffen = true">
+                    <Button v-if="darf('support.zugriff')" type="button" variant="outline" @click="hineinsehenOffen = true">
                         <Eye />
                         In die Praxis sehen
                     </Button>
-                    <Button type="button" variant="outline" @click="gutschriftOffen = true">Kontingent gutschreiben</Button>
-                    <Button type="button" :variant="mandant.gesperrt ? 'outline' : 'destructive'" @click="sperrenOffen = true">
+                    <Button v-if="darf('kontingent.gutschreiben')" type="button" variant="outline" @click="gutschriftOffen = true">
+                        Kontingent gutschreiben
+                    </Button>
+                    <Button
+                        v-if="darf('mandanten.sperren')"
+                        type="button"
+                        :variant="mandant.gesperrt ? 'outline' : 'destructive'"
+                        @click="sperrenOffen = true"
+                    >
                         {{ mandant.gesperrt ? 'Entsperren' : 'Sperren' }}
                     </Button>
                 </div>
@@ -147,6 +172,18 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
             <p class="text-xs text-muted-foreground">
                 Assistenzläufe diesen Monat: {{ mandant.verbrauch.agentenlaeufe }} · Wartelistenangebote: {{ mandant.verbrauch.angebote }}
             </p>
+
+            <!-- Das Abo und die Eingriffe darin (WP-34c). Sichtbar mit abo.sehen. -->
+            <AboKasten
+                v-if="darf('abo.sehen')"
+                :organisation="mandant.uuid"
+                :zugang="mandant.zugang"
+                :zugang-label="mandant.zugangLabel"
+                :abo="mandant.aboStand"
+                :darf-eingreifen="darf('abo.eingreifen')"
+                :darf-testphase="darf('testphase.verlaengern')"
+                :max-tage="maxTestphaseTage"
+            />
         </div>
 
         <FormularDialog
@@ -161,6 +198,12 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 <Label for="grund">Grund</Label>
                 <Input id="grund" v-model="sperre.grund" placeholder="Zahlungsausfall, Missbrauch, auf Wunsch der Praxis …" />
                 <InputError :message="sperre.errors.grund" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="sperre-passwort">Ihr Passwort</Label>
+                <Input id="sperre-passwort" v-model="sperre.current_password" type="password" autocomplete="current-password" />
+                <InputError :message="sperre.errors.current_password" />
             </div>
         </FormularDialog>
 
@@ -210,6 +253,12 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 <Label for="gutschriftgrund">Grund</Label>
                 <Input id="gutschriftgrund" v-model="gutschrift.grund" placeholder="Störung der Warteliste vom 12.–14.01." />
                 <InputError :message="gutschrift.errors.grund" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="gutschrift-passwort">Ihr Passwort</Label>
+                <Input id="gutschrift-passwort" v-model="gutschrift.current_password" type="password" autocomplete="current-password" />
+                <InputError :message="gutschrift.errors.current_password" />
             </div>
         </FormularDialog>
     </AppLayout>

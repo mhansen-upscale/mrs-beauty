@@ -45,6 +45,34 @@ enum AuditEvent: string
 
     case TenantCredited = 'tenant.credited';
 
+    /* Betreiberkonten (WP-34a). Ohne Organisation: sie gehoeren dem
+       Betreiber, nicht einer Praxis. Ein Fehlversuch nennt das Konto, wenn es
+       eines gibt -- nie die eingetippte Adresse (C5). */
+    case OperatorLoggedIn = 'operator.logged_in';
+    case OperatorLoginFailed = 'operator.login_failed';
+    case OperatorLoggedOutIdle = 'operator.logged_out_idle';
+    case OperatorCreated = 'operator.created';
+    case OperatorRoleChanged = 'operator.role_changed';
+    case OperatorDeactivated = 'operator.deactivated';
+    case OperatorReactivated = 'operator.reactivated';
+
+    /* Abo-Eingriffe (WP-34c, B17) -- beim Mandanten, damit die Praxis
+       nachlesen kann, was mit ihrem Abo geschehen ist. */
+    case SubscriptionChangeRequested = 'subscription.change_requested';
+    case SubscriptionChangeFailed = 'subscription.change_failed';
+    case SubscriptionTrialExtended = 'subscription.trial_extended';
+
+    /* Das Paket in Fassungen (WP-06b, B20). Die Fassung gehoert dem
+       Betreiber -- ohne Organisation. Der Wechsel eines Abos auf eine
+       Fassung steht beim Mandanten. */
+    case PlanVersionCreated = 'plan.version_created';
+    case PlanVersionReady = 'plan.version_ready';
+    case PlanVersionFailed = 'plan.version_failed';
+    case PlanMigrationRequested = 'plan.migration_requested';
+    case SubscriptionPlanChanged = 'subscription.plan_changed';
+    case SubscriptionPlanChangeFailed = 'subscription.plan_change_failed';
+    case SubscriptionPriceUnknown = 'subscription.price_unknown';
+
     case EncryptionKeyIssued = 'encryption_key.issued';
     case EncryptionKeyRevoked = 'encryption_key.revoked';
 
@@ -72,6 +100,23 @@ enum AuditEvent: string
             self::TenantSuspended => 'Mandant gesperrt',
             self::TenantUnsuspended => 'Mandant entsperrt',
             self::TenantCredited => 'Kontingent gutgeschrieben',
+            self::OperatorLoggedIn => 'Betreiber angemeldet',
+            self::OperatorLoginFailed => 'Anmeldung als Betreiber fehlgeschlagen',
+            self::OperatorLoggedOutIdle => 'Betreiber nach Leerlauf abgemeldet',
+            self::OperatorCreated => 'Betreiberkonto angelegt',
+            self::OperatorRoleChanged => 'Betreiberrolle geändert',
+            self::OperatorDeactivated => 'Betreiberkonto deaktiviert',
+            self::OperatorReactivated => 'Betreiberkonto reaktiviert',
+            self::SubscriptionChangeRequested => 'Abo-Eingriff beauftragt',
+            self::SubscriptionChangeFailed => 'Abo-Eingriff gescheitert',
+            self::SubscriptionTrialExtended => 'Testphase verlängert',
+            self::PlanVersionCreated => 'Paketfassung angelegt',
+            self::PlanVersionReady => 'Paketfassung gilt',
+            self::PlanVersionFailed => 'Paketfassung gescheitert',
+            self::PlanMigrationRequested => 'Bestand auf neue Paketfassung umgestellt',
+            self::SubscriptionPlanChanged => 'Abo auf neue Paketfassung gewechselt',
+            self::SubscriptionPlanChangeFailed => 'Umstellung auf neue Paketfassung gescheitert',
+            self::SubscriptionPriceUnknown => 'Stripe meldet einen Preis ohne Paketfassung',
             self::EncryptionKeyIssued => 'Schlüsselsatz angelegt',
             self::EncryptionKeyRevoked => 'Schlüssel widerrufen',
             self::AttachmentOpened => 'Anhang geöffnet',

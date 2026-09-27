@@ -32,6 +32,13 @@ enum SubscriptionStatus: string
 
     case Canceled = 'canceled';
 
+    /**
+     * Stripes eigenes `paused`: eine Testphase bei Stripe ist ohne
+     * Zahlungsmittel abgelaufen (WP-34c). Nicht dasselbe wie eine Pause des
+     * Einzugs -- die laesst den Status auf `active` und steht an `paused_at`.
+     */
+    case Paused = 'paused';
+
     public function label(): string
     {
         return match ($this) {
@@ -40,6 +47,7 @@ enum SubscriptionStatus: string
             self::PastDue => 'Zahlung offen',
             self::Unpaid => 'Gesperrt — Zahlung ausgeblieben',
             self::Canceled => 'Gekündigt',
+            self::Paused => 'Pausiert',
         };
     }
 
@@ -81,6 +89,10 @@ enum SubscriptionStatus: string
             // **Stripes Endstation.** `unpaid` setzt Stripe, wenn alle
             // Einzugsversuche gescheitert sind -- nicht beim ersten.
             'unpaid' => self::Unpaid,
+
+            // Bis WP-34c fiel `paused` in den Rest -- und aus einer ruhenden
+            // Testphase wurde eine Kuendigung.
+            'paused' => self::Paused,
             default => self::Canceled,
         };
     }

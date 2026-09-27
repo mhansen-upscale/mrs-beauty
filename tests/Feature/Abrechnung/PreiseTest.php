@@ -23,8 +23,7 @@ use function Pest\Laravel\actingAs;
 beforeEach(function (): void {
     config()->set('services.stripe.key', 'sk_test_preise');
     config()->set('services.stripe.url', 'https://stripe.test');
-    config()->set('services.stripe.price_id', 'price_abo');
-    config()->set('services.stripe.setup_price_id', 'price_einrichtung');
+    neuesPaket(['stripe_price_base' => 'price_abo', 'stripe_price_setup' => 'price_einrichtung']);
 
     Http::fake([
         'stripe.test/v1/customers' => Http::response(['id' => 'cus_preise']),
@@ -63,7 +62,7 @@ it('nimmt keine Einrichtung in eine Aufstockung', function (): void {
     $organisation = alsMandant(organisation('Demo-Praxis'));
     $inhaberin = User::factory()->fuer($organisation, Role::Owner)->create();
 
-    config()->set('services.stripe.topup_price_id', 'price_block');
+    neuesPaket(['stripe_price_topup' => 'price_block']);
 
     actingAs($inhaberin)->post(route('abo.kasse'), ['was' => 'nachrichten']);
 

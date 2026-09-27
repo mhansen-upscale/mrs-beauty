@@ -7,6 +7,8 @@ namespace App\Models;
 use App\Audit\ImpersonationContext;
 use App\Contracts\HasPersonalData;
 use App\Enums\Ability;
+use App\Enums\OperatorAbility;
+use App\Enums\OperatorRole;
 use App\Enums\Role;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasBinaryUuid;
@@ -26,7 +28,7 @@ use Illuminate\Notifications\Notifiable;
  * Die Anmeldung findet statt, bevor ein Mandant bekannt ist -- der Guard sucht
  * den Benutzer ueber die E-Mail-Adresse, und ein Global Scope wuerde dabei
  * einen Mandantenkontext verlangen, den es zu diesem Zeitpunkt nicht gibt.
- * Ausserdem gehoert der Super-Admin aus WP-34 zu keiner Organisation.
+ * Ausserdem gehoert der Betreiber aus WP-34 zu keiner Organisation.
  *
  * Diese Ausnahme steht in der Zulassungsliste des Architektur-Tests. **WP-04
  * muss jede Auflistung von Benutzern ausdruecklich auf die Organisation
@@ -46,6 +48,7 @@ use Illuminate\Notifications\Notifiable;
  * @property string|null $organization_id
  * @property string $email
  * @property Role|null $role
+ * @property OperatorRole|null $operator_role
  * @property CarbonImmutable|null $deactivated_at
  * @property CarbonImmutable|null $einfuehrung_gesehen_at
  * @property CarbonImmutable|null $email_verified_at
@@ -98,7 +101,7 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
             'deactivated_at' => 'immutable_datetime',
             'einfuehrung_gesehen_at' => 'immutable_datetime',
             'role' => Role::class,
-            'is_super_admin' => 'boolean',
+            'operator_role' => OperatorRole::class,
             'password' => 'hashed',
         ];
     }
@@ -126,7 +129,7 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
      * Was der Support waehrend einer Impersonation darf.
      *
      * Er sieht die Oberflaeche wie eine Inhaberin -- sonst waere eine
-     * Impersonation nutzlos, denn ein Super-Admin hat in der fremden
+     * Impersonation nutzlos, denn ein Betreiber hat in der fremden
      * Organisation keine Rolle. Zwei Faehigkeiten sind ausgenommen:
      *
      * - **Freigabe des Vollzugriffs.** Wer sich selbst freigeben koennte,
@@ -142,9 +145,15 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
         return Role::Owner->allows($ability);
     }
 
+    /**
+     * **Nur mit Support-Zugriff** (WP-34a). Wer die Faehigkeit verliert --
+     * etwa weil ihre Rolle auf Finanzen wechselt --, verliert mit der
+     * naechsten Anfrage auch die Sicht in die Praxis, nicht erst mit dem
+     * Ablauf der Sitzung.
+     */
     private function handeltAlsSupport(): bool
     {
-        if (! $this->isSuperAdmin()) {
+        if (! $this->betreiberDarf(OperatorAbility::SupportZugriff)) {
             return false;
         }
 
@@ -171,7 +180,7 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
      */
     public function auditableValues(): array
     {
-        return ['role', 'deactivated_at', 'is_super_admin'];
+        return ['role', 'deactivated_at', 'operator_role'];
     }
 
     /**
@@ -191,9 +200,64 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
         return ($this->getAttributes()['einfuehrung_gesehen_at'] ?? null) === null;
     }
 
-    public function isSuperAdmin(): bool
+    /*
+    |--------------------------------------------------------------------------
+    | Betreiber (WP-34a, Entscheidung C14)
+    |--------------------------------------------------------------------------
+    |
+    | **Zwei Fragen, zwei Methoden.** "Ist das ein Betreiber?" und "Darf er
+    | das?" sind nicht dasselbe. Bis hier beantwortete isSuperAdmin() beide --
+    | wer das unter einem Namen weiterfuehrt, gibt Finanzen den Support-Zugriff.
+    |
+    */
+
+    /** Gehoert das Konto zum Team des Betreibers? */
+    public function istBetreiber(): bool
     {
-        return (bool) $this->getAttribute('is_super_admin');
+        return $this->betreiberRolle() instanceof OperatorRole;
+    }
+
+    /**
+     * Die Betreiberrolle -- ueber getAttributes(), damit ein frisch
+     * angelegtes Modell ohne die Spalte nicht an Model::shouldBeStrict
+     * scheitert (wie einfuehrungStehtAus()).
+     */
+    public function betreiberRolle(): ?OperatorRole
+    {
+        if (! array_key_exists('operator_role', $this->getAttributes())) {
+            return null;
+        }
+
+        return $this->operator_role;
+    }
+
+    public function betreiberDarf(OperatorAbility $faehigkeit): bool
+    {
+        if ($this->isDeactivated()) {
+            return false;
+        }
+
+        return $this->betreiberRolle()?->allows($faehigkeit) ?? false;
+    }
+
+    /**
+     * Ist das der letzte aktive Super-Admin?
+     *
+     * Ohne diese Sperre sperrt sich der Betreiber aus seinem eigenen
+     * Backoffice aus -- und niemand kommt wieder hinein, ausser ueber die
+     * Konsole.
+     */
+    public function istLetzterSuperAdmin(): bool
+    {
+        if ($this->betreiberRolle() !== OperatorRole::SuperAdmin || $this->isDeactivated()) {
+            return false;
+        }
+
+        return ! self::query()
+            ->where('operator_role', OperatorRole::SuperAdmin->value)
+            ->whereNull('deactivated_at')
+            ->whereKeyNot($this->getKey())
+            ->exists();
     }
 
     /** Nicht `is()` -- den Namen belegt Eloquent fuer den Modellvergleich. */

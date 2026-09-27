@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use App\Audit\ImpersonationContext;
 use App\Enums\Ability;
 use App\Enums\CalendarConnectionStatus;
+use App\Enums\OperatorAbility;
 use App\Models\CalendarConnection;
 use App\Models\ImpersonationSession;
 use App\Models\Organization;
@@ -95,9 +96,18 @@ class HandleInertiaRequests extends Middleware
                 'user' => $benutzer,
                 'role' => $benutzer instanceof User ? $benutzer->role?->value : null,
 
-                // Das Kennzeichen des Betreibers (WP-34). Es haengt nicht an
-                // einer Rolle -- der Betreiber gehoert zu keiner Praxis.
-                'superAdmin' => $benutzer instanceof User && $benutzer->isSuperAdmin(),
+                // Die Rolle des Betreibers und was sie darf (WP-34a). Sie
+                // haengt nicht an einer Praxisrolle -- der Betreiber gehoert
+                // zu keiner Praxis. Wie `abilities` eine Bequemlichkeit fuer
+                // die Oberflaeche; die Tuer ist EnsureBetreiber.
+                'betreiber' => $benutzer instanceof User && $benutzer->istBetreiber() ? [
+                    'rolle' => $benutzer->betreiberRolle()?->value,
+                    'rolleLabel' => $benutzer->betreiberRolle()?->label(),
+                    'faehigkeiten' => array_values(array_map(
+                        fn (OperatorAbility $faehigkeit): string => $faehigkeit->value,
+                        array_filter(OperatorAbility::cases(), fn (OperatorAbility $faehigkeit): bool => $benutzer->betreiberDarf($faehigkeit)),
+                    )),
+                ] : null,
             ],
 
             // Die Oberflaeche blendet danach aus, was jemand nicht darf. Das

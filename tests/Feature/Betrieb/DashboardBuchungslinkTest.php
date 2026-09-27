@@ -49,9 +49,13 @@ it('fuehrt der Link auf die oeffentliche Buchungsseite', function (): void {
 
 it('zeigt ohne Mandanten keinen Link', function (): void {
     // Ein Super-Admin hat keine eigene Praxis -- und damit keinen Link.
-    $benutzer = User::factory()->create(['is_super_admin' => true, 'organization_id' => null]);
+    // Sein Dashboard zeigt seit dem 27.09.2026 die Installation (WP-34).
+    $benutzer = User::factory()->superAdmin()->create();
 
     actingAs($benutzer)
         ->get(route('dashboard'))
-        ->assertInertia(fn ($seite) => $seite->where('booking', null));
+        ->assertInertia(fn ($seite) => $seite
+            ->component('DashboardBetreiber')
+            ->missing('booking')
+        );
 });

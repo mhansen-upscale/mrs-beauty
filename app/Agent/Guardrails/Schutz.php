@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Agent\Guardrails;
 
+use App\Abrechnung\Abozugang;
 use App\Enums\AgentAction;
 use App\Enums\AgentMode;
 use App\Enums\GuardrailHit;
@@ -28,7 +29,10 @@ use Carbon\CarbonImmutable;
  */
 final class Schutz
 {
-    public function __construct(private readonly TenantContext $mandant) {}
+    public function __construct(
+        private readonly TenantContext $mandant,
+        private readonly Abozugang $abozugang,
+    ) {}
 
     /**
      * Darf der Agent in diesem Gespraech ueberhaupt arbeiten?
@@ -37,6 +41,20 @@ final class Schutz
     {
         if ((bool) config('mrs.agent.kill_switch', false)) {
             return GuardrailHit::KillSwitch;
+        }
+
+        // **Eine gesperrte Praxis antwortet nicht** (WP-34a). Sie kommt selbst
+        // nicht hinein und saehe weder die Antwort noch den Termin, den der
+        // Agent in ihrem Namen bucht.
+        if ($this->mandant->current()?->suspended_at !== null) {
+            return GuardrailHit::TenantSuspended;
+        }
+
+        // **Ein gesperrtes Abo antwortet nicht** (WP-34c): unbezahlt,
+        // pausiert, Testphase abgelaufen, gekuendigt. Wer nicht hineinkommt,
+        // saehe weder die Antwort noch den Termin -- und jeder Lauf kostet.
+        if ($this->abozugang->jetzt($jetzt)?->sperrtZugang() === true) {
+            return GuardrailHit::SubscriptionLocked;
         }
 
         if (! $this->mandantErlaubt()) {

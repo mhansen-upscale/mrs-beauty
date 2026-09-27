@@ -136,7 +136,7 @@ it('liefert waehrend einer maskierten Impersonation nichts aus', function (): vo
 
     // Ein Foto laesst sich nicht maskieren wie ein Name.
     actingAs($support)
-        ->withSession(['impersonation_session_id' => $sitzung->uuid])
+        ->withSession(impersonationSitzung($sitzung))
         ->get(route('anhang.zeigen', ['attachment' => $anhang->uuid]))
         ->assertForbidden();
 });

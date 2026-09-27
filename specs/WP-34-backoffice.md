@@ -154,14 +154,47 @@ sie als Pflichtfeld — sonst wäre das Protokoll eine Liste von Zeitstempeln.
 
 ## Offen
 
+> **Nachtrag 27.09.2026: Kennzahlen der Installation.** Das Dashboard des
+> Betreibers war leer. Jetzt zeigt `/dashboard` ihm die Installation
+> (`App\Backoffice\Installationskennzahlen`, Seite `DashboardBetreiber`).
+> Das Backoffice bleibt ausdrücklich die Liste der Praxen, so gewünscht am
+> selben Tag:
+> - **Abos:** zahlend, Monatsumsatz hochgerechnet, Testphase und davon „endet
+>   bald" (`mrs.backoffice.testphase_warnung_tage`), abgelaufen ohne Abo,
+>   unbezahlt, gekündigt.
+> - **Nutzung des Monats:** Termine und Selbstbuchungen, kostenpflichtige
+>   Nachrichten, Assistenzläufe, Modellkosten in US-Dollar.
+> - **Betrieb:** Praxen, Praxen mit Störung (jede einmal), fehlgeschlagene
+>   Aufträge, liegengebliebene Ereignisse, stehende Warteschlangen.
+>
+> Alles in **einem** begründeten Querzugriff, Summen über alle Praxen.
+> `tests/Feature/Backoffice/KennzahlenTest.php` (**6 Tests**). Die volle
+> Finanzübersicht bleibt WP-34d.
+
+> **Nachtrag 27.09.2026.** Das Backoffice wird in vier Paketen ausgebaut:
+> **WP-34a** Betreiberrollen und Anmeldung (C14), **WP-34b** Freigabe per
+> Einmal-PIN (C15), **WP-34c** Abo-Eingriffe und Testphase (B17, B18),
+> **WP-34d** Finanzübersicht (B19). WP-34d schließt auch den Punkt
+> *Historie* unten.
+>
+> **Beim Planen gefunden: AK 8 greift nicht.** „Eine gesperrte Praxis kommt
+> nicht mehr hinein" ist nicht durchgesetzt. `suspended_at` prüft allein
+> `ResolvePublicTenant`. Ein angemeldetes Praxisteam arbeitet nach der Sperre
+> weiter, und kein Test deckt das ab: Die Tests zur Sperre prüfen die Spalte
+> und den Protokolleintrag, nicht die Wirkung. **Behoben in WP-34a**
+> (`EnsurePraxisNichtGesperrt`, dazu der Agent und die Anmeldung),
+> `tests/Feature/Tenancy/SperreTest.php`. Der Stand oben nennt außerdem 10 Tests,
+> `tests/Feature/Backoffice/BackofficeTest.php` hat 12.
+
 > **Nachtrag 26.09.2026.** „In die Praxis sehen" steht im Mandantenblatt —
 > maskiert, mit Pflichtbegründung, befristet (C4). Offen: Historie.
 
-- **Impersonation aus dem Backoffice heraus starten.** Die Mechanik steht in
-  WP-05, der Knopf im Mandantenblatt fehlt noch.
+- ~~**Impersonation aus dem Backoffice heraus starten.**~~ Erledigt, siehe
+  Nachtrag vom 26.09.2026.
 - **Historie.** Sichtbar ist immer der Jetzt-Zustand. Wie sich eine Praxis
   über Monate entwickelt — wachsende Nutzung, häufende Störungen —, zeigt das
-  Backoffice nicht.
+  Backoffice nicht. Für Einnahmen und Kosten übernimmt das WP-34d mit dem
+  Monatsabschluss. Die Störungen über die Zeit bleiben offen.
 - ~~**Mahnwesen.**~~ Entschieden am 20.09.2026: nach der letzten Mahnung
   sperrt das Produkt den Zugang selbst (`EnsureAboGilt`). Das Backoffice
   bleibt dabei erreichbar — der Betreiber sperrt und entsperrt, sein Zugang

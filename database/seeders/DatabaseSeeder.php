@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\ChannelType;
+use App\Enums\OperatorRole;
 use App\Enums\Role;
 use App\Enums\Weekday;
 use App\Kanaele\Konversationen;
@@ -168,20 +169,27 @@ class DatabaseSeeder extends Seeder
                 $this->posteingang();
             });
 
-            // Super-Admin (WP-05, Backoffice folgt in WP-34). Gehoert zu
-            // keiner Organisation.
-            $support = User::query()->firstOrNew(['email' => 'support@mrs-beauty.test']);
-            $support->organization_id = null;
-            $support->role = null;
-            $support->is_super_admin = true;
-            $support->name = 'Support';
-            $support->password = Hash::make('passwort');
-            $support->email_verified_at = now();
-            $support->save();
+            // Das Team des Betreibers (WP-34a), je Rolle ein Konto. Gehoert
+            // zu keiner Organisation.
+            foreach ([
+                'support@mrs-beauty.test' => ['Support', OperatorRole::SuperAdmin],
+                'cs@mrs-beauty.test' => ['Customer Success', OperatorRole::CustomerSuccess],
+                'finanzen@mrs-beauty.test' => ['Finanzen', OperatorRole::Finanzen],
+            ] as $email => [$name, $rolle]) {
+                $konto = User::query()->firstOrNew(['email' => $email]);
+                $konto->organization_id = null;
+                $konto->role = null;
+                $konto->operator_role = $rolle;
+                $konto->name = $name;
+                $konto->password = Hash::make('passwort');
+                $konto->email_verified_at = now();
+                $konto->save();
+            }
         });
 
         $this->command->info('Demo-Praxis angelegt. Anmeldung: inhaberin@demo.test / passwort');
-        $this->command->info('Super-Admin: support@mrs-beauty.test / passwort');
+        $this->command->info('Betreiber unter /backoffice/anmelden, Passwort jeweils "passwort":');
+        $this->command->info('  support@mrs-beauty.test (Super-Admin), cs@mrs-beauty.test (Customer Success), finanzen@mrs-beauty.test (Finanzen)');
     }
 
     /**

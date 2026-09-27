@@ -6,6 +6,7 @@ namespace App\Audit;
 
 use App\Enums\AuditEvent;
 use App\Enums\ImpersonationMode;
+use App\Enums\OperatorAbility;
 use App\Enums\Role;
 use App\Models\ImpersonationSession;
 use App\Models\Organization;
@@ -30,8 +31,10 @@ final class Impersonation
      */
     public function start(User $superAdmin, Organization $organisation, string $begruendung): ImpersonationSession
     {
-        if (! $superAdmin->isSuperAdmin()) {
-            throw new RuntimeException('Impersonation setzt ein Super-Admin-Konto voraus.');
+        // **Die zweite Tuer nach der Route** (WP-34a): nur Super-Admin und
+        // Customer Success. Finanzen kommt nie in eine Praxis.
+        if (! $superAdmin->betreiberDarf(OperatorAbility::SupportZugriff)) {
+            throw new RuntimeException('Impersonation setzt ein Betreiberkonto mit Support-Zugriff voraus (Super-Admin oder Customer Success).');
         }
 
         if (trim($begruendung) === '') {
@@ -125,7 +128,7 @@ final class Impersonation
     public function laufendeVon(User $superAdmin): ?ImpersonationSession
     {
         return $this->mandant->acrossTenants(
-            'Laufende Impersonation eines Super-Admins suchen',
+            'Laufende Impersonation eines Betreibers suchen',
             fn (): ?ImpersonationSession => ImpersonationSession::query()
                 ->where('impersonator_user_id', $superAdmin->getKey())
                 ->whereNull('ended_at')

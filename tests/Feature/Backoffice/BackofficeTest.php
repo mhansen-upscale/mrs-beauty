@@ -8,6 +8,7 @@ use App\Enums\AuditEvent;
 use App\Enums\ChannelType;
 use App\Enums\ConnectionStatus;
 use App\Enums\ImpersonationMode;
+use App\Enums\OperatorRole;
 use App\Enums\Role;
 use App\Kanaele\Konversationen;
 use App\Models\ChannelIdentity;
@@ -50,7 +51,7 @@ function betreiber(): User
         'email' => 'support@mrs-beauty.test',
         'organization_id' => null,
         'role' => null,
-        'is_super_admin' => true,
+        'operator_role' => OperatorRole::SuperAdmin->value,
     ]);
 }
 
@@ -82,7 +83,6 @@ it('zeigt dem Betreiber alle Praxen, obwohl er zu keiner gehoert', function (): 
         ->assertInertia(fn ($seite) => $seite
             ->component('backoffice/Index')
             ->has('mandanten', 2)
-            ->where('installation.mandanten', 2)
         );
 });
 
@@ -151,6 +151,7 @@ it('sperrt eine Praxis mit Begruendung und Protokolleintrag', function (): void 
     actingAs(betreiber())
         ->post(route('backoffice.sperren', ['organisation' => $organisation->uuid]), [
             'grund' => 'Zahlungsausfall nach dritter Mahnung',
+            'current_password' => 'password',
         ])
         ->assertSessionHasNoErrors();
 
@@ -189,6 +190,7 @@ it('entsperrt wieder', function (): void {
     actingAs(betreiber())
         ->post(route('backoffice.entsperren', ['organisation' => $organisation->uuid]), [
             'grund' => 'Zahlung eingegangen',
+            'current_password' => 'password',
         ])
         ->assertSessionHasNoErrors();
 
@@ -207,6 +209,7 @@ it('schreibt Kontingent gut -- beim richtigen Mandanten', function (): void {
             'art' => 'nachrichten',
             'menge' => 100,
             'grund' => 'Störung der Warteliste vom 12. bis 14. Januar',
+            'current_password' => 'password',
         ])
         ->assertSessionHasNoErrors();
 
@@ -226,6 +229,7 @@ it('haelt die Gutschrift im Protokoll fest', function (): void {
         'art' => 'agentenlaeufe',
         'menge' => 200,
         'grund' => 'Ausfall des Assistenten',
+        'current_password' => 'password',
     ]);
 
     $eintrag = DB::table('audit_logs')->where('event', AuditEvent::TenantCredited->value)->first();

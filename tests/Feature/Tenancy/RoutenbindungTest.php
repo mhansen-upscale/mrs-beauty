@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Enums\Role;
 use App\Http\Middleware\ApplyImpersonation;
+use App\Http\Middleware\BetreiberLeerlauf;
+use App\Http\Middleware\EnsurePraxisNichtGesperrt;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\ResolveTenant;
 use App\Models\User;
@@ -79,7 +81,7 @@ it('ordnet die eigene Middleware vollstaendig vor die Bindungsaufloesung', funct
         fn (mixed $eintrag): bool => is_string($eintrag)
     ));
 
-    // Fehlt eine der vier, ist die Kette nicht nur falsch sortiert, sondern
+    // Fehlt eine davon, ist die Kette nicht nur falsch sortiert, sondern
     // gar nicht da -- das soll der Test sagen und nicht an einem Vergleich
     // gegen false scheitern.
     $stelle = function (string $klasse) use ($reihenfolge): int {
@@ -90,8 +92,14 @@ it('ordnet die eigene Middleware vollstaendig vor die Bindungsaufloesung', funct
         return (int) $index;
     };
 
-    expect($stelle(EnsureUserIsActive::class))->toBeLessThan($stelle(ResolveTenant::class))
-        ->and($stelle(ResolveTenant::class))->toBeLessThan($stelle(ApplyImpersonation::class))
+    // Seit WP-34a mit zwei Gliedern mehr: der Leerlauf der Betreiber vor der
+    // Mandantenaufloesung, die Sperre der Praxis dahinter -- vor der
+    // Impersonation, weil sie die eigene Praxis prueft, nicht die
+    // impersonierte.
+    expect($stelle(EnsureUserIsActive::class))->toBeLessThan($stelle(BetreiberLeerlauf::class))
+        ->and($stelle(BetreiberLeerlauf::class))->toBeLessThan($stelle(ResolveTenant::class))
+        ->and($stelle(ResolveTenant::class))->toBeLessThan($stelle(EnsurePraxisNichtGesperrt::class))
+        ->and($stelle(EnsurePraxisNichtGesperrt::class))->toBeLessThan($stelle(ApplyImpersonation::class))
         ->and($stelle(ApplyImpersonation::class))->toBeLessThan($stelle(SubstituteBindings::class));
 });
 

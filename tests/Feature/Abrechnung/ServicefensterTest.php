@@ -101,7 +101,7 @@ function laufendesAbo(): void
 it('zaehlt Antworten im Service-Fenster, aber nicht gegen das Kontingent', function (): void {
     alsMandant(organisation('Demo-Praxis'));
 
-    config()->set('mrs.billing.included.messages', 1);
+    neuesPaket(['included_messages' => 1]);
 
     servicefensternachricht();
     servicefensternachricht();

@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Betrieb;
 
+use App\Enums\AuditEvent;
 use App\Enums\ConnectionStatus;
+use App\Enums\SubscriptionChangeStatus;
 use App\Models\AdAccount;
+use App\Models\AuditLog;
 use App\Models\CalendarConnection;
 use App\Models\ChannelConnection;
 use App\Models\ChannelRawEvent;
 use App\Models\Organization;
+use App\Models\PlanVersion;
+use App\Models\SubscriptionChange;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -120,6 +125,35 @@ final class Betriebslage
                 'Betriebsuebersicht zaehlt die Mandanten',
                 fn (): int => Organization::query()->whereNull('suspended_at')->count(),
             ),
+
+            // **Ein gescheiterter Abo-Eingriff ist eine Stoerung** (WP-34c,
+            // Regel 4): der Betreiber glaubt sonst, eine Praxis sei pausiert
+            // oder gekuendigt, und Stripe bucht weiter ab.
+            'gescheiterteAboEingriffe' => $this->mandant->acrossTenants(
+                'Betriebsuebersicht zaehlt gescheiterte Abo-Eingriffe aller Mandanten',
+                fn (): int => SubscriptionChange::query()
+                    ->where('status', SubscriptionChangeStatus::Failed->value)
+                    ->where('created_at', '>=', $jetzt->subDays((int) config('mrs.backoffice.eingriffe_rueckblick_tage')))
+                    ->count(),
+            ),
+
+            // **Eine Paketfassung, die bei Stripe scheiterte** (WP-06b): die
+            // vorige gilt weiter, aber der Betreiber glaubt, der neue Preis
+            // stehe. Nur solange keine juengere gilt.
+            'gescheitertePaketfassungen' => PlanVersion::query()
+                ->where('stripe_state', PlanVersion::GESCHEITERT)
+                ->where('number', '>', (int) PlanVersion::query()->whereNotNull('activated_at')->max('number'))
+                ->count(),
+
+            // Ein Abo, das nicht umgestellt werden konnte, und ein Preis bei
+            // Stripe, den keine Fassung kennt -- beides wartet auf jemanden.
+            'paketHinweise' => $this->mandant->acrossTenants(
+                'Betriebsuebersicht zaehlt Paket-Hinweise aller Mandanten',
+                fn (): int => AuditLog::query()
+                    ->whereIn('event', [AuditEvent::SubscriptionPlanChangeFailed->value, AuditEvent::SubscriptionPriceUnknown->value])
+                    ->where('occurred_at', '>=', $jetzt->subDays((int) config('mrs.backoffice.eingriffe_rueckblick_tage')))
+                    ->count(),
+            ),
         ];
     }
 
@@ -130,6 +164,9 @@ final class Betriebslage
 
         return $installation['fehlgeschlageneAuftraege'] > 0
             || $installation['offeneEreignisse'] > 0
+            || $installation['gescheiterteAboEingriffe'] > 0
+            || $installation['gescheitertePaketfassungen'] > 0
+            || $installation['paketHinweise'] > 0
             || $installation['stehendeWarteschlangen'] !== [];
     }
 

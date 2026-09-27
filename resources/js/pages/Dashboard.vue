@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Heading from '@/components/Heading.vue';
+import Kennzahl from '@/components/Kennzahl.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -21,11 +22,83 @@ interface Betrieb {
     liegengebliebeneEreignisse: number;
 }
 
+/** Je Kontingentart: Templates, Assistenzläufe, Anzeigenbilder. */
+interface Mengen {
+    nachrichten: number;
+    agentenlaeufe: number;
+    bilder: number;
+}
+
+/**
+ * Was fehlt, darf die Person nicht sehen — es kommt als null, nicht als 0.
+ * Eine Null würde behaupten, es gäbe nichts.
+ */
+interface Kennzahlen {
+    termine: { heute: number; woche: number } | null;
+    buchungen: { tage: number; gebucht: number; selbstGebucht: number; erschienen: number; nichtErschienen: number } | null;
+    posteingang: { ungelesen: number } | null;
+    anfragen: { neu: number } | null;
+    warteliste: { aktiv: number } | null;
+    kontingent: { enthalten: Mengen; rest: Mengen } | null;
+}
+
 const props = defineProps<{
     booking: Booking | null;
     betrieb: Betrieb | null;
     aufgaben: { klaerungen: number } | null;
+    kennzahlen: Kennzahlen | null;
 }>();
+
+const zahl = (wert: number): string => new Intl.NumberFormat('de-DE').format(wert);
+
+/** Ein Anteil in Prozent — oder ein Strich, solange es nichts zu teilen gibt. */
+const anteil = (teil: number, ganz: number): string =>
+    ganz === 0 ? '—' : new Intl.NumberFormat('de-DE', { style: 'percent', maximumFractionDigits: 0 }).format(teil / ganz);
+
+const zeigtKennzahlen = computed(() => {
+    const k = props.kennzahlen;
+
+    return k !== null && (k.termine !== null || k.buchungen !== null || k.posteingang !== null || k.anfragen !== null || k.warteliste !== null);
+});
+
+/**
+ * Was ein leeres Kontingent bedeutet — in Worten. **Eine Antwort im offenen
+ * Service-Fenster ist nie gesperrt** (B12); wer das nicht dazuschreibt, lässt
+ * eine Praxis glauben, sie könne ihren Patientinnen nicht mehr antworten.
+ */
+const leer: Record<keyof Mengen, string> = {
+    nachrichten: 'Aufgebraucht — Templates bis zum Aufstocken gesperrt. Antworten im offenen Fenster gehen weiter.',
+    agentenlaeufe: 'Aufgebraucht — der Assistent pausiert, bis aufgestockt wird.',
+    bilder: 'Aufgebraucht — neue Anzeigenbilder erst nach dem Nachkauf.',
+};
+
+const kontingente = computed(() => {
+    const k = props.kennzahlen?.kontingent;
+
+    if (!k) {
+        return [];
+    }
+
+    return (
+        [
+            { art: 'nachrichten', titel: 'Templates' },
+            { art: 'agentenlaeufe', titel: 'Assistenzläufe' },
+            { art: 'bilder', titel: 'Anzeigenbilder' },
+        ] as const
+    ).map(({ art, titel }) => {
+        const enthalten = k.enthalten[art];
+        const rest = k.rest[art];
+
+        return {
+            art,
+            titel,
+            enthalten,
+            rest,
+            // Der Balken zeigt, was verbraucht ist.
+            verbraucht: enthalten === 0 ? 100 : Math.min(100, Math.round(((enthalten - rest) / enthalten) * 100)),
+        };
+    });
+});
 
 /**
  * Regel 4: ein Ausfall erzeugt einen Hinweis **im Produkt**. Er steht oben,
@@ -101,6 +174,93 @@ const kopieren = async (adresse: string) => {
                     <span class="block text-xs text-muted-foreground">Der Termin ist noch belegt — wer ihn bekommt, entscheiden Sie.</span>
                 </span>
             </Link>
+
+            <!--
+                Die Zahlen des Tages. Jede nur für die, die die Sache dahinter
+                sehen dürfen — die Behandlerin zählt ihre eigenen Termine.
+            -->
+            <section v-if="kennzahlen && zeigtKennzahlen" class="space-y-3">
+                <h2 class="text-sm font-medium">Heute und diese Woche</h2>
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                    <Kennzahl
+                        v-if="kennzahlen.termine"
+                        titel="Termine heute"
+                        :wert="zahl(kennzahlen.termine.heute)"
+                        :zusatz="`${zahl(kennzahlen.termine.woche)} in dieser Woche`"
+                        :href="route('appointments.index')"
+                    />
+                    <Kennzahl
+                        v-if="kennzahlen.posteingang"
+                        titel="Ungelesene Gespräche"
+                        :wert="zahl(kennzahlen.posteingang.ungelesen)"
+                        :zusatz="kennzahlen.posteingang.ungelesen > 0 ? 'warten auf eine Antwort' : 'alles gelesen'"
+                        :href="route('inbox.index')"
+                    />
+                    <Kennzahl
+                        v-if="kennzahlen.anfragen"
+                        titel="Neue Anfragen"
+                        :wert="zahl(kennzahlen.anfragen.neu)"
+                        zusatz="noch nicht bearbeitet"
+                        :href="route('leads.index')"
+                    />
+                    <Kennzahl
+                        v-if="kennzahlen.warteliste"
+                        titel="Auf der Warteliste"
+                        :wert="zahl(kennzahlen.warteliste.aktiv)"
+                        zusatz="warten auf einen freien Termin"
+                        :href="route('waitlist.index')"
+                    />
+                    <Kennzahl
+                        v-if="kennzahlen.buchungen"
+                        titel="Selbst gebucht"
+                        :wert="anteil(kennzahlen.buchungen.selbstGebucht, kennzahlen.buchungen.gebucht)"
+                        :zusatz="`${zahl(kennzahlen.buchungen.selbstGebucht)} von ${zahl(kennzahlen.buchungen.gebucht)} Terminen der letzten ${kennzahlen.buchungen.tage} Tage — online, per Assistent oder Warteliste`"
+                    />
+                    <Kennzahl
+                        v-if="kennzahlen.buchungen"
+                        titel="Nicht erschienen"
+                        :wert="anteil(kennzahlen.buchungen.nichtErschienen, kennzahlen.buchungen.erschienen + kennzahlen.buchungen.nichtErschienen)"
+                        :zusatz="`${zahl(kennzahlen.buchungen.nichtErschienen)} von ${zahl(kennzahlen.buchungen.erschienen + kennzahlen.buchungen.nichtErschienen)} Terminen der letzten ${kennzahlen.buchungen.tage} Tage`"
+                    />
+                </div>
+            </section>
+
+            <!--
+                Mengen, keine Cent (B11). Ist ein Kontingent leer, sagt es das
+                in Worten — nicht nur mit einem roten Balken.
+            -->
+            <section v-if="kontingente.length > 0" class="space-y-3 rounded-md border bg-card p-4">
+                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h2 class="text-sm font-medium">Kontingent in diesem Monat</h2>
+                    <Link :href="route('abo.edit')" class="text-xs text-muted-foreground underline underline-offset-4">Abo und Aufstockung</Link>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-3">
+                    <div v-for="k in kontingente" :key="k.art" class="space-y-1.5">
+                        <div class="flex items-baseline justify-between gap-2 text-sm">
+                            <span>{{ k.titel }}</span>
+                            <span class="tabular-nums text-muted-foreground">{{ zahl(k.rest) }} von {{ zahl(k.enthalten) }} übrig</span>
+                        </div>
+                        <div
+                            :class="['h-1.5 overflow-hidden rounded-full', k.rest === 0 ? 'bg-destructive/15' : 'bg-primary/15']"
+                            role="progressbar"
+                            :aria-label="`${k.titel}: ${k.rest} von ${k.enthalten} übrig`"
+                            :aria-valuenow="k.verbraucht"
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                        >
+                            <div
+                                :class="['h-full rounded-full', k.rest === 0 ? 'bg-destructive' : 'bg-primary']"
+                                :style="{ width: `${k.verbraucht}%` }"
+                            />
+                        </div>
+                        <p v-if="k.rest === 0" class="flex items-center gap-1.5 text-xs text-destructive">
+                            <AlertTriangle class="size-3.5 shrink-0" aria-hidden="true" />
+                            {{ leer[k.art] }}
+                        </p>
+                    </div>
+                </div>
+            </section>
 
             <!--
                 Der öffentliche Buchungslink war bis WP-19 nirgends im Produkt

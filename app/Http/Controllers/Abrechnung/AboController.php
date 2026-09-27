@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Abrechnung;
 
+use App\Abrechnung\Abozugang;
 use App\Abrechnung\Kontingente;
 use App\Abrechnung\Nutzungsuebersicht;
+use App\Abrechnung\Paket;
 use App\Abrechnung\Stripe\Stripeclient;
 use App\Enums\Ability;
 use App\Http\Controllers\Controller;
@@ -35,6 +37,7 @@ final class AboController extends Controller
         private readonly Kontingente $kontingente,
         private readonly Nutzungsuebersicht $nutzung,
         private readonly Stripeclient $stripe,
+        private readonly Paket $paket,
     ) {}
 
     public function edit(TenantContext $mandant): Response
@@ -46,6 +49,11 @@ final class AboController extends Controller
         $rest = $this->kontingente->rest();
         $nutzung = $this->nutzung->fuerMonat();
 
+        // **Die eigene Fassung, nicht die aktuelle** (WP-06b AK 13): eine
+        // Praxis im Bestandsschutz sieht nicht die Preise, die sie nicht
+        // zahlt.
+        $fassung = $this->paket->fuer($abo);
+
         return Inertia::render('settings/Abo', [
             'status' => $abo->status->value,
             'statusLabel' => $abo->status->label(),
@@ -53,6 +61,10 @@ final class AboController extends Controller
             'testphaseEndet' => $abo->trial_ends_at?->toIso8601String(),
             'periodeEndet' => $abo->period_ends_at?->toIso8601String(),
             'gekuendigtAm' => $abo->canceled_at?->toIso8601String(),
+            'paket' => [
+                'name' => $fassung->name,
+                'grundpreisCent' => $fassung->base_cents,
+            ],
 
             'verbrauch' => [
                 'zeitraum' => $nutzung['zeitraum'],
@@ -77,14 +89,14 @@ final class AboController extends Controller
             ],
 
             // Einzeln nachkaufbar, nicht in Bloecken (WP-31).
-            'bildpreisCent' => (int) config('mrs.billing.image_price_cents'),
+            'bildpreisCent' => $fassung->image_price_cents,
 
             // Die Praxis soll vor dem Klick wissen, was ein Block kostet.
             // Abgerechnet wird bei Stripe; die Zahl hier nennt ihn nur.
-            'blockpreisCent' => (int) config('mrs.billing.prices.topup_cents'),
+            'blockpreisCent' => $fassung->topup_cents,
             'blockmengen' => [
-                'nachrichten' => (int) config('mrs.billing.topup.messages'),
-                'agentenlaeufe' => (int) config('mrs.billing.topup.agent_runs'),
+                'nachrichten' => $fassung->topup_messages,
+                'agentenlaeufe' => $fassung->topup_agent_runs,
             ],
 
             // Vorerst null (B14) -- die Oberflaeche sagt dann "ohne Berechnung".
@@ -117,6 +129,22 @@ final class AboController extends Controller
         }
 
         $abo = $this->kontingente->abo();
+        $abschluss = $daten['was'] === 'abo';
+
+        // **Ein Abschluss zur aktuellen Fassung, eine Aufstockung zur eigenen**
+        // (WP-06b): wer im Bestandsschutz ist, kauft zu seinem Preis nach.
+        $fassung = $abschluss ? $this->paket->aktuell() : $this->paket->fuer($abo);
+
+        $preis = match ($daten['was']) {
+            'abo' => $fassung->stripe_price_base,
+            'bilder' => $fassung->stripe_price_image,
+            default => $fassung->stripe_price_topup,
+        };
+
+        if (! is_string($preis) || $preis === '') {
+            return back()->withErrors(['abo' => 'Für dieses Paket fehlt der Preis bei Stripe.']);
+        }
+
         $kunde = $this->stripe->kunde($praxis, $abo->stripe_customer_id, (string) $benutzer->email);
 
         if ($kunde === null) {
@@ -126,14 +154,6 @@ final class AboController extends Controller
         $abo->stripe_customer_id = $kunde;
         $abo->save();
 
-        $abschluss = $daten['was'] === 'abo';
-
-        $preis = (string) config(match ($daten['was']) {
-            'abo' => 'services.stripe.price_id',
-            'bilder' => 'services.stripe.image_price_id',
-            default => 'services.stripe.topup_price_id',
-        });
-
         $adresse = $this->stripe->kasse(
             kunde: $kunde,
             preis: $preis,
@@ -141,7 +161,7 @@ final class AboController extends Controller
             modus: $abschluss ? 'subscription' : 'payment',
             menge: $daten['was'] === 'bilder' ? (int) ($daten['menge'] ?? 1) : 1,
             artikel: $abschluss ? null : (string) $daten['was'],
-            einrichtung: $abschluss ? $this->einrichtung($abo) : null,
+            einrichtung: $abschluss ? $this->einrichtung($abo, $fassung->stripe_price_setup) : null,
         );
 
         if ($adresse === null) {
@@ -158,15 +178,42 @@ final class AboController extends Controller
      * Die Einrichtung wird einmal berechnet -- beim ersten Abschluss, nicht
      * bei jeder Rueckkehr nach einer Kuendigung.
      */
-    private function einrichtung(Subscription $abo): ?string
+    private function einrichtung(Subscription $abo, ?string $preis): ?string
     {
-        $preis = config('services.stripe.setup_price_id');
-
         if (! is_string($preis) || $preis === '' || is_string($abo->stripe_subscription_id)) {
             return null;
         }
 
         return $preis;
+    }
+
+    /**
+     * Die Sperrseite (WP-34c): fuer alle im Team, die das Abo nicht loesen
+     * koennen -- und fuer den Betreiber in der Impersonation.
+     *
+     * **Kein 403.** Die Empfangskraft hat nichts falsch gemacht und kann es
+     * auch nicht beheben; die Seite sagt, wer es kann.
+     */
+    public function gesperrt(TenantContext $mandant, Abozugang $abozugang): Response|RedirectResponse
+    {
+        $praxis = $mandant->current();
+
+        if (! $praxis instanceof Organization) {
+            return redirect()->route('dashboard');
+        }
+
+        $lage = $abozugang->fuer($praxis);
+
+        if (! $lage->sperrtZugang()) {
+            return redirect()->route('dashboard');
+        }
+
+        return Inertia::render('settings/AboGesperrt', [
+            'praxis' => $praxis->name,
+            'zugang' => $lage->value,
+            'label' => $lage->label(),
+            'hinweis' => $lage->hinweis(),
+        ]);
     }
 
     /** Rechnungen, Zahlungsart, Kuendigung -- alles im Portal von Stripe. */

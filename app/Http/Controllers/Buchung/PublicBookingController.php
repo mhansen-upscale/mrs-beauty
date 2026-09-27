@@ -482,6 +482,36 @@ final class PublicBookingController extends Controller
         session()->forget(self::SITZUNG);
     }
 
+    /**
+     * Die Buchungsseite einer Praxis, deren Abo den Zugang sperrt (WP-34c).
+     *
+     * **Kein Buchen, aber kein toter Link.** Die Praxis kommt nicht hinein und
+     * saehe keine Buchung; eine Patientin, die ueber den Link kommt, soll
+     * trotzdem wissen, wie sie die Praxis erreicht. Impressum und Datenschutz
+     * bleiben -- die Seite ist weiterhin eine oeffentliche Website.
+     */
+    public function nichtVerfuegbar(): Response
+    {
+        $praxis = $this->praxis();
+
+        return Inertia::render('buchung/NichtVerfuegbar', [
+            'practice' => ['name' => $praxis->name, 'slug' => $praxis->slug],
+            'brandStyle' => Markenstil::fuer($this->markenfarbe($praxis)),
+            ...$this->rahmen($praxis),
+            'kontakte' => Location::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get()
+                ->filter(fn (Location $ort): bool => $ort->phone !== null || $ort->email !== null)
+                ->map(fn (Location $ort): array => [
+                    'name' => $ort->name,
+                    'phone' => $ort->phone,
+                    'email' => $ort->email,
+                ])
+                ->values(),
+        ]);
+    }
+
     private function praxis(): Organization
     {
         $organisation = app(TenantContext::class)->current();

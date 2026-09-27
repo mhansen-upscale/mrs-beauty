@@ -61,6 +61,19 @@ final class AufbewahrungDurchsetzen extends Command
             });
         }
 
+        // **Das Protokoll ohne Mandanten** (Querzugriffe, Anmeldungen der
+        // Betreiber) gehoert keiner Praxis und lief deshalb bei keiner mit --
+        // es blieb ewig (WP-34a, C7). Nicht, wenn nur eine Praxis gemeint ist.
+        if (! is_string($this->option('organisation'))) {
+            $ohneMandant = $aufbewahrung->protokollOhneMandant($vorschau, $jetzt);
+
+            if ($ohneMandant > 0) {
+                $this->line('Protokoll ohne Mandanten');
+                $this->line(sprintf('  %-36s %5d', RetentionSubject::AuditLog->label(), $ohneMandant));
+                $gesamt += $ohneMandant;
+            }
+        }
+
         $this->info($vorschau
             ? "Vorschau: {$gesamt} Datensaetze waeren betroffen. Mit --scharf ausfuehren."
             : "Fertig: {$gesamt} Datensaetze bearbeitet.");
@@ -76,7 +89,10 @@ final class AufbewahrungDurchsetzen extends Command
         return $mandant->acrossTenants(
             'Aufbewahrungsfristen werden fuer alle Mandanten durchgesetzt',
             function (): iterable {
-                $abfrage = Organization::query()->whereNull('suspended_at');
+                // **Auch fuer gesperrte Praxen** (WP-34a). Regel 3: Fristen
+                // werden automatisch durchgesetzt, nicht auf Zuruf -- eine
+                // Sperre hielte die Daten sonst ueber jede Frist hinaus.
+                $abfrage = Organization::query();
 
                 if (is_string($this->option('organisation'))) {
                     $abfrage->whereUuid((string) $this->option('organisation'));

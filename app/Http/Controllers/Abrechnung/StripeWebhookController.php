@@ -5,15 +5,20 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Abrechnung;
 
 use App\Abrechnung\Kontingente;
+use App\Abrechnung\Paket;
 use App\Abrechnung\Stripe\Stripesignatur;
+use App\Audit\AuditLogger;
+use App\Enums\AuditEvent;
 use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
+use App\Models\PlanVersion;
 use App\Models\Subscription;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Was Stripe uns ueber das Abo sagt.
@@ -28,7 +33,11 @@ use Illuminate\Http\Response;
  */
 final class StripeWebhookController extends Controller
 {
-    public function __construct(private readonly Kontingente $kontingente) {}
+    public function __construct(
+        private readonly Kontingente $kontingente,
+        private readonly Paket $paket,
+        private readonly AuditLogger $protokoll,
+    ) {}
 
     public function __invoke(Request $request, TenantContext $mandant): Response
     {
@@ -44,6 +53,12 @@ final class StripeWebhookController extends Controller
 
         $art = (string) $request->input('type', '');
         $gegenstand = (array) $request->input('data.object', []);
+
+        // **Der Zeitpunkt des Ereignisses, nicht der Zustellung** (WP-34c).
+        // Stripe liefert in keiner festen Reihenfolge; wer `now()` nimmt,
+        // haelt eine Pause fuer juenger als das Fortsetzen, das sie aufhob.
+        $erstellt = $request->input('created');
+        $zeitpunkt = is_numeric($erstellt) ? CarbonImmutable::createFromTimestamp((int) $erstellt, 'UTC') : CarbonImmutable::now();
 
         $kunde = data_get($gegenstand, 'customer');
 
@@ -69,14 +84,37 @@ final class StripeWebhookController extends Controller
             return response('', 200);
         }
 
-        $mandant->runAs($organisation, function () use ($art, $gegenstand): void {
-            match ($art) {
-                'checkout.session.completed' => $this->nachKasse($gegenstand),
-                'customer.subscription.created',
-                'customer.subscription.updated' => $this->zustand($gegenstand),
-                'customer.subscription.deleted' => $this->beendet(),
-                default => null,
-            };
+        // **Jede Zustellung genau einmal** (WP-06 AK 15, WP-34c). Bis hier galt
+        // das nur, weil die meisten Handler zufaellig idempotent waren -- die
+        // Aufstockung war es nicht: zweimal zugestellt, zweimal gutgeschrieben.
+        //
+        // Vermerk und Verarbeitung in **einer** Transaktion: scheitert die
+        // Verarbeitung, ist auch der Vermerk weg, und Stripes Wiederholung
+        // kommt durch.
+        $kennung = $request->input('id');
+
+        DB::transaction(function () use ($kennung, $art, $mandant, $organisation, $gegenstand, $zeitpunkt): void {
+            if (is_string($kennung) && $kennung !== '') {
+                $neu = DB::table('stripe_events')->insertOrIgnore([
+                    'id' => $kennung,
+                    'type' => mb_substr($art, 0, 64),
+                    'received_at' => CarbonImmutable::now(),
+                ]);
+
+                if ($neu === 0) {
+                    return;
+                }
+            }
+
+            $mandant->runAs($organisation, function () use ($art, $gegenstand, $zeitpunkt): void {
+                match ($art) {
+                    'checkout.session.completed' => $this->nachKasse($gegenstand),
+                    'customer.subscription.created',
+                    'customer.subscription.updated' => $this->zustand($gegenstand, $zeitpunkt),
+                    'customer.subscription.deleted' => $this->beendet($zeitpunkt),
+                    default => null,
+                };
+            });
         });
 
         return response('', 200);
@@ -111,8 +149,8 @@ final class StripeWebhookController extends Controller
         $menge = (int) (data_get($gegenstand, 'metadata.menge') ?? 1);
 
         match ($artikel) {
-            'nachrichten' => $this->kontingente->stockeAuf('nachrichten', (int) config('mrs.billing.topup.messages')),
-            'agentenlaeufe' => $this->kontingente->stockeAuf('agentenlaeufe', (int) config('mrs.billing.topup.agent_runs')),
+            'nachrichten' => $this->kontingente->stockeAuf('nachrichten', $this->blockfassung()->topup_messages),
+            'agentenlaeufe' => $this->kontingente->stockeAuf('agentenlaeufe', $this->blockfassung()->topup_agent_runs),
 
             // Einzeln, nicht in Bloecken: bei zwei Euro das Stueck waere ein
             // Block von 250 eine Rechnung ueber 500 Euro.
@@ -127,34 +165,132 @@ final class StripeWebhookController extends Controller
     /** Aufstockungen ohne Artikelangabe -- der Stand vor WP-31. */
     private function altbestand(): void
     {
-        $this->kontingente->stockeAuf('nachrichten', (int) config('mrs.billing.topup.messages'));
-        $this->kontingente->stockeAuf('agentenlaeufe', (int) config('mrs.billing.topup.agent_runs'));
+        $this->kontingente->stockeAuf('nachrichten', $this->blockfassung()->topup_messages);
+        $this->kontingente->stockeAuf('agentenlaeufe', $this->blockfassung()->topup_agent_runs);
     }
 
     /**
+     * Wie gross ein Block ist, sagt die Fassung des Abos -- zu ihrem Preis
+     * wurde er gekauft (WP-06b).
+     */
+    private function blockfassung(): PlanVersion
+    {
+        return $this->paket->fuer($this->kontingente->abo());
+    }
+
+    /**
+     * Welche Fassung Stripe am Abo meldet -- ueber den Grundpreis der
+     * Position (WP-06b).
+     *
+     * **Sofort** beim ersten Abschluss, sonst **zur naechsten Periode**
+     * (`neuePeriode()`): eine Umstellung mitten im Monat aenderte die
+     * Kontingente rueckwirkend. Ein unbekannter Preis ist ein Hinweis fuer den
+     * Betrieb, keine Vermutung -- das Abo bleibt, wo es war.
+     *
      * @param  array<string, mixed>  $gegenstand
      */
-    private function zustand(array $gegenstand): void
+    private function ordneFassungZu(Subscription $abo, array $gegenstand, bool $ersterAbschluss): void
+    {
+        $preis = data_get($gegenstand, 'items.data.0.price.id');
+
+        if (! is_string($preis) || $preis === '') {
+            return;
+        }
+
+        $fassung = PlanVersion::query()->where('stripe_price_base', $preis)->first();
+
+        if (! $fassung instanceof PlanVersion) {
+            $this->protokoll->record(
+                ereignis: AuditEvent::SubscriptionPriceUnknown,
+                gegenstand: $abo,
+                kontext: ['preis' => $preis],
+            );
+
+            return;
+        }
+
+        if (($abo->getAttributes()['plan_version_id'] ?? null) === $fassung->getKey()) {
+            if ($abo->pending_plan_version_id !== null) {
+                $abo->forceFill(['pending_plan_version_id' => null])->save();
+            }
+
+            return;
+        }
+
+        if ($ersterAbschluss) {
+            $this->paket->wechsle($abo, $fassung);
+
+            return;
+        }
+
+        $abo->forceFill(['pending_plan_version_id' => $fassung->getKey()])->save();
+    }
+
+    /**
+     * Der Zustand des Abos, wie Stripe ihn meldet.
+     *
+     * **Aelteres aendert Neueres nicht** (WP-34c). Ein Ereignis von vor der
+     * Pause, das nach ihr ankommt, hebt sie sonst still wieder auf.
+     *
+     * @param  array<string, mixed>  $gegenstand
+     */
+    private function zustand(array $gegenstand, CarbonImmutable $zeitpunkt): void
     {
         $abo = $this->kontingente->abo();
 
+        if ($abo->stripe_event_at instanceof CarbonImmutable && $zeitpunkt->lessThan($abo->stripe_event_at)) {
+            return;
+        }
+
         $vorherigerBeginn = $abo->period_starts_at;
+        $ersterAbschluss = ! is_string($abo->stripe_subscription_id) || $abo->stripe_subscription_id === '';
 
         $abo->status = SubscriptionStatus::ausStripe((string) data_get($gegenstand, 'status', ''));
         $abo->stripe_subscription_id = is_string(data_get($gegenstand, 'id'))
             ? (string) data_get($gegenstand, 'id')
             : $abo->stripe_subscription_id;
 
-        $beginn = $this->zeit($gegenstand, 'current_period_start');
-        $ende = $this->zeit($gegenstand, 'current_period_end');
+        // **Am Abo -- oder an seinen Positionen.** Ab der API-Version
+        // 2025-03-31.basil stehen `current_period_*` nicht mehr am Abo. Der
+        // Client nagelt die Version fest; hier stehen beide, damit ein
+        // Wechsel am Webhook-Endpunkt nicht still jede neue Periode verliert.
+        $beginn = $this->zeit($gegenstand, 'current_period_start') ?? $this->zeit($gegenstand, 'items.data.0.current_period_start');
+        $ende = $this->zeit($gegenstand, 'current_period_end') ?? $this->zeit($gegenstand, 'items.data.0.current_period_end');
 
         $abo->period_starts_at = $beginn ?? $abo->period_starts_at;
         $abo->period_ends_at = $ende ?? $abo->period_ends_at;
         $abo->canceled_at = $abo->status === SubscriptionStatus::Canceled
-            ? ($abo->canceled_at ?? CarbonImmutable::now())
+            ? ($abo->canceled_at ?? $zeitpunkt)
             : null;
 
+        // **Eine Pause laesst den Status auf `active`** (B17) -- die Sperre
+        // haengt deshalb hier, nicht am Status.
+        if (is_array(data_get($gegenstand, 'pause_collection'))) {
+            $abo->paused_at ??= $zeitpunkt;
+            $abo->pause_resumes_at = $this->zeit($gegenstand, 'pause_collection.resumes_at');
+        } else {
+            $abo->paused_at = null;
+            $abo->pause_resumes_at = null;
+        }
+
+        $abo->cancel_at_period_end = (bool) data_get($gegenstand, 'cancel_at_period_end', false);
+        $abo->cancel_at = $this->zeit($gegenstand, 'cancel_at');
+
+        // Ein Gutschein fuer einmal traegt kein Enddatum: er gilt fuer die
+        // naechste Rechnung, also die am Ende der laufenden Periode.
+        $abo->discount_ends_at = is_array(data_get($gegenstand, 'discount'))
+            ? ($this->zeit($gegenstand, 'discount.end') ?? $abo->period_ends_at)
+            : null;
+
+        // Der erste Wechsel auf aktiv -- die Einrichtung zaehlt genau einmal.
+        if ($abo->status === SubscriptionStatus::Active && ! $abo->activated_at instanceof CarbonImmutable) {
+            $abo->activated_at = $zeitpunkt;
+        }
+
+        $abo->stripe_event_at = $zeitpunkt;
         $abo->save();
+
+        $this->ordneFassungZu($abo, $gegenstand, $ersterAbschluss);
 
         // **Eine neue Periode raeumt Aufgestocktes ab.** Wer im Januar
         // aufstockt, hat das im Februar verbraucht -- sonst waechst das
@@ -165,12 +301,18 @@ final class StripeWebhookController extends Controller
         }
     }
 
-    private function beendet(): void
+    private function beendet(CarbonImmutable $zeitpunkt): void
     {
         $abo = $this->kontingente->abo();
 
+        if ($abo->stripe_event_at instanceof CarbonImmutable && $zeitpunkt->lessThan($abo->stripe_event_at)) {
+            return;
+        }
+
         $abo->status = SubscriptionStatus::Canceled;
-        $abo->canceled_at ??= CarbonImmutable::now();
+        $abo->canceled_at ??= $zeitpunkt;
+        $abo->cancel_at_period_end = false;
+        $abo->stripe_event_at = $zeitpunkt;
         $abo->save();
     }
 

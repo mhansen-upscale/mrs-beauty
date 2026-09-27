@@ -21,6 +21,7 @@ Ein Briefing je Arbeitspaket. **Eine Session, ein Paket.**
 | WP-04 | Benutzer, Rollen, Einladungen | steht; Rollenkatalog abgeleitet, zu bestätigen |
 | WP-05 | Audit-Log & Impersonation | steht |
 | WP-06 | Abo & Abrechnung | steht: Stripe Billing, eine Stufe + Nutzung, Kontingent + Aufstockung; **Preise festgelegt** (B15), Antworten im Service-Fenster gezählt und bepreist (B14) |
+| WP-06b | Paketverwaltung | steht: Name, Preise und Kontingente im Backoffice, in Fassungen (append-only per Trigger); Stripe-Preise per Auftrag, **ohne Stripe-Schlüssel gilt eine Fassung sofort (Testbetrieb)**; Bestand je Änderung zum nächsten Zeitraum umstellbar (B20); Kasse, Kontingente und MRR je Abo aus dessen Fassung |
 | WP-07 | Whitelabel | steht: Markenfarbe mit Prüfung, Logo, Impressum und Datenschutz auf der Buchungsseite |
 
 WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeigbares gebraucht wird. WP-03 und WP-04 nicht: Mandantentrennung und Verschlüsselung nachträglich einzuziehen bedeutet vollständige Neuverschlüsselung aller Daten.
@@ -74,6 +75,10 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 |---|---|---|
 | WP-33 | Job- und Betriebsinfrastruktur | steht (Virenprüfung, Betriebslage, `mrs:betrieb`, `docs/betrieb.md`); CI-Kette lokal vollständig grün, Sicherung regelt Laravel Cloud |
 | WP-34 | Super-Admin-Backoffice | kann WP-05 aushebeln; steht: Übersicht, Mandantenblatt, Sperre, Gutschrift, Impersonation aus dem Blatt |
+| WP-34a | Betreiberrollen & Anmeldung | steht: Super-Admin, Customer Success, Finanzen (C14), eigener Eingang `/backoffice/anmelden` mit Drosselung, Leerlauf und Passwort vor jeder Handlung, Betreiberverwaltung und -protokoll; **die Sperre wirkt jetzt** (WP-34 AK 8), auch für den Agenten und in der Aufbewahrung |
+| WP-34b | Freigabe per Einmal-PIN | offen: die Inhaberin gibt den Vollzugriff auch per PIN frei (C15); nach WP-34a |
+| WP-34c | Abo-Eingriffe & Testphase | steht: pausieren, kündigen, Rücknahme, Gratismonat als Auftrag bei Stripe (B17), **ohne Stripe-Schlüssel sofort lokal (Testbetrieb)**; Ende der Testphase durchgesetzt mit Gnadenfrist (B18); Webhook mit Dedupe und Reihenfolge; Agent und Buchungsseite ruhen bei Abo-Sperre |
+| WP-34d | Finanzübersicht | offen: Einnahmen, Kosten und Ergebnis als Hochrechnung, Monatsabschluss als Historie (B19); nach WP-34c und WP-31b |
 
 ## Außerhalb des Repositories
 
@@ -88,10 +93,12 @@ Stand 26.09.2026 — alles, was sich im Repository nicht erledigen lässt:
 |---|---|---|
 | **Meta** | App Review (`ads_management`, `ads_read`, `business_management`, WhatsApp), Business-Verifizierung, `META_LOGIN_CONFIG_ID`, Asset-Typ Datensatz in der Login-Konfiguration (B16) | WP-00, WP-32c, `docs/integrationen/meta.md` |
 | **Microsoft** | App-Registrierung in Entra ID, Herausgeberüberprüfung | `docs/integrationen/kalender.md`, „Einrichtung Microsoft" |
-| **Stripe** | vier Preise anlegen, IDs setzen | `docs/produkt.md`, Preismodell |
+| **Stripe** | `STRIPE_SECRET` setzen, dann im Backoffice unter *Paket* eine Fassung speichern — sie legt Produkt und Preise an (die vier Preis-IDs in der Umgebung liest nur noch die Migration für Fassung 1); einen Gutschein 100 %, einmalig, anlegen (`STRIPE_FREE_MONTH_COUPON_ID`); API-Version des Webhook-Endpunkts festlegen, dieselbe wie im Client | `docs/betrieb.md`; WP-06b, WP-34c |
 | **Datenschutz** | AV, TOM, Verzeichnis, Löschkonzept | WP-01 (extern) |
 | **HWG** | juristische Durchsicht des Regelwerks — bewusst offen: die Ampel ist eine Hilfe und sagt es überall | WP-30 |
 | **Entscheidung** | `Schedule` und `Contact` an die Conversions API — ja oder nein (C8) | WP-32b, „Offen" |
+| **Entscheidung** | Rollenkatalog der Betreiber bestätigen; Agent und Buchungsseite bei Abo-Sperre (B17); Praxen in der Testphase wechseln immer auf die neue Paketfassung (B20) | WP-34a, WP-34c, WP-06b |
+| **Betreiber** | zweiter Faktor für Betreiberkonten — zurückgestellt (C14) | WP-34a, „Nicht in diesem Paket" |
 
 ## Fachlogik
 

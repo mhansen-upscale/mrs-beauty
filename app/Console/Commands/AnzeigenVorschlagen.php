@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Abrechnung\Abozugang;
 use App\Anzeigen\Vorschlagslauf;
 use App\Models\Organization;
 use App\Tenancy\TenantContext;
@@ -26,13 +27,22 @@ final class AnzeigenVorschlagen extends Command
 
     protected $description = 'Erzeugt die Anzeigenentwuerfe der Woche';
 
-    public function handle(TenantContext $mandant): int
+    public function handle(TenantContext $mandant, Abozugang $abozugang): int
     {
         $jetzt = CarbonImmutable::now();
         $gesamt = 0;
         $uebersprungen = [];
 
         foreach ($this->organisationen($mandant) as $organisation) {
+            // **Ein gesperrtes Abo bekommt keine Entwuerfe** (WP-34c): jeder
+            // kostet einen Modellaufruf, und niemand kaeme hinein, um ihn zu
+            // lesen.
+            if ($abozugang->fuer($organisation, $jetzt)->sperrtZugang()) {
+                $uebersprungen['abo_gesperrt'] = ($uebersprungen['abo_gesperrt'] ?? 0) + 1;
+
+                continue;
+            }
+
             $mandant->runAs($organisation, function () use ($jetzt, &$gesamt, &$uebersprungen): void {
                 // Erst im Mandanten aufloesen: Brand Guide, Kontingent und
                 // Pruefung haengen alle daran.

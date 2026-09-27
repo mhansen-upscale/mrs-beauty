@@ -112,6 +112,35 @@ final class Fehlereinordnung
     }
 
     /**
+     * Ordnet eine **Stripe**-Antwort ein (WP-34c).
+     *
+     * Stripe ist schlichter als Meta: der HTTP-Status sagt, was los ist.
+     * Rate Limit und Ausfaelle werden wiederholt; alles andere aus 4xx ist
+     * eine fachliche Ablehnung -- ein Abo, das es nicht gibt, ein Gutschein,
+     * der fehlt -- und wird beim zwanzigsten Versuch nicht angenommen.
+     *
+     * Kein Verbindungszustand: ein abgelehnter Abo-Eingriff stoert keine
+     * Verbindung einer Praxis, er steht am Eingriff.
+     *
+     * @param  array<string, mixed>  $antwort
+     */
+    public static function ausStripeAntwort(int $status, array $antwort): self
+    {
+        $meldung = data_get($antwort, 'error.message');
+        $klartext = is_string($meldung) && $meldung !== '' ? $meldung : null;
+
+        if ($status === 429) {
+            return new self('rate_limit', wiederholen: true, zustand: null, klartext: $klartext);
+        }
+
+        if ($status >= 500 || $status === 0) {
+            return new self('stripe_nicht_erreichbar', wiederholen: true, zustand: null, klartext: $klartext);
+        }
+
+        return new self((string) (data_get($antwort, 'error.code') ?? 'abgelehnt'), wiederholen: false, zustand: null, klartext: $klartext);
+    }
+
+    /**
      * Metas Antwort als ein Satz, den jemand lesen kann.
      *
      * @param  array<string, mixed>  $antwort

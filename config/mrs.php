@@ -86,6 +86,52 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Backoffice des Betreibers (WP-34)
+    |--------------------------------------------------------------------------
+    |
+    | Fundstelle: specs/WP-34-backoffice.md, dazu WP-34c.
+    |
+    */
+
+    'backoffice' => [
+        // **Die Anmeldung der Betreiber** (WP-34a, Entscheidung C14). Ohne
+        // zweiten Faktor ist sie strenger als die der Praxen: ein
+        // Betreiberkonto reicht quer ueber alle Praxen. Drei Versuche, dann
+        // eine Viertelstunde Pause -- je Adresse und Rechner.
+        'login_versuche' => 3,
+        'login_sperrminuten' => 15,
+
+        // Nach so vielen Minuten ohne Anfrage ist ein Betreiber abgemeldet
+        // (C14). Fuer das Team einer Praxis gilt das nicht -- wer eine halbe
+        // Stunde am Empfang steht, meldet sich nicht jedes Mal neu an.
+        'leerlauf_minuten' => 30,
+
+        // Ab wann eine laufende Testphase als "endet bald" gilt. Eine Woche
+        // reicht fuer einen Anruf und einen Abschluss; wer erst am letzten
+        // Tag davon erfaehrt, telefoniert einer Praxis hinterher, die schon
+        // gesperrt ist (WP-34c, `testphase_warnung_tage`).
+        'testphase_warnung_tage' => 7,
+
+        // So lange zaehlt ein gescheiterter Abo-Eingriff in der Betriebslage
+        // (WP-34c). Er bleibt im Mandantenblatt stehen; als Alarm genuegt die
+        // Woche, in der jemand ihn noch beheben will.
+        'eingriffe_rueckblick_tage' => 7,
+
+        // Der Zeitraum fuer "neue Praxen" in der Uebersicht, in Tagen --
+        // derselbe wie fuer die Termine im Mandantenblatt (`termine30`).
+        'neue_praxen_tage' => 30,
+    ],
+
+    'dashboard' => [
+        // Rueckblick fuer Selbstbuchungen und Nichterscheinen auf dem
+        // Dashboard der Praxis, in Tagen. Ein Monat glaettet die einzelne
+        // Woche mit Urlaub, ohne die letzte Aenderung am Buchungsweg zu
+        // verschlucken.
+        'rueckblick_tage' => 30,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Agent (WP-22 bis WP-24)
     |--------------------------------------------------------------------------
     |
@@ -467,13 +513,30 @@ return [
 
     'billing' => [
 
+        // **Das Paket steht seit WP-06b in der Datenbank** (Entscheidung B20),
+        // in Fassungen, gepflegt im Backoffice. `trial_days`, `prices`,
+        // `included`, `topup` und `image_price_cents` sind **nur noch die
+        // Startwerte der ersten Fassung**: die Migration 2026_09_27_140000 liest sie
+        // einmal, zur Laufzeit liest sie niemand (Architekturtest in
+        // tests/Feature/Backoffice/PaketverwaltungTest.php). Wer hier etwas
+        // aendert, aendert nichts -- er speichert unter Backoffice -> Paket.
+
+        // Gerechnet ab dem Anlegen der Praxis und seit WP-34c durchgesetzt
+        // (Entscheidung B18): danach wirkt sie wie eine ausgebliebene Zahlung.
         'trial_days' => 30,
 
+        // Beim Ausrollen von B18 endet keine abgelaufene Testphase vor dieser
+        // Frist -- sonst waere jede Pilotpraxis ueber Nacht gesperrt.
+        'trial_gnadenfrist_tage' => 14,
+
+        // So viele Tage legt ein Eingriff aus dem Backoffice hoechstens drauf.
+        // Laenger ist kein Entgegenkommen mehr, sondern ein Gratisabo -- dafuer
+        // gibt es den Gratismonat mit Stripe-Rechnung (B17).
+        'trial_verlaengerung_max_tage' => 30,
+
         // **Die Preise** (festgelegt am 26.09.2026, docs/produkt.md, Abschnitt
-        // "Preismodell"). Netto, in Cent. Abgerechnet wird bei Stripe unter
-        // den Preis-IDs aus config/services.php -- die Zahlen hier nennen den
-        // Preis nur in der Oberflaeche und **muessen dem Preis bei Stripe
-        // entsprechen**. Wer einen aendert, aendert beide.
+        // "Preismodell"). Netto, in Cent. Startwerte der ersten Fassung; die
+        // Preise bei Stripe legt seit WP-06b jede Fassung selbst an.
         'prices' => [
             // Eine Stufe je Praxis (B10), monatlich kuendbar.
             'base_cents' => 79000,

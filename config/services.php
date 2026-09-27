@@ -212,6 +212,9 @@ return [
         'key' => env('STRIPE_SECRET'),
         'url' => env('STRIPE_API_URL', 'https://api.stripe.com'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        // **Nur fuer Fassung 1** (WP-06b): die Migration uebernimmt diese
+        // IDs einmal ins Paket. Danach legt jede Fassung ihre Preise selbst
+        // an, und zur Laufzeit liest sie niemand mehr.
         'price_id' => env('STRIPE_PRICE_ID'),
         'topup_price_id' => env('STRIPE_TOPUP_PRICE_ID'),
 
@@ -221,6 +224,16 @@ return [
 
         // Je Bild, nicht je Block (WP-31): 2 Euro das Stueck.
         'image_price_id' => env('STRIPE_IMAGE_PRICE_ID'),
+
+        // **Festgenagelt** (WP-34c). Ohne festen Header gilt die Version des
+        // Kontos -- und ab 2025-03-31.basil stehen `current_period_*` an den
+        // Positionen des Abos statt am Abo. Der Webhook-Endpunkt bei Stripe
+        // muss auf dieselbe Version stehen.
+        'api_version' => env('STRIPE_API_VERSION', '2025-02-24.acacia'),
+
+        // Der Gutschein fuer den Gratismonat (B17): 100 %, einmal. Einmal im
+        // Stripe-Konto angelegt, wie die Preise.
+        'free_month_coupon' => env('STRIPE_FREE_MONTH_COUPON_ID'),
     ],
 
 ];

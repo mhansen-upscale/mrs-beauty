@@ -137,6 +137,20 @@ Betrieb — dort ist Horizon zuständig und hat alle vier.
 
 ## Offen
 
+> **Nachtrag 27.09.2026: Kennzahlen auf dem Dashboard.** Unter den Störungen
+> und Aufgaben stehen jetzt die Zahlen des Tages, jede nur für die, die die
+> Sache dahinter sehen dürfen (`App\Betrieb\Praxiskennzahlen`):
+> - Termine heute und in dieser Woche, in Ortszeit. Die Behandlerin zählt
+>   ihre eigenen.
+> - Ungelesene Gespräche, neue Anfragen, Einträge auf der Warteliste.
+> - Selbst gebucht und nicht erschienen über `mrs.dashboard.rueckblick_tage`.
+> - Das Kontingent als Balken, nur mit `billing.manage`. Es liest über
+>   `Kontingente::stand()`, weil `abo()` sonst bei jedem Seitenaufruf ein Abo
+>   anlegen würde.
+>
+> Was jemand nicht sehen darf, fehlt, statt als Null dazustehen.
+> `tests/Feature/Betrieb/DashboardKennzahlenTest.php` (**7 Tests**).
+
 > **Nachtrag 26.09.2026.** **Sicherung und Wiederherstellung regelt Laravel
 > Cloud** (`docs/betrieb.md`). **Die CI wäre beim ersten Lauf gescheitert**:
 > `phpunit.xml` nannte eine Suite `tests/Unit`, die es nicht gab —

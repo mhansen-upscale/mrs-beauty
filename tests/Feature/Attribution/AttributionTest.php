@@ -385,6 +385,10 @@ it('speichert einen manuell angelegten Termin nicht ohne Quelle', function (): v
     $organisation = alsMandant(organisation('Demo-Praxis'));
     $szenario = new Szenario;
 
+    // Vier Monate nach dem Anlegen zahlt die Praxis -- sonst sperrt das Ende
+    // der Testphase (B18, WP-34c).
+    bezahltesAbo();
+
     // Das Szenario baut um seine eigene Zeit -- ohne diesen Sprung liegt der
     // Vorschlag jenseits des Buchungshorizonts.
     travelTo($szenario->jetzt());

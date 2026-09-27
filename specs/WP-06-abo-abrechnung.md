@@ -132,6 +132,15 @@ es.
 still von Monat zu Monat: wer im Januar 250 dazukauft, hätte sie im Februar
 noch.
 
+> **Nachtrag 27.09.2026.** Die Bilder aus WP-31 fehlten dabei.
+> `neuePeriode()` setzte `extra_messages` und `extra_agent_runs` zurück,
+> `extra_images` nicht. Beabsichtigt war das nicht: `extra_images` ist die
+> Summe der Käufe, kein Restguthaben, und `rest()` zieht nur den Verbrauch
+> des laufenden Monats ab. Wer einmal zehn Bilder kaufte, hatte damit
+> dauerhaft 40 im Monat statt 30. Jetzt räumt die Periode alle drei Zähler
+> ab, geprüft in `tests/Feature/Abrechnung/AbrechnungTest.php` („raeumt auch
+> gekaufte Bilder … ab").
+
 **Die Sperre trifft nie eine Antwort.** Entscheidung B12 ist im Code genau
 eine Stelle: die Prüfung sitzt im Zweig *außerhalb des Service-Fensters*, wo
 ein Template nötig ist — der Zweig, der Geld kostet. Der Test schickt bei

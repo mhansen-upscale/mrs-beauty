@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -48,11 +49,16 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        // Vor dem Abmelden gefragt -- danach gibt es keinen Benutzer mehr.
+        $benutzer = $request->user();
+        $betreiber = $benutzer instanceof User && $benutzer->istBetreiber();
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        // Der Betreiber hat seinen eigenen Eingang (WP-34a).
+        return $betreiber ? redirect()->route('backoffice.anmelden') : redirect('/');
     }
 }

@@ -348,7 +348,7 @@ it('erzeugt ohne Kontingent kein Bild', function (): void {
     $organisation = praxisMitMarke();
     $inhaberin = User::factory()->fuer($organisation, Role::Owner)->create();
 
-    config()->set('mrs.billing.included.images', 0);
+    neuesPaket(['included_images' => 0]);
 
     setzeModell(dreiVarianten());
     app(Vorschlagslauf::class)->fuerPraxis();

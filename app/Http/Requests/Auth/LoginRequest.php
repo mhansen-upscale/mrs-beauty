@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Auth;
 
+use App\Http\Middleware\EnsurePraxisNichtGesperrt;
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -44,13 +46,35 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        // **Erst pruefen, dann anmelden.** Wer mit Auth::attempt anmeldet und
+        // danach wieder abmeldet, loest Login und Logout fuer jemanden aus,
+        // der gar nicht hinein darf.
+        $benutzer = Auth::validate($this->only('email', 'password'))
+            ? Auth::getLastAttempted()
+            : null;
+
+        // **Betreiber melden sich an ihrem eigenen Eingang an** (WP-34a, C14)
+        // -- und hier mit derselben Meldung wie bei falschem Passwort. Die
+        // Abweisung kommt erst nach der Pruefung: vorher verriete sie, welche
+        // Adressen Betreiberkonten sind.
+        if (! $benutzer instanceof User || $benutzer->istBetreiber()) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
             ]);
         }
+
+        // **Eine gesperrte Praxis kommt nicht wieder hinein** (WP-34 AK 8).
+        // EnsurePraxisNichtGesperrt wirft laufende Sitzungen hinaus; hier
+        // entsteht gar nicht erst eine.
+        if ($benutzer->organization?->suspended_at !== null) {
+            throw ValidationException::withMessages([
+                'email' => EnsurePraxisNichtGesperrt::MELDUNG,
+            ]);
+        }
+
+        Auth::login($benutzer, $this->boolean('remember'));
 
         RateLimiter::clear($this->throttleKey());
     }

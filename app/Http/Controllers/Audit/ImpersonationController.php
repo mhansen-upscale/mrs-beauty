@@ -6,7 +6,9 @@ namespace App\Http\Controllers\Audit;
 
 use App\Audit\Impersonation;
 use App\Enums\Ability;
+use App\Enums\OperatorAbility;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\ApplyImpersonation;
 use App\Models\ImpersonationSession;
 use App\Models\Organization;
 use App\Models\User;
@@ -29,7 +31,9 @@ final class ImpersonationController extends Controller
     {
         $superAdmin = $request->user();
 
-        abort_unless($superAdmin instanceof User && $superAdmin->isSuperAdmin(), 403);
+        // Die Route verlangt `betreiber:support.zugriff` schon -- hier steht
+        // es fuer PHPStan und fuer den Fall, dass jemand die Route umhaengt.
+        abort_unless($superAdmin instanceof User && $superAdmin->betreiberDarf(OperatorAbility::SupportZugriff), 403);
 
         $validiert = $request->validate([
             'organization' => ['required', 'string', 'uuid'],
@@ -51,7 +55,10 @@ final class ImpersonationController extends Controller
 
         $sitzung = $impersonation->start($superAdmin, $organisation, (string) $validiert['reason']);
 
-        $request->session()->put('impersonation_session_id', $sitzung->uuid);
+        // **Sitzung und Praxis**: ApplyImpersonation sucht die Sitzung damit
+        // im Mandanten, statt bei jeder Anfrage quer zu lesen (WP-34a).
+        $request->session()->put(ApplyImpersonation::SESSION_KEY, $sitzung->uuid);
+        $request->session()->put(ApplyImpersonation::ORGANISATION_KEY, $organisation->uuid);
 
         return redirect()->route('dashboard');
     }
@@ -60,7 +67,7 @@ final class ImpersonationController extends Controller
     {
         $superAdmin = $request->user();
 
-        abort_unless($superAdmin instanceof User && $superAdmin->isSuperAdmin(), 403);
+        abort_unless($superAdmin instanceof User && $superAdmin->istBetreiber(), 403);
 
         $sitzung = $impersonation->laufendeVon($superAdmin);
 
@@ -68,7 +75,7 @@ final class ImpersonationController extends Controller
             $impersonation->end($sitzung, 'manual');
         }
 
-        $request->session()->forget('impersonation_session_id');
+        $request->session()->forget([ApplyImpersonation::SESSION_KEY, ApplyImpersonation::ORGANISATION_KEY]);
 
         return redirect()->route('dashboard');
     }

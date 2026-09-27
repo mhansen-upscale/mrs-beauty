@@ -36,6 +36,11 @@ const texte: Record<string, string> = {
     '/behandlungen': 'Ihr Leistungskatalog mit Preisspanne und Durchschnittsumsatz. Der Umsatz ist die Grundlage jeder Auswertung.',
     '/terminarten': 'Was konkret buchbar ist: Dauer, Rüstzeit und Vorlauf je Termin. Nur was hier freigegeben ist, erscheint auf der Buchungsseite.',
     '/backoffice': 'Die Betreibersicht über alle Praxen. Inhalte sehen Sie hier nicht — dafür gibt es die Impersonation mit Freigabe.',
+    '/backoffice/paket':
+        'Name, Preise und Kontingente des einen Pakets. Speichern legt eine neue Fassung an — wer schon ein Abo hat, behält seine, wenn Sie nichts anderes wählen.',
+    '/backoffice/betreiber':
+        'Die Konten Ihres Teams: Super-Admin, Customer Success und Finanzen. Das Passwort setzt jede Person selbst über einen Link.',
+    '/backoffice/protokoll': 'Was quer zu den Praxen geschah: Zugriffe, Anmeldungen und jede Handlung des Teams an einer Praxis.',
     '/team': 'Wer Zugang hat und mit welcher Rolle. Neue Kolleginnen kommen über eine Einladung herein.',
     '/protokoll': 'Wer was geändert hat. Jeder Zugriff über Praxisgrenzen hinweg trägt eine Begründung und landet hier.',
     '/datenschutz': 'Aufbewahrungsfristen und Auskunftsersuchen. Was nicht mehr gebraucht wird, löscht das System von selbst.',

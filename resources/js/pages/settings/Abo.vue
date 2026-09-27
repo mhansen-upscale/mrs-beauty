@@ -17,6 +17,7 @@ const props = defineProps<{
     testphaseEndet: string | null;
     periodeEndet: string | null;
     gekuendigtAm: string | null;
+    paket: { name: string; grundpreisCent: number };
     verbrauch: {
         zeitraum: string;
         nachrichten: number;
@@ -83,6 +84,12 @@ const zumPortal = () => router.post(route('abo.portal'), {}, { preserveScroll: t
                         </span>
                         <span v-else-if="periodeEndet" class="text-sm text-muted-foreground"> Laufende Periode bis {{ datum(periodeEndet) }} </span>
                     </div>
+
+                    <!-- Die eigene Fassung, nicht die aktuelle (WP-06b). -->
+                    <p class="text-sm">
+                        <span class="font-medium">{{ paket.name }}</span>
+                        <span class="text-muted-foreground"> · {{ euro(paket.grundpreisCent) }} im Monat, zzgl. USt.</span>
+                    </p>
 
                     <p
                         v-if="status === 'past_due'"

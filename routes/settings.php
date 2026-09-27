@@ -76,9 +76,12 @@ Route::middleware('auth')->group(function () {
         Route::put('settings/assistent', [AgentController::class, 'update'])->name('agent.update');
     });
 
-    // Impersonation (WP-05). Die Mandantenauswahl gehoert zu WP-34.
-    Route::post('impersonation', [ImpersonationController::class, 'store'])->name('impersonation.store');
-    Route::delete('impersonation', [ImpersonationController::class, 'destroy'])->name('impersonation.destroy');
+    // Impersonation (WP-05). Die Mandantenauswahl gehoert zu WP-34. Nur mit
+    // Support-Zugriff -- Finanzen kommt nie in eine Praxis (WP-34a).
+    Route::middleware('betreiber:support.zugriff')->group(function () {
+        Route::post('impersonation', [ImpersonationController::class, 'store'])->name('impersonation.store');
+        Route::delete('impersonation', [ImpersonationController::class, 'destroy'])->name('impersonation.destroy');
+    });
     Route::post('impersonation/{session}/freigeben', [ImpersonationController::class, 'approve'])
         ->middleware('can:impersonation.approve')
         ->name('impersonation.approve');

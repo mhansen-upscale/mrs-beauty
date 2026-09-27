@@ -138,7 +138,7 @@ it('beginnt in der Testphase, nicht gesperrt', function (): void {
 it('sperrt kostenpflichtigen Versand bei leerem Kontingent', function (): void {
     alsMandant(organisation('Demo-Praxis'));
 
-    config()->set('mrs.billing.included.messages', 2);
+    neuesPaket(['included_messages' => 2]);
 
     abrechnungsnachricht(MessageCostCategory::Utility);
 
@@ -153,7 +153,7 @@ it('sperrt kostenpflichtigen Versand bei leerem Kontingent', function (): void {
 it('gibt eine Aufstockung den Versand wieder frei', function (): void {
     alsMandant(organisation('Demo-Praxis'));
 
-    config()->set('mrs.billing.included.messages', 1);
+    neuesPaket(['included_messages' => 1]);
 
     abrechnungsnachricht(MessageCostCategory::Utility);
 
@@ -188,18 +188,6 @@ it('laesst bei offener Zahlung weiterarbeiten', function (): void {
 });
 
 /* Webhook ------------------------------------------------------------------ */
-
-/**
- * @param  array<string, mixed>  $daten
- * @return array<string, string>
- */
-function stripekopf(array $daten, string $geheimnis = 'whsec_test'): array
-{
-    $rumpf = (string) json_encode($daten);
-    $zeit = time();
-
-    return ['Stripe-Signature' => 't='.$zeit.',v1='.hash_hmac('sha256', $zeit.'.'.$rumpf, $geheimnis)];
-}
 
 it('verwirft eine Zustellung mit falscher Signatur', function (): void {
     config()->set('services.stripe.webhook_secret', 'whsec_test');
@@ -336,6 +324,46 @@ it('raeumt Aufgestocktes zu Beginn einer neuen Periode ab', function (): void {
     alsMandant($organisation);
 
     expect(Subscription::query()->firstOrFail()->extra_messages)->toBe(0);
+});
+
+it('raeumt auch gekaufte Bilder zu Beginn einer neuen Periode ab', function (): void {
+    // **`extra_images` ist die Summe der Kaeufe, kein Restguthaben.** Der
+    // Verbrauch zaehlt je Kalendermonat, die Kaeufe zaehlen nie zurueck.
+    // Ohne Abraeumen haette eine Praxis, die einmal zehn Bilder kauft, fortan
+    // jeden Monat vierzig statt dreissig -- auf Dauer und ohne zu zahlen.
+    config()->set('services.stripe.webhook_secret', 'whsec_test');
+
+    $organisation = alsMandant(organisation('Demo-Praxis'));
+
+    $abo = app(Kontingente::class)->abo();
+    $abo->stripe_customer_id = 'cus_1';
+    $abo->extra_images = 10;
+    $abo->extra_agent_runs = 300;
+    $abo->period_starts_at = CarbonImmutable::now()->subMonth();
+    $abo->save();
+
+    ohneMandant();
+
+    $daten = [
+        'type' => 'customer.subscription.updated',
+        'data' => ['object' => [
+            'id' => 'sub_1',
+            'customer' => 'cus_1',
+            'status' => 'active',
+            'current_period_start' => CarbonImmutable::now()->getTimestamp(),
+            'current_period_end' => CarbonImmutable::now()->addMonth()->getTimestamp(),
+        ]],
+    ];
+
+    postJson(route('stripe.webhook'), $daten, stripekopf($daten))->assertOk();
+
+    alsMandant($organisation);
+
+    $frisch = Subscription::query()->firstOrFail();
+
+    expect($frisch->extra_images)->toBe(0)
+        ->and($frisch->extra_agent_runs)->toBe(0)
+        ->and(app(Kontingente::class)->enthalten()['bilder'])->toBe((int) config('mrs.billing.included.images'));
 });
 
 /* Anzeige ------------------------------------------------------------------ */

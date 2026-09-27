@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Abrechnung\Stripe;
 
 use App\Models\Organization;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response as ClientResponse;
 use Illuminate\Support\Facades\Http;
 use Throwable;
 
@@ -161,6 +163,147 @@ final class Stripeclient
         return $antwort->successful() && is_string($kennung) ? $kennung : null;
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Eingriffe in ein Abo (WP-34c, B17)
+    |--------------------------------------------------------------------------
+    |
+    | **Nicht im Anfragezyklus** (Regel 4): aufgerufen aus dem Auftrag
+    | AboEingriffAusfuehren, jeder mit dem Idempotenzschluessel seines
+    | Eingriffs. Zurueck kommt die Antwort selbst -- der Auftrag entscheidet,
+    | ob wiederholt wird oder ob es endgueltig gescheitert ist.
+    |
+    | Den Zustand danach meldet der Webhook, nicht diese Antwort.
+    |
+    */
+
+    /** Der Einzug ruht; Stripe verwirft Rechnungen bis zum Fortsetzen. */
+    public function pausiere(string $abo, ?CarbonImmutable $bis, string $idempotenz): ClientResponse
+    {
+        return $this->aendereAbo($abo, $idempotenz, array_filter([
+            'pause_collection[behavior]' => 'void',
+            'pause_collection[resumes_at]' => $bis?->getTimestamp(),
+        ], fn (mixed $wert): bool => $wert !== null));
+    }
+
+    public function setzeFort(string $abo, string $idempotenz): ClientResponse
+    {
+        // Ein leerer Wert hebt das Objekt bei Stripe auf.
+        return $this->aendereAbo($abo, $idempotenz, ['pause_collection' => '']);
+    }
+
+    public function kuendigeZumPeriodenende(string $abo, string $idempotenz): ClientResponse
+    {
+        return $this->aendereAbo($abo, $idempotenz, ['cancel_at_period_end' => 'true']);
+    }
+
+    public function nimmKuendigungZurueck(string $abo, string $idempotenz): ClientResponse
+    {
+        return $this->aendereAbo($abo, $idempotenz, ['cancel_at_period_end' => 'false']);
+    }
+
+    public function kuendigeSofort(string $abo, string $idempotenz): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->delete($this->adresse('subscriptions/'.rawurlencode($abo)));
+    }
+
+    /** Der Gratismonat: ein Gutschein mit 100 %, einmal (B17). */
+    public function gewaehreGutschein(string $abo, string $gutschein, string $idempotenz): ClientResponse
+    {
+        return $this->aendereAbo($abo, $idempotenz, ['discounts[0][coupon]' => $gutschein]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $felder
+     */
+    private function aendereAbo(string $abo, string $idempotenz, array $felder): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('subscriptions/'.rawurlencode($abo)), $felder);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Paketfassungen (WP-06b, B20)
+    |--------------------------------------------------------------------------
+    |
+    | Ein Preis bei Stripe ist unveraenderlich. Eine neue Fassung bekommt
+    | neue Preise unter demselben Produkt; Grund- und Einrichtungspreis der
+    | alten werden archiviert -- das sperrt sie fuer neue Abschluesse,
+    | laufende Abos rechnen weiter.
+    |
+    */
+
+    public function preis(string $preis): ClientResponse
+    {
+        return $this->anfrage()->get($this->adresse('prices/'.rawurlencode($preis)));
+    }
+
+    public function legeProduktAn(string $name, string $idempotenz): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('products'), ['name' => $name]);
+    }
+
+    public function benenneProdukt(string $produkt, string $name, string $idempotenz): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('products/'.rawurlencode($produkt)), ['name' => $name]);
+    }
+
+    /**
+     * Ein Preis in Euro-Cent, netto -- monatlich wiederkehrend oder einmalig.
+     */
+    public function legePreisAn(string $produkt, int $cent, bool $monatlich, string $bezeichnung, string $idempotenz): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('prices'), array_filter([
+                'product' => $produkt,
+                'unit_amount' => $cent,
+                'currency' => 'eur',
+                'nickname' => $bezeichnung,
+                'tax_behavior' => 'exclusive',
+                'recurring[interval]' => $monatlich ? 'month' : null,
+            ], fn (mixed $wert): bool => $wert !== null));
+    }
+
+    public function archivierePreis(string $preis, string $idempotenz): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('prices/'.rawurlencode($preis)), ['active' => 'false']);
+    }
+
+    public function abo(string $abo): ClientResponse
+    {
+        return $this->anfrage()->get($this->adresse('subscriptions/'.rawurlencode($abo)));
+    }
+
+    /**
+     * Stellt die Position eines Abos auf einen neuen Preis um -- **ohne
+     * anteilige Verrechnung**: der laufende Zeitraum ist bezahlt, die naechste
+     * Rechnung kommt zum neuen Preis.
+     */
+    public function stelleAboUm(string $abo, string $position, string $preis, string $idempotenz): ClientResponse
+    {
+        return $this->aendereAbo($abo, $idempotenz, [
+            'items[0][id]' => $position,
+            'items[0][price]' => $preis,
+            'proration_behavior' => 'none',
+        ]);
+    }
+
     private function adresse(string $pfad): string
     {
         return rtrim((string) config('services.stripe.url'), '/').'/v1/'.$pfad;
@@ -169,6 +312,10 @@ final class Stripeclient
     private function anfrage(): PendingRequest
     {
         return Http::withToken((string) config('services.stripe.key'))
+            // **Festgenagelt** (WP-34c): ohne Header gilt die Version des
+            // Kontos, und ein Wechsel dort verschiebt Felder, ohne dass hier
+            // jemand davon erfaehrt.
+            ->withHeaders(['Stripe-Version' => (string) config('services.stripe.api_version')])
             ->acceptJson()
             ->timeout(20)
             // Nur Ausfaelle werden wiederholt. Eine Ablehnung wird beim

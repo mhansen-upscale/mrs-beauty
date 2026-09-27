@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Abrechnung\Abozugang;
+use App\Http\Controllers\Buchung\PublicBookingController;
 use App\Models\Organization;
 use App\Tenancy\TenantContext;
 use Closure;
@@ -42,6 +44,14 @@ final class ResolvePublicTenant
         abort_unless($organisation instanceof Organization, 404);
 
         app(TenantContext::class)->set($organisation);
+
+        // **Ein gesperrtes Abo nimmt keine Buchung an** (WP-34c). Jede Route
+        // dieser Seite zeigt dann den Hinweis mit den Kontaktdaten -- auch ein
+        // POST, der von einer noch offenen Seite kommt. Nur das Logo bleibt:
+        // der Hinweis selbst zeigt es.
+        if (! $request->routeIs('buchung.logo') && app(Abozugang::class)->fuer($organisation)->sperrtZugang()) {
+            return app(PublicBookingController::class)->nichtVerfuegbar()->toResponse($request);
+        }
 
         return $next($request);
     }

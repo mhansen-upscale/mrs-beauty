@@ -34,6 +34,9 @@ final class Betriebspruefung extends Command
                 ['Stehende Warteschlangen', $zahlen['stehendeWarteschlangen'] === []
                     ? '—'
                     : implode(', ', $zahlen['stehendeWarteschlangen'])],
+                ['Gescheiterte Abo-Eingriffe', $zahlen['gescheiterteAboEingriffe']],
+                ['Gescheiterte Paketfassungen', $zahlen['gescheitertePaketfassungen']],
+                ['Paket-Hinweise (Umstellung, unbekannter Preis)', $zahlen['paketHinweise']],
                 ['Mandanten', $zahlen['mandanten']],
             ]);
         }

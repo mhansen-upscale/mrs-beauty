@@ -253,7 +253,7 @@ it('gibt dem Support die Sicht einer Inhaberin', function (): void {
     $sitzung = app(Impersonation::class)->start($superAdmin, $organisation, 'Ticket 4711, Termin fehlt');
 
     actingAs($superAdmin)
-        ->withSession(['impersonation_session_id' => $sitzung->uuid])
+        ->withSession(impersonationSitzung($sitzung))
         ->get(route('team.index'))
         ->assertOk();
 });
@@ -267,7 +267,7 @@ it('laesst den Support seinen eigenen Vollzugriff nicht freigeben', function ():
     // Der Kern von Entscheidung C4: die Freigabe kommt vom Kunden, nie vom
     // Support selbst. Ohne diese Ausnahme waere die ganze Konstruktion hohl.
     actingAs($superAdmin)
-        ->withSession(['impersonation_session_id' => $sitzung->uuid])
+        ->withSession(impersonationSitzung($sitzung))
         ->post(route('impersonation.approve', ['session' => $sitzung->uuid]))
         ->assertForbidden();
 
@@ -292,7 +292,7 @@ it('macht die Impersonation in jeder Antwort erkennbar', function (): void {
     $sitzung = app(Impersonation::class)->start($superAdmin, $organisation, 'Ticket 4711, Termin fehlt');
 
     actingAs($superAdmin)
-        ->withSession(['impersonation_session_id' => $sitzung->uuid])
+        ->withSession(impersonationSitzung($sitzung))
         ->get(route('dashboard'))
         ->assertOk()
         ->assertInertia(fn ($seite) => $seite
