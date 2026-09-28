@@ -59,8 +59,9 @@ it('verbindet kein Benutzerkonto einer fremden Organisation', function (): void 
     $eigene = alsMandant();
     $inhaberin = User::factory()->fuer($eigene, Role::Owner)->create();
 
+    // Dieselbe Rolle wie gemeint -- abgewiesen wird wegen der Organisation.
     $fremde = organisation('Andere Praxis');
-    $fremdesKonto = User::factory()->fuer($fremde, Role::Reception)->create();
+    $fremdesKonto = User::factory()->fuer($fremde, Role::Practitioner)->create();
 
     app(TenantContext::class)->set($eigene);
 
@@ -69,11 +70,35 @@ it('verbindet kein Benutzerkonto einer fremden Organisation', function (): void 
         'last_name' => 'Beispiel',
         'user' => $fremdesKonto->uuid,
         'locations' => [],
-    ])->assertSessionHasNoErrors();
+    ])->assertSessionHasErrors('user');
 
-    // Stillschweigend ignoriert statt verbunden -- und vor allem nicht
-    // verbunden.
-    expect(Practitioner::query()->firstOrFail()->user_id)->toBeNull();
+    // Bis September 2026 stillschweigend ignoriert -- die Praxis glaubte dann
+    // an eine Verbindung, die es nicht gab. Jetzt ein Fehler am Feld, und vor
+    // allem nicht verbunden.
+    expect(Practitioner::query()->count())->toBe(0);
+});
+
+it('meldet ein fremdes und ein unbekanntes Konto gleich', function (): void {
+    $eigene = alsMandant();
+    $inhaberin = User::factory()->fuer($eigene, Role::Owner)->create();
+
+    $fremde = organisation('Andere Praxis');
+    $fremdesKonto = User::factory()->fuer($fremde, Role::Practitioner)->create();
+
+    app(TenantContext::class)->set($eigene);
+
+    $meldung = function (string $uuid) use ($inhaberin): string {
+        actingAs($inhaberin)->post(route('practitioners.store'), [
+            'first_name' => 'Anna',
+            'last_name' => 'Beispiel',
+            'user' => $uuid,
+            'locations' => [],
+        ])->assertSessionHasErrors('user');
+
+        return (string) session('errors')?->first('user');
+    };
+
+    expect($meldung((string) $fremdesKonto->uuid))->toBe($meldung('01a0aad1-4911-738d-88d7-000000000000'));
 });
 
 // --- Zeitzone --------------------------------------------------------------

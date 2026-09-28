@@ -163,12 +163,36 @@ const rueckgaengig = (vorgang: MergeItem) => {
     router.post(route('merges.revert', { merge: vorgang.uuid }), {}, { preserveScroll: true });
 };
 
-const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy', { contact: kontakt.uuid }), { preserveScroll: true });
+/**
+ * Löschen ist hier ein Löschverlangen nach Art. 17 DSGVO: Die Person geht mit
+ * allem, was an ihr hängt, und es gibt keinen Papierkorb. Bis September 2026
+ * schlug das beim ersten Klick zu — deshalb erst der Dialog, der sagt, was
+ * mitgeht.
+ */
+const loeschenOffen = ref(false);
+const zumLoeschen = ref<ContactItem | null>(null);
+const loeschen = useForm({});
+
+const loeschenOeffnen = (kontakt: ContactItem) => {
+    zumLoeschen.value = kontakt;
+    loeschenOffen.value = true;
+};
+
+const loescheEndgueltig = () => {
+    if (!zumLoeschen.value) {
+        return;
+    }
+
+    loeschen.delete(route('contacts.destroy', { contact: zumLoeschen.value.uuid }), {
+        preserveScroll: true,
+        onSuccess: () => (loeschenOffen.value = false),
+    });
+};
 
 const aktionen = (kontakt: ContactItem): Zeilenaktion[] => [
     { symbol: Pencil, beschriftung: 'Bearbeiten', aktion: () => bearbeitenOeffnen(kontakt) },
     { symbol: MessageSquarePlus, beschriftung: `Kanäle (${kontakt.identities.length})`, aktion: () => kanaeleOeffnen(kontakt) },
-    { symbol: Trash2, beschriftung: 'Löschen', aktion: () => loeschen(kontakt), gefahr: true },
+    { symbol: Trash2, beschriftung: 'Löschen', aktion: () => loeschenOeffnen(kontakt), gefahr: true },
 ];
 </script>
 
@@ -393,6 +417,30 @@ const aktionen = (kontakt: ContactItem): Zeilenaktion[] => [
                     <InputError :message="kanal.errors.display_name" />
                 </div>
             </div>
+        </FormularDialog>
+
+        <FormularDialog
+            v-model:offen="loeschenOffen"
+            :titel="`${zumLoeschen?.name ?? ''} löschen`"
+            beschreibung="Endgültig: Die Person wird mit allem gelöscht, was an ihr hängt. Das lässt sich nicht rückgängig machen — es gibt keinen Papierkorb."
+            :laeuft="loeschen.processing"
+            absende-text="Endgültig löschen"
+            :absende-symbol="Trash2"
+            @absenden="loescheEndgueltig"
+        >
+            <div class="space-y-2 text-sm">
+                <p>Mit gelöscht werden:</p>
+                <ul class="list-disc space-y-1 pl-5 text-muted-foreground">
+                    <li>alle Termine, auch künftige — die Zeiten werden wieder frei und fehlen danach auch in der Auswertung</li>
+                    <li>Anfragen und Wartelisteneinträge</li>
+                    <li>Notizen, Schlagworte und Anhänge</li>
+                    <li>Kanäle mit Einwilligungen, Gesprächen und Nachrichten im Posteingang</li>
+                </ul>
+            </div>
+
+            <p class="text-sm text-muted-foreground">
+                Gedacht für ein Löschverlangen nach Art. 17 DSGVO. Unter Datenschutz bleibt nur der Vorgang, in Zahlen — ohne Namen.
+            </p>
         </FormularDialog>
     </AppLayout>
 </template>

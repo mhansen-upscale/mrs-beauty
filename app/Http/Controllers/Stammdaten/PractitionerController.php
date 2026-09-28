@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Stammdaten;
 
 use App\Enums\Ability;
 use App\Enums\AbsenceReason;
+use App\Enums\Role;
 use App\Enums\Weekday;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Stammdaten\AbsenceRequest;
@@ -20,11 +21,14 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
 final class PractitionerController extends Controller
 {
+    private const KEIN_TEAMKONTO = 'Verbinden lässt sich nur ein aktives Konto mit der Rolle Behandlerin aus Ihrem Team.';
+
     public function index(): Response
     {
         Gate::authorize(Ability::ManageMasterData->value);
@@ -52,6 +56,7 @@ final class PractitionerController extends Controller
                     'avatar_url' => $behandler->avatarUrl(),
                     'initials' => $behandler->initialen(),
                     'user' => $behandler->user?->uuid,
+                    'user_name' => $behandler->user?->name,
                     'locations' => $behandler->locations->map(fn (Location $s): string => (string) $s->uuid)->values(),
                     'working_hours' => $behandler->workingHours->map(fn (WorkingHour $zeit): array => [
                         'uuid' => $zeit->uuid,
@@ -83,6 +88,25 @@ final class PractitionerController extends Controller
                 ])
                 ->values(),
 
+            // Was sich an einen Behandler haengen laesst: aktive Konten mit
+            // der Rolle Behandlerin, die noch an keinem haengen. Nur fuer sie
+            // hat die Verbindung eine Wirkung -- wer Termine verwaltet, sieht
+            // ohnehin alle. Das schon verbundene Konto steht am Behandler
+            // selbst ('user'), nicht hier.
+            'accounts' => User::query()
+                ->derOrganisation()
+                ->where('role', Role::Practitioner->value)
+                ->whereNull('deactivated_at')
+                ->whereNotIn('id', Practitioner::query()->whereNotNull('user_id')->select('user_id'))
+                ->orderBy('name')
+                ->get()
+                ->map(fn (User $konto): array => [
+                    'uuid' => $konto->uuid,
+                    'name' => $konto->name,
+                    'email' => $konto->email,
+                ])
+                ->values(),
+
             'weekdays' => collect(Weekday::cases())
                 ->map(fn (Weekday $tag): array => ['value' => $tag->value, 'label' => $tag->label()])
                 ->values(),
@@ -98,12 +122,13 @@ final class PractitionerController extends Controller
         Gate::authorize(Ability::ManageMasterData->value);
 
         $validiert = $this->validiere($request);
+        $konto = $this->konto($validiert['user'] ?? null, null);
 
         $behandler = Practitioner::create([
             'title' => $validiert['title'] ?? null,
             'first_name' => $validiert['first_name'],
             'last_name' => $validiert['last_name'],
-            'user_id' => $this->kontoSchluessel($validiert['user'] ?? null),
+            'user_id' => $konto?->getKey(),
         ]);
 
         $behandler->locations()->sync($this->standortSchluessel($validiert['locations'] ?? []));
@@ -117,12 +142,21 @@ final class PractitionerController extends Controller
 
         $validiert = $this->validiere($request);
 
-        $practitioner->update([
+        $felder = [
             'title' => $validiert['title'] ?? null,
             'first_name' => $validiert['first_name'],
             'last_name' => $validiert['last_name'],
-            'user_id' => $this->kontoSchluessel($validiert['user'] ?? null),
-        ]);
+        ];
+
+        // **Nur, wenn das Formular das Feld schickt.** Bis September 2026
+        // schickte es keins, und jedes Speichern loeste die Verbindung zum
+        // Konto -- die Behandlerin sah danach keinen eigenen Kalender mehr.
+        // Ein ausdrueckliches null loest sie weiterhin.
+        if ($request->exists('user')) {
+            $felder['user_id'] = $this->konto($validiert['user'] ?? null, $practitioner)?->getKey();
+        }
+
+        $practitioner->update($felder);
 
         $practitioner->locations()->sync($this->standortSchluessel($validiert['locations'] ?? []));
 
@@ -265,19 +299,51 @@ final class PractitionerController extends Controller
     }
 
     /**
-     * Der Global Scope sorgt dafuer, dass ein Konto einer fremden
-     * Organisation hier nicht auftaucht -- users ist allerdings kein
-     * TenantModel, deshalb die ausdrueckliche Einschraenkung.
+     * Das Konto, das an diesem Behandler haengen soll -- oder null.
+     *
+     * Verbunden wird eine aktive Behandlerin der eigenen Organisation, die an
+     * keinem anderen Behandler haengt. users ist kein TenantModel, deshalb
+     * die ausdrueckliche Einschraenkung auf die Organisation.
+     *
+     * **Ein Fehler am Feld, kein stilles Ignorieren**: sonst glaubt die Praxis
+     * an eine Verbindung, die es nicht gibt. Fremde, unbekannte und
+     * unpassende Konten bekommen dieselbe Meldung -- sie verraet nicht, ob es
+     * die Kennung in einer anderen Praxis gibt.
+     *
+     * Das Konto, das schon an diesem Behandler haengt, bleibt erlaubt, auch
+     * mit anderer Rolle: Altbestand aus der Zeit vor dieser Pruefung soll
+     * beim naechsten Speichern keinen Fehler werfen.
      */
-    private function kontoSchluessel(?string $uuid): ?string
+    private function konto(?string $uuid, ?Practitioner $behandler): ?User
     {
         if ($uuid === null) {
             return null;
         }
 
-        $benutzer = User::query()->derOrganisation()->whereUuid($uuid)->first();
+        $konto = User::query()->derOrganisation()->whereUuid($uuid)->first();
 
-        return $benutzer instanceof User ? $benutzer->getKey() : null;
+        if (! $konto instanceof User) {
+            throw ValidationException::withMessages(['user' => self::KEIN_TEAMKONTO]);
+        }
+
+        $bisher = $behandler instanceof Practitioner && $behandler->user_id === $konto->getKey();
+
+        if (! $bisher && (! $konto->hasRole(Role::Practitioner) || $konto->isDeactivated())) {
+            throw ValidationException::withMessages(['user' => self::KEIN_TEAMKONTO]);
+        }
+
+        $anderer = Practitioner::query()
+            ->where('user_id', $konto->getKey())
+            ->when($behandler instanceof Practitioner, fn ($abfrage) => $abfrage->whereKeyNot($behandler?->getKey()))
+            ->first();
+
+        if ($anderer instanceof Practitioner) {
+            throw ValidationException::withMessages([
+                'user' => "Dieses Konto ist bereits mit {$anderer->name()} verbunden.",
+            ]);
+        }
+
+        return $konto;
     }
 
     /**

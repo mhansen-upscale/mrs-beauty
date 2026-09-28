@@ -60,6 +60,9 @@ interface PractitionerItem extends Record<string, unknown> {
     is_active: boolean;
     avatar_url: string | null;
     initials: string;
+    /** Das verbundene Konto — dessen Inhaberin sieht unter Termine nur diesen Kalender. */
+    user: string | null;
+    user_name: string | null;
     locations: string[];
     working_hours: WorkingHour[];
     absences: Absence[];
@@ -71,9 +74,17 @@ interface LocationOption {
     timezone: string;
 }
 
+/** Ein Konto mit der Rolle Behandlerin, das noch an keinem Behandler hängt. */
+interface AccountOption {
+    uuid: string;
+    name: string;
+    email: string;
+}
+
 const props = defineProps<{
     practitioners: PractitionerItem[];
     locations: LocationOption[];
+    accounts: AccountOption[];
     weekdays: { value: number; label: string }[];
     absenceReasons: { value: string; label: string }[];
 }>();
@@ -83,6 +94,7 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Behandler', href: '/behandl
 const spalten: Spalte<PractitionerItem>[] = [
     { schluessel: 'name', titel: 'Name' },
     { schluessel: 'locations', titel: 'Standorte', sortierbar: false, ab: 'md' },
+    { schluessel: 'user_name', titel: 'Zugang', ab: 'md' },
     { schluessel: 'working_hours', titel: 'Arbeitszeiten', sortierbar: false, klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'absences', titel: 'Abwesend', sortierbar: false, klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'is_active', titel: 'Status' },
@@ -93,10 +105,17 @@ const spalten: Spalte<PractitionerItem>[] = [
 const formularOffen = ref(false);
 const bearbeitet = ref<PractitionerItem | null>(null);
 
+/**
+ * „Kein Zugang“ in der Auswahl. Ein leerer Wert taugt dafür nicht — die
+ * Auswahl kennt ihn nicht als Eintrag. Beim Absenden wird daraus null.
+ */
+const KEIN_ZUGANG = 'kein';
+
 const formular = useForm({
     title: 'Dr. med.',
     first_name: '',
     last_name: '',
+    user: KEIN_ZUGANG,
     locations: [] as string[],
 });
 
@@ -113,24 +132,45 @@ const bearbeitenOeffnen = (behandler: PractitionerItem) => {
     formular.title = behandler.title ?? '';
     formular.first_name = behandler.first_name;
     formular.last_name = behandler.last_name;
+    formular.user = behandler.user ?? KEIN_ZUGANG;
     formular.locations = [...behandler.locations];
     formularOffen.value = true;
 };
+
+/**
+ * Die freien Konten — und das, was schon an diesem Behandler hängt. Das steht
+ * nicht unter den freien, und ohne eigenen Eintrag zeigte die Auswahl nichts
+ * an, obwohl ein Konto verbunden ist.
+ */
+const kontoAuswahl = computed<AccountOption[]>(() => {
+    const verbunden = bearbeitet.value;
+
+    if (!verbunden?.user || props.accounts.some((konto) => konto.uuid === verbunden.user)) {
+        return props.accounts;
+    }
+
+    return [{ uuid: verbunden.user, name: verbunden.user_name ?? 'Verbundenes Konto', email: '' }, ...props.accounts];
+});
 
 const standortUmschalten = (uuid: string) => {
     formular.locations = formular.locations.includes(uuid) ? formular.locations.filter((eintrag) => eintrag !== uuid) : [...formular.locations, uuid];
 };
 
+/**
+ * Das Konto geht immer mit — ausdrücklich null heißt „lösen“. Fehlte das
+ * Feld, bliebe die Verbindung auf dem Server, wie sie ist.
+ */
 const speichern = () => {
     const fertig = { preserveScroll: true, onSuccess: () => (formularOffen.value = false) };
+    const absenden = formular.transform((daten) => ({ ...daten, user: daten.user === KEIN_ZUGANG ? null : daten.user }));
 
     if (bearbeitet.value) {
-        formular.patch(route('practitioners.update', { practitioner: bearbeitet.value.uuid }), fertig);
+        absenden.patch(route('practitioners.update', { practitioner: bearbeitet.value.uuid }), fertig);
 
         return;
     }
 
-    formular.post(route('practitioners.store'), fertig);
+    absenden.post(route('practitioners.store'), fertig);
 };
 
 /* Arbeitszeiten ----------------------------------------------------------- */
@@ -333,6 +373,11 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                     </span>
                 </template>
 
+                <template #zelle-user_name="{ zeile }">
+                    <span v-if="zeile.user_name" class="break-words">{{ zeile.user_name }}</span>
+                    <span v-else class="text-muted-foreground">—</span>
+                </template>
+
                 <template #zelle-working_hours="{ zeile }">
                     {{ zeile.working_hours.length }}
                 </template>
@@ -396,6 +441,23 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                     </label>
                 </div>
                 <InputError :message="formular.errors.locations" />
+            </div>
+
+            <div class="grid gap-2">
+                <Label for="zugang">Zugang</Label>
+                <Select v-model="formular.user">
+                    <SelectTrigger id="zugang" aria-describedby="zugang-hinweis"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem :value="KEIN_ZUGANG">Kein Zugang</SelectItem>
+                        <SelectItem v-for="konto in kontoAuswahl" :key="konto.uuid" :value="konto.uuid">
+                            {{ konto.email ? `${konto.name} · ${konto.email}` : konto.name }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+                <p id="zugang-hinweis" class="text-xs text-muted-foreground">
+                    Ein Konto mit der Rolle Behandlerin sieht unter Termine nur diesen Kalender. Ohne Zugang sieht es dort nichts.
+                </p>
+                <InputError :message="formular.errors.user" />
             </div>
         </FormularDialog>
 

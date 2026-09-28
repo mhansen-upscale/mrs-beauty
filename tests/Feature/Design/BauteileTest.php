@@ -1037,3 +1037,79 @@ it('findet die Rueckmeldung selbst, wenn nichts ausgenommen ist', function (): v
     // beiden bekannten Stellen.
     expect(eigeneRueckmeldungen([]))->toContain('components/Rueckmeldung.vue', 'pages/auth/ZweiFaktor.vue');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Eine gefaehrliche Zeilenaktion fragt vorher nach
+|--------------------------------------------------------------------------
+|
+| `gefahr: true` faerbt eine Zeilenaktion rot -- und verspricht damit, dass
+| sie nicht beim ersten Klick zuschlaegt. Unter Kontakte loeschte "Loeschen"
+| bis September 2026 eine Person sofort und endgueltig, samt Terminen,
+| Anfragen, Notizen und Nachrichten, ohne eine einzige Rueckfrage.
+|
+| Die Aktion oeffnet deshalb einen Dialog, erkennbar am Namen der Funktion:
+| `loeschenOeffnen`, `oeffneLoeschen`. Geloescht wird erst im Dialog.
+|
+*/
+
+/**
+ * Beschriftungen gefaehrlicher Zeilenaktionen, die keinen Dialog oeffnen.
+ *
+ * @return list<string>
+ */
+function gefahrOhneRueckfrage(string $inhalt): array
+{
+    $verstoesse = [];
+
+    // Ein Aktionsobjekt ohne verschachtelte Klammern, ueber Zeilen hinweg.
+    preg_match_all('/\{[^{}]*\bgefahr:\s*true[^{}]*\}/s', $inhalt, $treffer);
+
+    foreach ($treffer[0] as $aktion) {
+        preg_match('/beschriftung:\s*[\'"`]([^\'"`]+)/', $aktion, $beschriftung);
+        preg_match('/\baktion:\s*\(\)\s*=>\s*([A-Za-z_]\w*)\s*\(/', $aktion, $aufruf);
+
+        if (preg_match('/oeffne/i', $aufruf[1] ?? '') !== 1) {
+            $verstoesse[] = $beschriftung[1] ?? trim($aktion);
+        }
+    }
+
+    return $verstoesse;
+}
+
+it('fragt vor jeder gefaehrlichen Zeilenaktion nach', function (): void {
+    $verstoesse = [];
+
+    foreach (vueDateien() as $pfad) {
+        foreach (gefahrOhneRueckfrage((string) file_get_contents($pfad)) as $beschriftung) {
+            $verstoesse[] = sprintf('%s: %s', str_replace(resource_path('js').'/', '', $pfad), $beschriftung);
+        }
+    }
+
+    expect($verstoesse)->toBeEmpty(
+        "Diese Zeilenaktionen sind als Gefahr markiert und handeln ohne Dialog:\n".implode("\n", $verstoesse)
+    );
+});
+
+it('findet ueberhaupt gefaehrliche Zeilenaktionen', function (): void {
+    // Ohne diese Zusicherung koennte die Pruefung oben leer durchlaufen.
+    $anzahl = 0;
+
+    foreach (vueDateien() as $pfad) {
+        $anzahl += preg_match_all('/\bgefahr:\s*true/', (string) file_get_contents($pfad));
+    }
+
+    expect($anzahl)->toBeGreaterThanOrEqual(4);
+});
+
+it('erkennt die Gefahr ohne Rueckfrage, wenn es sie gibt', function (): void {
+    // Die Gegenprobe: direkt geloescht ist ein Verstoss, ein Dialog nicht --
+    // auch dann nicht, wenn das Objekt ueber mehrere Zeilen geht.
+    $direkt = "{ symbol: Trash2, beschriftung: 'Löschen', aktion: () => loeschen(kontakt), gefahr: true }";
+    $dialog = "{ symbol: Trash2, beschriftung: 'Löschen', aktion: () => loeschenOeffnen(kontakt), gefahr: true }";
+    $mehrzeilig = "{\n    symbol: Trash2,\n    beschriftung: 'Kampagne löschen',\n    aktion: () => oeffneLoeschen(zeile),\n    gefahr: true,\n}";
+
+    expect(gefahrOhneRueckfrage($direkt))->toBe(['Löschen'])
+        ->and(gefahrOhneRueckfrage($dialog))->toBe([])
+        ->and(gefahrOhneRueckfrage($mehrzeilig))->toBe([]);
+});

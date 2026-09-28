@@ -89,6 +89,8 @@ class DatabaseSeeder extends Seeder
                     ],
                 );
 
+                $konto = User::query()->where('email', 'behandlerin@demo.test')->first();
+
                 foreach ([['Dr. med.', 'Martina', 'Sauer'], ['', 'Jonas', 'Rieck']] as [$titel, $vorname, $nachname]) {
                     $behandler = Practitioner::query()->firstOrCreate(
                         ['first_name' => $vorname, 'last_name' => $nachname],
@@ -96,6 +98,17 @@ class DatabaseSeeder extends Seeder
                     );
 
                     $behandler->locations()->syncWithoutDetaching([$standort->getKey()]);
+
+                    // Das Demo-Konto der Behandlerin gehoert zu Dr. Sauer --
+                    // ohne Verbindung saehe es unter Termine nichts. Nur, wenn
+                    // weder sie noch das Konto schon verbunden ist.
+                    if ($vorname === 'Martina'
+                        && $behandler->user_id === null
+                        && $konto instanceof User
+                        && ! Practitioner::query()->where('user_id', $konto->getKey())->exists()) {
+                        $behandler->user_id = $konto->getKey();
+                        $behandler->save();
+                    }
 
                     if ($behandler->workingHours()->exists()) {
                         continue;
