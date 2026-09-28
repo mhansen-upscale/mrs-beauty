@@ -8,6 +8,7 @@ use App\Enums\ChannelType;
 use App\Enums\ConnectionStatus;
 use App\Models\ChannelConnection;
 use App\Models\Organization;
+use Illuminate\Mail\Transport\ArrayTransport;
 
 /**
  * Eine Praxis mit E-Mail-Kanal.
@@ -21,6 +22,9 @@ final class MailAufbau
     public readonly Organization $organisation;
 
     public readonly ChannelConnection $verbindung;
+
+    /** Was ueber das Postfach der Praxis hinausging. */
+    public readonly ArrayTransport $attrappe;
 
     public const EINGANG = 'demo-praxis@inbound.mrs-beauty.test';
 
@@ -36,7 +40,16 @@ final class MailAufbau
         $verbindung->external_id = self::EINGANG;
         $verbindung->sender_id = self::ABSENDER;
         $verbindung->display_name = 'Demo-Praxis';
+
+        // Seit WP-36 geht eine Antwort nur ueber das Postfach der Praxis
+        // (B22) -- ohne eigenen Server gaebe es keine. Die Attrappe faengt,
+        // was er verschickt haette.
+        $verbindung->smtp_host = 'smtp.demo-praxis.de';
+        $verbindung->smtp_port = 587;
+        $verbindung->smtp_encryption = 'tls';
         $verbindung->save();
+
+        $this->attrappe = postfachAttrappe();
 
         $this->verbindung = $verbindung;
     }

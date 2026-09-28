@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace App\Betrieb;
 
+use App\Benachrichtigung\Versand\KeinPraxispostfach;
 use App\Enums\AuditEvent;
 use App\Enums\ConnectionStatus;
 use App\Enums\SubscriptionChangeStatus;
+use App\Kanaele\Email\Postfach;
 use App\Models\AdAccount;
+use App\Models\AppointmentNotification;
 use App\Models\AuditLog;
 use App\Models\CalendarConnection;
 use App\Models\ChannelConnection;
 use App\Models\ChannelRawEvent;
 use App\Models\Organization;
 use App\Models\PlanVersion;
+use App\Models\PlatformMailSetting;
 use App\Models\SubscriptionChange;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
@@ -37,6 +41,7 @@ final class Betriebslage
     public function __construct(
         private readonly TenantContext $mandant,
         private readonly Warteschlangen $warteschlangen,
+        private readonly Postfach $postfach,
     ) {}
 
     /**
@@ -89,9 +94,10 @@ final class Betriebslage
             // Ein Rohereignis ohne Verarbeitung laesst sich 14 Tage lang
             // erneut einspielen -- danach ist die Nachricht weg (WP-19).
             'liegengebliebeneEreignisse' => ChannelRawEvent::query()
-                ->offen()
-                ->where('created_at', '<', $jetzt->subHour())
+                ->liegengeblieben($jetzt)
                 ->count(),
+
+            'mailversand' => $this->mailversand($jetzt),
         ];
     }
 
@@ -154,6 +160,25 @@ final class Betriebslage
                     ->where('occurred_at', '>=', $jetzt->subDays((int) config('mrs.backoffice.eingriffe_rueckblick_tage')))
                     ->count(),
             ),
+
+            // Der Versand der Plattform (WP-37, B23): scheitert der
+            // hinterlegte Server, gehen die Mails ueber .env -- das faellt
+            // sonst niemandem auf.
+            'plattformversand' => $this->plattformversand(),
+        ];
+    }
+
+    /**
+     * @return array{hinterlegt: bool, gilt: bool, stoerung: string|null}
+     */
+    private function plattformversand(): array
+    {
+        $einstellung = PlatformMailSetting::aktuell();
+
+        return [
+            'hinterlegt' => $einstellung->hatServer(),
+            'gilt' => $einstellung->serverGilt(),
+            'stoerung' => $einstellung->hatServer() ? $einstellung->last_error : null,
         ];
     }
 
@@ -167,7 +192,30 @@ final class Betriebslage
             || $installation['gescheiterteAboEingriffe'] > 0
             || $installation['gescheitertePaketfassungen'] > 0
             || $installation['paketHinweise'] > 0
+            || $installation['plattformversand']['stoerung'] !== null
             || $installation['stehendeWarteschlangen'] !== [];
+    }
+
+    /**
+     * Gehen Mails an Patientinnen hinaus? (B22, WP-36 AK 25)
+     *
+     * **Ohne eigenes Postfach nicht** -- und das faellt sonst erst auf, wenn
+     * eine Patientin fragt, warum keine Bestaetigung kam. Dazu die
+     * Terminmails, die in den letzten Tagen gescheitert sind.
+     *
+     * @return array{bereit: bool, fehlgeschlagen: int}
+     */
+    public function mailversand(?CarbonImmutable $jetzt = null): array
+    {
+        $jetzt ??= CarbonImmutable::now();
+
+        return [
+            'bereit' => $this->postfach->versandbereit(),
+            'fehlgeschlagen' => AppointmentNotification::query()
+                ->whereIn('failure', ['mail', KeinPraxispostfach::GRUND])
+                ->where('failed_at', '>=', $jetzt->subDays((int) config('mrs.mail.fehlschlag_rueckblick_tage')))
+                ->count(),
+        ];
     }
 
     private function fehlgeschlagene(): int

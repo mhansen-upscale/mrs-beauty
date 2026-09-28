@@ -38,6 +38,10 @@ const texte: Record<string, string> = {
     '/backoffice': 'Die Betreibersicht über alle Praxen. Inhalte sehen Sie hier nicht — dafür gibt es die Impersonation mit Freigabe.',
     '/backoffice/paket':
         'Name, Preise und Kontingente des einen Pakets. Speichern legt eine neue Fassung an — wer schon ein Abo hat, behält seine, wenn Sie nichts anderes wählen.',
+    '/backoffice/versand':
+        'Server, Absender und Aussehen der Mails an Konten — Anmeldecodes, Einladungen, Passwort-Links. Ein neuer Server gilt erst nach der Probemail.',
+    '/backoffice/mails':
+        'Die Texte der Produktmails, für alle Praxen zugleich. Links, Codes und Fristen setzt das Produkt; die Vorlage schreibt davor und danach.',
     '/backoffice/betreiber':
         'Die Konten Ihres Teams: Super-Admin, Customer Success und Finanzen. Das Passwort setzt jede Person selbst über einen Link.',
     '/backoffice/protokoll': 'Was quer zu den Praxen geschah: Zugriffe, Anmeldungen und jede Handlung des Teams an einer Praxis.',

@@ -81,12 +81,15 @@ final class Rohereignisse
      * auf -- bis dahin laesst sich eine misslungene Verarbeitung wiederholen,
      * ohne den Anbieter um eine erneute Zustellung zu bitten.
      *
+     * **Nur liegengebliebene**, nicht jedes offene: an einem frischen sitzt
+     * vielleicht gerade ein Worker (mrs:rohereignisse-einspielen).
+     *
      * @return Collection<int, ChannelRawEvent>
      */
-    public function offene(?ChannelType $kanal = null, int $hoechstens = 100)
+    public function offene(?ChannelType $kanal = null, int $hoechstens = 100, ?CarbonImmutable $jetzt = null)
     {
         return ChannelRawEvent::query()
-            ->offen()
+            ->liegengeblieben($jetzt ?? CarbonImmutable::now())
             ->when($kanal instanceof ChannelType, fn ($abfrage) => $abfrage->where('channel', $kanal?->value))
             ->orderBy('created_at')
             ->limit($hoechstens)

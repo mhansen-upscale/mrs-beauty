@@ -2,8 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Benachrichtigung\Versand\Plattformversand;
+use App\Enums\ChannelType;
+use App\Enums\ConnectionStatus;
 use App\Enums\SubscriptionStatus;
 use App\Http\Middleware\ApplyImpersonation;
+use App\Kanaele\Email\Postfach;
+use App\Models\ChannelConnection;
 use App\Models\ImpersonationSession;
 use App\Models\Organization;
 use App\Models\PlanVersion;
@@ -11,7 +16,12 @@ use App\Models\Subscription;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Transport\ArrayTransport;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\TransportInterface;
+use Symfony\Component\Mime\Email;
 use Tests\TestCase;
 
 /*
@@ -149,4 +159,83 @@ function stripekopf(array $daten, string $geheimnis = 'whsec_test'): array
     $zeit = time();
 
     return ['Stripe-Signature' => 't='.$zeit.',v1='.hash_hmac('sha256', $zeit.'.'.$rumpf, $geheimnis)];
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mailversand (WP-36, WP-37)
+|--------------------------------------------------------------------------
+|
+| **Mail::fake() faengt Mail::build() nicht.** Postfach und Plattformversand
+| bauen ihren Mailer je Versand; ohne Attrappe verbaende ein Test wirklich mit
+| dem Mailserver aus der Zeile. Die Attrappe tauscht den Transport, nicht den
+| Mailer -- Rahmen, Absender und Anhang laufen durch wie im Betrieb.
+|
+*/
+
+/** Die Mails, die ueber das Postfach einer Praxis hinausgehen. */
+function postfachAttrappe(): ArrayTransport
+{
+    $attrappe = new ArrayTransport;
+
+    Mail::extend(Postfach::TRANSPORT, fn (): TransportInterface => $attrappe);
+
+    return $attrappe;
+}
+
+/** Die Mails, die ueber den hinterlegten Server der Plattform hinausgehen. */
+function plattformAttrappe(): ArrayTransport
+{
+    $attrappe = new ArrayTransport;
+
+    Mail::extend(Plattformversand::TRANSPORT, fn (): TransportInterface => $attrappe);
+
+    return $attrappe;
+}
+
+/**
+ * Ein sendebereites Postfach fuer den geltenden Mandanten -- **immer mit
+ * Attrappe** (B22).
+ *
+ * Seit WP-36 geht keine Mail an eine Patientin ohne eigenes Postfach hinaus.
+ * Wer Terminmails, Posteingang oder Warteliste testet, braucht deshalb eines.
+ */
+function praxispostfach(string $absender = 'praxis@demo-praxis.de', ?ArrayTransport $attrappe = null): ChannelConnection
+{
+    if ($attrappe === null) {
+        postfachAttrappe();
+    } else {
+        Mail::extend(Postfach::TRANSPORT, fn (): TransportInterface => $attrappe);
+    }
+
+    $verbindung = ChannelConnection::query()->where('channel', ChannelType::Email->value)->first() ?? new ChannelConnection;
+    $verbindung->channel = ChannelType::Email;
+    $verbindung->status = ConnectionStatus::Active;
+    if (! $verbindung->exists) {
+        $verbindung->external_id = 'praxis-'.bin2hex(random_bytes(3)).'@inbound.mrs-beauty.test';
+        $verbindung->display_name = 'Demo-Praxis';
+    }
+
+    $verbindung->sender_id = $absender;
+    $verbindung->smtp_host = 'smtp.demo-praxis.de';
+    $verbindung->smtp_port = 587;
+    $verbindung->smtp_encryption = 'tls';
+    $verbindung->smtp_username = 'praxis@demo-praxis.de';
+    $verbindung->smtp_password = 'app-passwort';
+    $verbindung->save();
+
+    return $verbindung;
+}
+
+/**
+ * Die Mails einer Attrappe als Symfony-Nachrichten.
+ *
+ * @return list<Email>
+ */
+function versandteMails(ArrayTransport $attrappe): array
+{
+    return array_values(array_filter(
+        array_map(fn (SentMessage $gesendet): mixed => $gesendet->getOriginalMessage(), $attrappe->messages()->all()),
+        fn (mixed $nachricht): bool => $nachricht instanceof Email,
+    ));
 }

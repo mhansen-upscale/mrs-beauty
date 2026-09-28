@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\ChannelType;
+use App\Enums\ConnectionStatus;
 use App\Enums\OperatorRole;
 use App\Enums\Role;
 use App\Enums\Weekday;
@@ -12,6 +13,7 @@ use App\Kanaele\Konversationen;
 use App\Kontakte\Kontaktsuche;
 use App\Models\Appointment;
 use App\Models\AppointmentType;
+use App\Models\ChannelConnection;
 use App\Models\ChannelIdentity;
 use App\Models\Contact;
 use App\Models\Conversation;
@@ -164,7 +166,8 @@ class DatabaseSeeder extends Seeder
             });
 
             // Kontakte und Termine (WP-11)
-            app(TenantContext::class)->runAs($praxis, function (): void {
+            app(TenantContext::class)->runAs($praxis, function () use ($praxis): void {
+                $this->postfach($praxis);
                 $this->termine();
                 $this->posteingang();
             });
@@ -190,6 +193,27 @@ class DatabaseSeeder extends Seeder
         $this->command->info('Demo-Praxis angelegt. Anmeldung: inhaberin@demo.test / passwort');
         $this->command->info('Betreiber unter /backoffice/anmelden, Passwort jeweils "passwort":');
         $this->command->info('  support@mrs-beauty.test (Super-Admin), cs@mrs-beauty.test (Customer Success), finanzen@mrs-beauty.test (Finanzen)');
+    }
+
+    /**
+     * Das Postfach der Demo-Praxis -- gegen Mailhog (WP-36, B22).
+     *
+     * **Ohne eigenes Postfach geht keine Mail an Patientinnen hinaus.** Lokal
+     * gibt es deshalb eines: der Mailhog-Server aus Laradock, ohne
+     * Verschluesselung und ohne Zugangsdaten. Terminmails und Antworten aus
+     * dem Posteingang landen dort.
+     */
+    private function postfach(Organization $praxis): void
+    {
+        $verbindung = ChannelConnection::query()->firstOrNew(['channel' => ChannelType::Email->value]);
+        $verbindung->status = ConnectionStatus::Active;
+        $verbindung->external_id = $praxis->slug.'@'.config('mrs.channels.email.inbound_domain');
+        $verbindung->sender_id = 'empfang@demo-praxis.test';
+        $verbindung->display_name = $praxis->name;
+        $verbindung->smtp_host = (string) config('mail.mailers.smtp.host', 'mailhog');
+        $verbindung->smtp_port = (int) config('mail.mailers.smtp.port', 1025);
+        $verbindung->smtp_encryption = null;
+        $verbindung->save();
     }
 
     /**

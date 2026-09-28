@@ -2,6 +2,7 @@
     Laravels Mail-Layout mit einem Titel von aussen (App\Benachrichtigung\Mailmarke).
     Das Original setzt config('app.name') in den <title> -- manche Programme
     zeigen ihn an, und eine Patientin soll dort ihre Praxis lesen, nicht uns.
+    Gemeinsam fuer Mails der Praxis und der Plattform (WP-36, WP-37).
 --}}
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="{{ str_replace('_', '-', app()->getLocale()) }}">

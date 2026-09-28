@@ -95,6 +95,16 @@ final class Farbe
     }
 
     /**
+     * Als `#RRGGBB` -- fuer Mails, in denen es keine CSS-Variablen gibt.
+     */
+    public function alsHex(): string
+    {
+        $kanal = fn (float $wert): int => (int) round(max(0.0, min(1.0, $wert)) * 255);
+
+        return sprintf('#%02X%02X%02X', $kanal($this->r), $kanal($this->g), $kanal($this->b));
+    }
+
+    /**
      * Die Form, in der die Tokens stehen: "178 50% 24%".
      *
      * Ohne Klammern und ohne Kommas, damit sich die Variable in Tailwind mit

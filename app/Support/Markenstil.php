@@ -71,6 +71,24 @@ final class Markenstil
     }
 
     /**
+     * Dieselbe Farbe als `#RRGGBB` -- fuer den Rahmen der Mails (WP-36).
+     *
+     * **Dieselbe Abdunklung wie auf der Buchungsseite**: Weiss auf der
+     * Schaltflaeche muss auch im Postfach lesbar sein. Null, wenn keine oder
+     * keine brauchbare Farbe hinterlegt ist -- dann gilt die Produktfarbe.
+     */
+    public static function hexFuer(?string $hex): ?string
+    {
+        $variablen = self::fuer($hex);
+
+        if (! isset($variablen['--primary'])) {
+            return null;
+        }
+
+        return Farbe::ausHslToken($variablen['--primary'])->alsHex();
+    }
+
+    /**
      * Dunkelt die Farbe ab, bis Weiss darauf lesbar ist -- und zwar auf dem
      * **gerundeten** Token.
      *

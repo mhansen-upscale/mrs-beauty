@@ -4,8 +4,8 @@ import Kennzahl from '@/components/Kennzahl.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/vue3';
+import { type BreadcrumbItem, type SharedData } from '@/types';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { AlertTriangle, Check, ClipboardCheck, Copy, ExternalLink } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
@@ -20,6 +20,8 @@ interface Betrieb {
     gestoerteKalender: number;
     gestoerteWerbekonten: number;
     liegengebliebeneEreignisse: number;
+    /** WP-36, B22: ohne eigenes Postfach geht keine Mail an Patientinnen hinaus. */
+    mailversand: { bereit: boolean; fehlgeschlagen: number };
 }
 
 /** Je Kontingentart: Templates, Assistenzläufe, Anzeigenbilder. */
@@ -109,8 +111,13 @@ const stoerungen = computed(
         (props.betrieb?.gestoerteKanaele.length ?? 0) +
         (props.betrieb?.gestoerteKalender ?? 0) +
         (props.betrieb?.gestoerteWerbekonten ?? 0) +
-        (props.betrieb?.liegengebliebeneEreignisse ?? 0),
+        (props.betrieb?.liegengebliebeneEreignisse ?? 0) +
+        (props.betrieb && !props.betrieb.mailversand.bereit ? 1 : 0) +
+        (props.betrieb?.mailversand.fehlgeschlagen ?? 0),
 );
+
+const page = usePage<SharedData>();
+const darfPostfachEinrichten = computed(() => page.props.abilities?.includes('organization.manage') ?? false);
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' }];
 
@@ -153,6 +160,16 @@ const kopieren = async (adresse: string) => {
 
                 <p v-if="betrieb.liegengebliebeneEreignisse > 0">
                     {{ betrieb.liegengebliebeneEreignisse }} eingegangene Nachricht(en) konnten nicht verarbeitet werden. Wir sehen uns das an.
+                </p>
+
+                <p v-if="!betrieb.mailversand.bereit">
+                    Ohne eigenes Postfach gehen keine Mails an Patientinnen hinaus — keine Terminbestätigung, keine Erinnerung.
+                    <Link v-if="darfPostfachEinrichten" :href="route('postfach.edit')" class="underline underline-offset-4">Postfach einrichten</Link>
+                </p>
+
+                <p v-if="betrieb.mailversand.fehlgeschlagen > 0">
+                    {{ betrieb.mailversand.fehlgeschlagen }} Terminmail(s) sind in den letzten Tagen nicht hinausgegangen — die Terminansicht zeigt,
+                    welche.
                 </p>
             </div>
 

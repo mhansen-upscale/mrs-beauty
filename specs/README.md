@@ -80,6 +80,8 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 | WP-34c | Abo-Eingriffe & Testphase | steht: pausieren, kündigen, Rücknahme, Gratismonat als Auftrag bei Stripe (B17), **ohne Stripe-Schlüssel sofort lokal (Testbetrieb)**; Ende der Testphase durchgesetzt mit Gnadenfrist (B18); Webhook mit Dedupe und Reihenfolge; Agent und Buchungsseite ruhen bei Abo-Sperre |
 | WP-34d | Finanzübersicht | offen: Einnahmen, Kosten und Ergebnis als Hochrechnung, Monatsabschluss als Historie (B19); nach WP-34c und WP-31b |
 | WP-35 | Zweiter Faktor | steht: freiwillig für Praxen und Betreiber, per Authenticator-App oder E-Mail-Code, Hinweis statt Pflicht (C16); Zurücksetzen über Team, Betreiberverwaltung oder Konsole; nach WP-34a |
+| WP-36 | Mails der Praxis | steht: Texte und Aussehen der fünf Terminmails unter *Einstellungen → E-Mails* mit Vorschau, Probemail und Zurücksetzen (P12, C17, D15); Versand **nur** über das Postfach der Praxis (B22, A15), ohne Postfach `no_mailer` mit Hinweis im Produkt; nach WP-07, WP-13, WP-20b |
+| WP-37 | Plattformmails & Versand des Betreibers | steht: Mailserver im Backoffice, gilt erst nach der Probemail, `.env` als Rückfall und bei Störung (B23); Texte und Aussehen der Produktmails unter *Backoffice → E-Mails*; nur Super-Admin; nach WP-36 und WP-34a |
 
 ## Außerhalb des Repositories
 
@@ -99,6 +101,7 @@ Stand 26.09.2026 — alles, was sich im Repository nicht erledigen lässt:
 | **HWG** | juristische Durchsicht des Regelwerks — bewusst offen: die Ampel ist eine Hilfe und sagt es überall | WP-30 |
 | **Entscheidung** | `Schedule` und `Contact` an die Conversions API — ja oder nein (C8) | WP-32b, „Offen" |
 | **Entscheidung** | Rollenkatalog der Betreiber bestätigen; Agent und Buchungsseite bei Abo-Sperre (B17); Praxen in der Testphase wechseln immer auf die neue Paketfassung (B20) | WP-34a, WP-34c, WP-06b |
+| **Mailversand** | **Vor dem Ausrollen von WP-36 jede Praxis ohne eigenes Postfach informieren** — ab dann gehen ihre Terminmails, Posteingang-Antworten und Wartelisten-Angebote nicht mehr über die Plattform (B22); die Zahl steht im Betreiber-Dashboard. Im Backoffice unter *Versand* den Plattformserver hinterlegen und mit der Probemail prüfen (B23) | WP-36, WP-37, `docs/betrieb.md` |
 
 ## Fachlogik
 

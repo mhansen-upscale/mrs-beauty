@@ -37,6 +37,12 @@ final class Betriebspruefung extends Command
                 ['Gescheiterte Abo-Eingriffe', $zahlen['gescheiterteAboEingriffe']],
                 ['Gescheiterte Paketfassungen', $zahlen['gescheitertePaketfassungen']],
                 ['Paket-Hinweise (Umstellung, unbekannter Preis)', $zahlen['paketHinweise']],
+                ['Plattformversand', match (true) {
+                    $zahlen['plattformversand']['stoerung'] !== null => 'gestoert ('.$zahlen['plattformversand']['stoerung'].'), Rueckfall auf .env',
+                    $zahlen['plattformversand']['gilt'] => 'hinterlegter Server',
+                    $zahlen['plattformversand']['hinterlegt'] => 'hinterlegt, ungeprueft -- es gilt .env',
+                    default => '.env',
+                }],
                 ['Mandanten', $zahlen['mandanten']],
             ]);
         }

@@ -140,3 +140,36 @@ export interface User {
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;
+
+/**
+ * Die Teile einer Mail, die eine Vorlage ändern darf (`App\Enums\Mailfeld`,
+ * P12). Alles andere ist fester Kern und steht in keinem Feld (C17).
+ */
+export type Mailfeld = 'subject' | 'greeting' | 'intro' | 'outro' | 'salutation';
+
+export type Mailfelder = Record<Mailfeld, string>;
+
+/** Ein Platzhalter, wie ihn die Mailart für ein Feld erlaubt. */
+export interface Mailplatzhalter {
+    name: string;
+    label: string;
+}
+
+/** Eine gerenderte Mail — HTML nur für ein iframe mit `sandbox=""`. */
+export interface Mailvorschau {
+    betreff: string;
+    html: string;
+    text: string;
+}
+
+/**
+ * Ob Terminmails hinausgehen können (B22). Ohne sendebereites Postfach geht
+ * keine Mail an eine Patientin — auch nicht über die Plattform.
+ */
+export interface Postfachstand {
+    eingerichtet: boolean;
+    eigenerServer: boolean;
+    bereit: boolean;
+    absender: string | null;
+    darfEinrichten: boolean;
+}

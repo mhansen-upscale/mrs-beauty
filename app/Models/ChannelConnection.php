@@ -29,6 +29,7 @@ use Illuminate\Database\Eloquent\Builder;
  * @property ConnectionStatus $status
  * @property string $external_id
  * @property string|null $display_name
+ * @property string|null $sender_id
  * @property string|null $smtp_host
  * @property int|null $smtp_port
  * @property string|null $smtp_encryption
@@ -83,15 +84,28 @@ class ChannelConnection extends TenantModel implements HasPersonalData
     }
 
     /**
-     * Schickt diese Praxis ueber ihr eigenes Postfach?
+     * Hat diese Praxis einen eigenen Mailserver hinterlegt?
      *
-     * Wenn nicht, geht die Post ueber den Versand der Plattform -- mit der
-     * Adresse der Praxis im Absender, aber aus fremder Infrastruktur. Das
-     * funktioniert nur, solange SPF und DKIM der Domain das zulassen.
+     * Wenn nicht, geht **keine** Mail an eine Patientin hinaus (B22) -- bis
+     * zum 28.09.2026 ging sie dann ueber den Versand der Plattform.
      */
     public function hatEigenesPostfach(): bool
     {
         return is_string($this->smtp_host) && $this->smtp_host !== '' && $this->smtp_port !== null;
+    }
+
+    /**
+     * Kann ueber diese Verbindung eine Mail an eine Patientin hinausgehen?
+     *
+     * Eigener Server, eine Absenderadresse, und die Verbindung ist nicht als
+     * gestoert gemeldet (die Probemail setzt `expired`, wenn sie scheitert).
+     */
+    public function kannVersenden(): bool
+    {
+        return $this->channel === ChannelType::Email
+            && $this->hatEigenesPostfach()
+            && is_string($this->sender_id) && $this->sender_id !== ''
+            && in_array($this->status, [ConnectionStatus::Active, ConnectionStatus::Degraded], true);
     }
 
     /**

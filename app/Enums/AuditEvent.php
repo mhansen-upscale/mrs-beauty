@@ -92,6 +92,16 @@ enum AuditEvent: string
     case SubscriptionPlanChangeFailed = 'subscription.plan_change_failed';
     case SubscriptionPriceUnknown = 'subscription.price_unknown';
 
+    /* Der Versand der Plattform und die Produktmails (WP-37, B23). Global --
+       ohne Organisation. Im Kontext nur Feldnamen und Mailart, **nie ein
+       Wert**: weder Zugangsdaten noch Text (C5, C17). Die Vorlagen einer
+       Praxis protokolliert MailTemplate selbst (Auditable). */
+    case PlatformMailSettingsChanged = 'mail.platform_settings_changed';
+    case PlatformMailLogoChanged = 'mail.platform_logo_changed';
+    case PlatformMailTestRequested = 'mail.platform_test_requested';
+    case PlatformMailTemplateChanged = 'mail.platform_template_changed';
+    case PlatformMailTemplateReset = 'mail.platform_template_reset';
+
     case EncryptionKeyIssued = 'encryption_key.issued';
     case EncryptionKeyRevoked = 'encryption_key.revoked';
 
@@ -144,6 +154,11 @@ enum AuditEvent: string
             self::SubscriptionPlanChanged => 'Abo auf neue Paketfassung gewechselt',
             self::SubscriptionPlanChangeFailed => 'Umstellung auf neue Paketfassung gescheitert',
             self::SubscriptionPriceUnknown => 'Stripe meldet einen Preis ohne Paketfassung',
+            self::PlatformMailSettingsChanged => 'Plattformversand geändert',
+            self::PlatformMailLogoChanged => 'Logo der Produktmails geändert',
+            self::PlatformMailTestRequested => 'Probemail des Plattformversands angefordert',
+            self::PlatformMailTemplateChanged => 'Vorlage einer Produktmail geändert',
+            self::PlatformMailTemplateReset => 'Vorlage einer Produktmail zurückgesetzt',
             self::EncryptionKeyIssued => 'Schlüsselsatz angelegt',
             self::EncryptionKeyRevoked => 'Schlüssel widerrufen',
             self::AttachmentOpened => 'Anhang geöffnet',

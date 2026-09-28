@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Benachrichtigung\Versand\KeinPraxispostfach;
+use App\Benachrichtigung\Versand\Smtpzugang;
 use App\Enums\ChannelType;
 use App\Enums\ConnectionStatus;
 use App\Enums\Role;
@@ -243,13 +245,37 @@ it('schickt ueber den Server der Praxis, wenn einer hinterlegt ist', function ()
     expect((string) $mailer->getSymfonyTransport())->toContain('smtp.demo-praxis.de');
 });
 
-it('faellt ohne eigenen Server auf den Versand der Plattform zurueck', function (): void {
-    // Kein Notbehelf: er haelt eine Praxis arbeitsfaehig, die gerade erst
-    // anfaengt -- mit ihrer Adresse im Absender.
+it('faellt ohne eigenen Server nicht auf den Versand der Plattform zurueck (WP-36 AK 24)', function (): void {
+    // Bis zum 28.09.2026 ging die Post dann ueber unsere Infrastruktur --
+    // mit der Adresse der Praxis im Absender. Jetzt nicht mehr (B22).
     $benutzer = postfachinhaberin();
     actingAs($benutzer)->put(route('postfach.update'), postfachdaten(['smtp_host' => '', 'smtp_password' => '']));
 
-    $mailer = app(Postfach::class)->mailer(ChannelConnection::query()->firstOrFail());
+    expect(fn () => app(Postfach::class)->mailer(ChannelConnection::query()->firstOrFail()))
+        ->toThrow(KeinPraxispostfach::class);
+});
 
-    expect((string) $mailer->getSymfonyTransport())->not->toContain('smtp.demo-praxis.de');
+it('erzwingt STARTTLS, wenn TLS gewaehlt ist, statt es nur anzubieten', function (): void {
+    // Laravel liest `encryption` nicht; ohne require_tls ginge die Mail an
+    // einen Server ohne STARTTLS im Klartext hinaus.
+    $benutzer = postfachinhaberin();
+    actingAs($benutzer)->put(route('postfach.update'), postfachdaten());
+
+    $konfiguration = Smtpzugang::ausVerbindung(ChannelConnection::query()->firstOrFail())->konfiguration(Postfach::TRANSPORT);
+
+    expect($konfiguration['scheme'])->toBe('smtp')
+        ->and($konfiguration['require_tls'])->toBeTrue()
+        ->and(Smtpzugang::ausVerbindung(tap(ChannelConnection::query()->firstOrFail(), fn (ChannelConnection $verbindung) => $verbindung->smtp_port = 465))->konfiguration(Postfach::TRANSPORT)['scheme'])
+        ->toBe('smtps');
+});
+
+it('prueft kein Postfach ohne eigenen Server', function (): void {
+    Queue::fake();
+
+    $benutzer = postfachinhaberin();
+    actingAs($benutzer)->put(route('postfach.update'), postfachdaten(['smtp_host' => '', 'smtp_password' => '']));
+
+    actingAs($benutzer)->post(route('postfach.pruefen'))->assertSessionHasErrors('smtp_host');
+
+    Queue::assertNotPushed(PostfachPruefen::class);
 });

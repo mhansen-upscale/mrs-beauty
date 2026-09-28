@@ -34,7 +34,7 @@ enum OperatorRole: string
     public function description(): string
     {
         return match ($this) {
-            self::SuperAdmin => 'Alles, einschließlich Sperren, Abo-Eingriffen, Paket und Betreiberkonten.',
+            self::SuperAdmin => 'Alles, einschließlich Sperren, Abo-Eingriffen, Paket, Mailversand und Betreiberkonten.',
             self::CustomerSuccess => 'Praxen und Abos sehen, Kontingent gutschreiben, Testphase verlängern, mit Freigabe in eine Praxis sehen.',
             self::Finanzen => 'Praxen, Abos, Umsatz und Kosten sehen. Nie in eine Praxis.',
         };

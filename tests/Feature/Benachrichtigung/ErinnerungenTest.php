@@ -40,6 +40,9 @@ beforeEach(function (): void {
     // 12.01.2027 laengst aus der Testphase -- die seit WP-34c sperrt (B18).
     travelTo(CarbonImmutable::parse('2027-01-12 08:00:00', 'UTC'));
     alsMandant();
+
+    // Seit WP-36 geht eine Terminmail nur ueber das Postfach der Praxis (B22).
+    praxispostfach();
 });
 
 /** @return array{Szenario, Appointment} */
@@ -322,7 +325,7 @@ it('traegt in Kopf und Fuss die Praxis, nicht das Produkt', function (): void {
     $termin->loadMissing(['appointmentType', 'practitioner', 'location', 'contact']);
 
     $marke = new Mailmarke(
-        praxisname: 'Praxis Sonnenschein',
+        name: 'Praxis Sonnenschein',
         impressum: 'https://praxis-sonnenschein.test/impressum',
         datenschutz: 'https://praxis-sonnenschein.test/datenschutz',
     );
@@ -408,21 +411,28 @@ it('bucht auch ueber die oeffentliche Seite mit Kanal public', function (): void
     expect($termin->booked_via)->toBe(BookingChannel::Internal);
 });
 
-it('verschickt im Namen der Praxis, nicht in unserem', function (): void {
+it('verschickt ueber das Postfach der Praxis, mit ihrer Adresse (WP-36 AK 21)', function (): void {
     [$szenario, $termin] = terminMitNachrichten();
 
     $szenario->aufbau->standort->email = 'praxis@example.test';
     $szenario->aufbau->standort->save();
 
-    $termin->loadMissing(['appointmentType', 'practitioner', 'location', 'contact']);
+    $termin->refresh()->loadMissing(['appointmentType', 'practitioner', 'location', 'contact']);
 
-    $nachricht = (new Terminnachricht($termin, NotificationKind::Reminder, 'Praxis Musterstrasse'))
-        ->toMail($termin->contact);
+    $attrappe = postfachAttrappe();
+    praxispostfach('empfang@praxis-musterstrasse.de', $attrappe);
 
-    // Die Adresse bleibt unsere, der Anzeigename ist der der Praxis. Und wer
-    // antwortet, erreicht die Praxis.
-    expect($nachricht->from[1] ?? null)->toBe('Praxis Musterstrasse')
-        ->and($nachricht->replyTo[0][0] ?? null)->toBe('praxis@example.test');
+    Notification::route('mail', 'patientin@example.test')
+        ->notifyNow(new Terminnachricht($termin, NotificationKind::Reminder, 'Praxis Musterstrasse'));
+
+    [$mail] = versandteMails($attrappe);
+
+    // Bis zum 28.09.2026 war die Adresse unsere und nur der Name der der
+    // Praxis. Jetzt ist beides ihres (B22). Und wer antwortet, erreicht die
+    // Praxis.
+    expect($mail->getFrom()[0]->getAddress())->toBe('empfang@praxis-musterstrasse.de')
+        ->and($mail->getFrom()[0]->getName())->toBe('Demo-Praxis')
+        ->and($mail->getReplyTo()[0]->getAddress())->toBe('praxis@example.test');
 });
 
 it('zeigt in der Terminansicht, was verschickt wurde und was aussteht', function (): void {

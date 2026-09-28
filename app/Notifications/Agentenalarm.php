@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Benachrichtigung\Plattformmails;
+use App\Benachrichtigung\Versand\PlattformMailkanal;
+use App\Contracts\Plattformmail;
 use App\Enums\GuardrailHit;
 use App\Models\Conversation;
 use Illuminate\Bus\Queueable;
@@ -36,7 +39,7 @@ use Illuminate\Notifications\Notification;
  * ist ein User, und dessen Schluessel sind Rohbytes (A4) -- unverschluesselt
  * bricht json_encode() die Nutzlast.
  */
-final class Agentenalarm extends Notification implements ShouldBeEncrypted, ShouldQueue
+final class Agentenalarm extends Notification implements Plattformmail, ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 
@@ -57,22 +60,23 @@ final class Agentenalarm extends Notification implements ShouldBeEncrypted, Shou
     }
 
     /**
-     * @return list<string>
+     * @return list<class-string>
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return [PlattformMailkanal::class];
     }
 
+    /**
+     * Der Satz, dass der Inhalt fehlt, ist Kern -- keine Vorlage nimmt ihn
+     * heraus, und keine kann den Inhalt hineinschreiben (C17).
+     */
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
-            ->subject('Bitte im Posteingang nachsehen')
-            ->greeting('Es liegt eine Nachricht vor, die jemand lesen sollte.')
-            ->line('Der Assistent hat sie an Sie übergeben: '.$this->grund->label().'.')
-            ->line('Der Inhalt steht **nicht** in dieser E-Mail — er gehört in kein Postfach und auf keinen Sperrbildschirm.')
-            ->action('Im Posteingang öffnen', url(route('inbox.index', ['gespraech' => $this->gespraech], false)))
-            ->line('Der Assistent hält sich aus diesem Gespräch heraus, bis jemand ihn wieder hereinlässt.')
-            ->salutation('Viele Grüße von '.$this->praxisname);
+        return app(Plattformmails::class)->agentenalarm(
+            $this->praxisname,
+            $this->grund->label(),
+            url(route('inbox.index', ['gespraech' => $this->gespraech], false)),
+        );
     }
 }

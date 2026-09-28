@@ -14,6 +14,7 @@ import {
     Inbox,
     LayoutGrid,
     ListChecks,
+    Mails,
     MapPin,
     Megaphone,
     MessagesSquare,
@@ -21,6 +22,7 @@ import {
     Palette,
     Scale,
     ScrollText,
+    Send,
     ShieldCheck,
     Sparkles,
     Stethoscope,
@@ -134,6 +136,14 @@ const gruppen = computed<NavGroup[]>(() =>
                       items: [
                           ...(betreiberDarf('mandanten.sehen') ? [{ title: 'Backoffice', href: '/backoffice', icon: Building2 }] : []),
                           ...(betreiberDarf('paket.verwalten') ? [{ title: 'Paket', href: '/backoffice/paket', icon: Package }] : []),
+                          // Server und Produktmails (WP-37): wer den Versand
+                          // ändert, entscheidet, ob Anmeldecodes ankommen.
+                          ...(betreiberDarf('versand.verwalten')
+                              ? [
+                                    { title: 'Versand', href: '/backoffice/versand', icon: Send },
+                                    { title: 'E-Mails', href: '/backoffice/mails', icon: Mails },
+                                ]
+                              : []),
                           ...(betreiberDarf('betreiber.verwalten')
                               ? [{ title: 'Betreiberkonten', href: '/backoffice/betreiber', icon: UserCog }]
                               : []),

@@ -62,6 +62,26 @@ jeder Meldung der Spaltenname: „avg revenue cents ist erforderlich."
 zusammen; eine Übersetzungsdatei greift bei ihnen nur halb. Außerdem sind sie
 für viele Praxen der erste Kontakt und sollen nach dem Produkt klingen.
 
+**Mailtexte stehen im Register, nicht in der Notification** (WP-36, WP-37).
+Jede Mail hat eine `App\Enums\Mailart`; ihr Standardtext steht in
+`App\Benachrichtigung\Vorlagen\Standardtexte`, Überschreibungen von Praxis
+oder Betreiber in der Datenbank (D15). Was eine Mail tragen muss — Link,
+Frist, Code, Eckdaten, der Alarmsatz —, steht im festen Block
+(`Festblock`), nie im Text (C17). Gebaut wird jede Mail über
+`Mailaufbau::baue()` im gemeinsamen Rahmen `mail.rahmen` mit dem Theme
+`mrs`; **die Farbe einer Mail kommt nur über dieses Theme**, nie als
+Inline-Stil im Text.
+
+**Jede Notification nennt ihren Versandweg** (A15): sie implementiert
+`Praxismail` oder `Plattformmail`, und `via()` gibt genau den Kanal dazu
+zurück (`PraxisMailkanal`, `PlattformMailkanal`). Nie `['mail']` — der
+Standardmailer verschickte unter wessen Namen auch immer. Durchgesetzt durch
+`tests/Feature/Mailvorlagen/RegisterTest.php`.
+
+**Eine Vorschau fremden HTMLs steht nur in `<iframe sandbox="">`** — leer,
+nicht sparsam erlaubt: kein Skript, kein Formular, kein Zugriff auf die Seite
+drumherum. Durchgesetzt durch `tests/Feature/Mailvorlagen/VorschauTest.php`.
+
 Durchgesetzt durch `tests/Feature/Auth/DeutschTest.php`.
 
 **Jede Mail geht über die Warteschlange, verschlüsselt** (B21). Eine neue

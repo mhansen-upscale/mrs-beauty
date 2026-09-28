@@ -256,9 +256,14 @@ Was trotzdem bei uns liegt:
 
 ## Was je Kunde einzurichten ist
 
-- **SPF und DKIM** der Praxisdomain, wenn der Versand über die Plattform läuft
-  (`docs/integrationen/email.md`). Ohne das landet die Post im Spam, und die
-  Praxis merkt es daran, dass niemand antwortet.
+- **Das eigene Postfach — Pflicht** (B22, WP-36). Unter *Einstellungen →
+  Postfach* Mailserver, Absender und Zugangsdaten eintragen und die Probemail
+  schicken. **Ohne gehen keine Mails an Patientinnen hinaus**: keine
+  Terminbestätigung, keine Erinnerung, keine Antwort aus dem Posteingang.
+  Das Dashboard der Praxis sagt es, das Betreiber-Dashboard zählt „Praxen
+  ohne Postfach“. Einen Rückfall auf den Versand der Plattform gibt es seit
+  dem 28.09.2026 nicht mehr — und damit auch kein SPF und DKIM, das wir für
+  die Domain einer Praxis einrichten müssten.
 - **Weiterleitung** des Praxispostfachs auf die Eingangsadresse.
 - **WhatsApp:** WABA-ID, Rufnummern-ID und Systembenutzer-Token — die Praxis
   trägt sie selbst unter *Einstellungen → WhatsApp* ein. Die Prüfung läuft in
@@ -282,6 +287,13 @@ Was trotzdem bei uns liegt:
   sie in Fassung 1 übernommen. **Danach liest sie niemand mehr**: Eine
   später gesetzte `STRIPE_PRICE_ID` ändert nichts, das Paket steht in der
   Datenbank.
+- **Plattformversand** (B23, WP-37): im Backoffice unter **Versand** den
+  Mailserver für die Produktmails (Adresse bestätigen, Passwort, Einladung,
+  Alarm, Anmeldecode) hinterlegen und die **Probemail** schicken. Erst danach
+  gilt er; bis dahin — und immer, wenn er ausfällt — gilt `MAIL_*` aus der
+  Umgebung. Die Umgebung bleibt deshalb auch mit hinterlegtem Server
+  vollständig gesetzt. Aussehen und Texte der Produktmails stehen im
+  Backoffice unter **E-Mails**.
 - **Microsoft Entra ID:** App-Registrierung, Geheimnis mit Ablaufdatum im
   Betriebskalender.
 - **Meta:** App Review und Business-Verifizierung (WP-00).
@@ -305,6 +317,9 @@ GOOGLE_CLIENT_ID=…           GOOGLE_CLIENT_SECRET=…
 MICROSOFT_CLIENT_ID=…        MICROSOFT_CLIENT_SECRET=…
 ANTHROPIC_API_KEY=…          AGENT_KILL_SWITCH=false
 MAIL_INBOUND_TOKEN=…         MAIL_INBOUND_DOMAIN=…
+MAIL_MAILER=smtp             MAIL_HOST=…              MAIL_PORT=…
+MAIL_USERNAME=…              MAIL_PASSWORD=…
+MAIL_FROM_ADDRESS=…          MAIL_FROM_NAME=…         (Rückfall des Plattformversands, B23)
 CLAMAV_HOST=…
 ATTACHMENTS_DISK=s3            AWS_BUCKET=…
 AWS_ACCESS_KEY_ID=…            AWS_SECRET_ACCESS_KEY=…
@@ -370,6 +385,14 @@ den Fall, in dem etwas grundsätzlich schiefgeht.
 4. Rohereignisse bleiben **14 Tage** wiedereinspielbar (WP-19). Danach ist die
    Nachricht weg — das ist die Frist, innerhalb derer eine kaputte
    Verarbeitung repariert werden muss.
+   `mrs:rohereignisse-einspielen --nur-zeigen` listet, was liegt (älter als
+   `raw_event_replay_after_minutes`, je Praxis, ohne Inhalte). Ohne
+   `--nur-zeigen` wird synchron eingespielt, an einem ausgefallenen Worker
+   vorbei. Einschränken lässt sich mit `--organisation=<uuid>` und
+   `--kanal=whatsapp`. Das ist der Weg für einen Auftrag, der **nie lief** und
+   deshalb nicht in `failed_jobs` steht. Ist er gescheitert, genügt
+   `queue:retry`. Endet der Befehl mit 1, ist etwas liegen geblieben, und die
+   Zeile dazu nennt den Kurzgrund.
 5. **Eine Anzeige hängt auf „wird übertragen“:**
    `mrs:anzeige-uebertragen <uuid> --nur-zeigen` zeigt, wie weit der Auftrag
    kam (Bild, Creative, Anzeige), Werbekonto, Warteschlange `default` und den
@@ -399,6 +422,25 @@ den Fall, in dem etwas grundsätzlich schiefgeht.
      das Einreihen scheitert. Mit `MAIL_MAILER=log` steht der Code im Log —
      das ist nur lokal hinnehmbar.
 
+
+7. **Eine Praxis bekommt keine Terminmails hinaus** (WP-36). Die
+   Terminansicht nennt den Grund an der Nachricht:
+   - „kein Postfach der Praxis eingerichtet“ (`no_mailer`) — unter
+     *Einstellungen → Postfach* einen Mailserver hinterlegen. Es wird nichts
+     nachgeschickt; die nächste Erinnerung geht hinaus, sobald das Postfach
+     steht.
+   - „Mail ließ sich nicht verschicken“ (`mail`) — der Server der Praxis hat
+     abgelehnt. Die Probemail auf der Postfach-Seite zeigt, ob Zugangsdaten
+     oder Port nicht stimmen. **TLS wird erzwungen**, wenn TLS gewählt ist:
+     ein Server ohne STARTTLS bekommt die Mail nicht mehr im Klartext.
+8. **Produktmails kommen nicht an** (WP-37). `mrs:betrieb` und das
+   Betreiber-Dashboard zeigen „Plattformversand“: gestört heißt, der
+   hinterlegte Server hat abgelehnt und die Mails gehen über `MAIL_*`. Im
+   Backoffice unter **Versand** korrigieren und die Probemail schicken.
+   **Den App-Schlüssel nie ohne `APP_PREVIOUS_KEYS` drehen**: Das Passwort des
+   Plattformservers ist damit verschlüsselt; ist es unlesbar, steht die
+   Störung `entschluesselung` da, und es gilt `MAIL_*` — das Passwort muss
+   neu eingetragen werden.
 
 ## Das Zeichen
 

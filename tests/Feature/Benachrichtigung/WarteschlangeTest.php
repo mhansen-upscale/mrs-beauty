@@ -6,6 +6,7 @@ use App\Enums\AppointmentStatus;
 use App\Enums\GuardrailHit;
 use App\Enums\NotificationKind;
 use App\Enums\Role;
+use App\Kanaele\Email\Postfach;
 use App\Models\User;
 use App\Notifications\Agentenalarm;
 use App\Termine\Terminplaner;
@@ -16,6 +17,7 @@ use Illuminate\Mail\Transport\ArrayTransport;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 
 use function Pest\Laravel\actingAs;
@@ -23,6 +25,7 @@ use function Pest\Laravel\post;
 use function Pest\Laravel\travelTo;
 
 use Symfony\Component\Mailer\SentMessage;
+use Symfony\Component\Mailer\Transport\TransportInterface;
 use Symfony\Component\Mime\Email;
 use Tests\Feature\Agent\Agentenaufbau;
 use Tests\Feature\Termine\Szenario;
@@ -179,6 +182,8 @@ it('stellt Passwortlink, Bestaetigung und Anmeldecode ohne Geheimnis in der Schl
 it('stellt eine Terminnachricht ohne Mandanten zu, ohne Behandlung und Adresse in der Schlange', function (): void {
     alsMandant(organisation('Demo-Praxis'));
     bezahltesAbo();
+    $attrappe = postfachAttrappe();
+    praxispostfach(attrappe: $attrappe);
     $szenario = new Szenario;
     $termin = app(Terminplaner::class)->buche($szenario->vorschlag(), $szenario->kontakt, status: AppointmentStatus::Confirmed, jetzt: $szenario->jetzt());
     $behandlung = $termin->appointmentType->name;
@@ -192,11 +197,49 @@ it('stellt eine Terminnachricht ohne Mandanten zu, ohne Behandlung und Adresse i
     expect($nutzlast)->toContain('SendQueuedNotifications')
         ->and($nutzlast)->not->toContain($behandlung)
         ->and($nutzlast)->not->toContain($adresse)
-        ->and(zugestellteMails())->toBeEmpty();
+        // Die Zugangsdaten der Praxis entschluesselt erst der Kanal im
+        // Arbeiter (WP-36 AK 26).
+        ->and($nutzlast)->not->toContain('app-passwort')
+        ->and(versandteMails($attrappe))->toBeEmpty();
 
     arbeitsgang();
 
-    mailMitBetreff('Ihr Termin am');
+    // Ueber das Postfach der Praxis, nicht ueber den Mailer der Plattform.
+    expect(zugestellteMails())->toBeEmpty()
+        ->and((string) (versandteMails($attrappe)[0] ?? null)?->getSubject())->toStartWith('Ihr Termin am');
+});
+
+it('schickt zwei Praxen in einem Arbeiterlauf je ueber ihren eigenen Server (WP-36 AK 26)', function (): void {
+    $erste = alsMandant(organisation('Erste Praxis'));
+    bezahltesAbo();
+    $ersteAttrappe = new ArrayTransport;
+    praxispostfach('empfang@erste.test', $ersteAttrappe)->forceFill(['smtp_host' => 'smtp.erste.test'])->save();
+    $szenario = new Szenario;
+    app(Terminplaner::class)->buche($szenario->vorschlag(), $szenario->kontakt, status: AppointmentStatus::Confirmed, jetzt: $szenario->jetzt());
+
+    alsMandant(organisation('Zweite Praxis'));
+    bezahltesAbo();
+    praxispostfach('empfang@zweite.test', $ersteAttrappe)->forceFill(['smtp_host' => 'smtp.zweite.test'])->save();
+    $zweites = new Szenario;
+    app(Terminplaner::class)->buche($zweites->vorschlag(), $zweites->kontakt, status: AppointmentStatus::Confirmed, jetzt: $zweites->jetzt());
+
+    // Der Transport merkt sich den Host, ueber den er gebaut wurde -- so
+    // zeigt sich, ob der Kanal fuer jede Praxis ihren eigenen Server nahm.
+    $hosts = [];
+    Mail::extend(Postfach::TRANSPORT, function (array $konfiguration) use ($ersteAttrappe, &$hosts): ArrayTransport {
+        $hosts[] = $konfiguration['host'];
+
+        return $ersteAttrappe;
+    });
+
+    arbeitsgang();
+
+    $absender = array_map(fn (Email $mail): string => $mail->getFrom()[0]->getAddress(), versandteMails($ersteAttrappe));
+
+    expect($absender)->toEqualCanonicalizing(['empfang@erste.test', 'empfang@zweite.test'])
+        ->and($hosts)->toEqualCanonicalizing(['smtp.erste.test', 'smtp.zweite.test']);
+
+    expect($erste->exists)->toBeTrue();
 });
 
 it('haelt eine endgueltig gescheiterte Terminnachricht als fehlgeschlagen fest, nicht als verschickt', function (): void {
@@ -205,10 +248,13 @@ it('haelt eine endgueltig gescheiterte Terminnachricht als fehlgeschlagen fest, 
     $szenario = new Szenario;
     $termin = app(Terminplaner::class)->buche($szenario->vorschlag(), $szenario->kontakt, status: AppointmentStatus::Confirmed, jetzt: $szenario->jetzt());
 
-    arbeitsgang(einer: true);
+    // Ein Postfach, dessen Mailserver nicht antwortet -- echter Transport,
+    // keine Attrappe.
+    praxispostfach()->forceFill(['smtp_host' => '127.0.0.1', 'smtp_port' => 1, 'smtp_encryption' => null])->save();
+    Mail::extend(Postfach::TRANSPORT, fn (array $konfiguration): TransportInterface => app('mail.manager')
+        ->createSymfonyTransport([...$konfiguration, 'transport' => 'smtp']));
 
-    // Ein Mailserver, der nicht antwortet.
-    config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => '127.0.0.1', 'mail.mailers.smtp.port' => 1]);
+    arbeitsgang(einer: true);
 
     arbeitsgang();
 

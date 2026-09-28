@@ -28,14 +28,16 @@ use Inertia\Response;
  * - **Eingang** -- unsere Adresse. Die Praxis leitet ihre Post dorthin
  *   weiter; kein MX-Wechsel, keine Zugangsdaten noetig.
  * - **Absender** -- die Adresse der Praxis, unter der geantwortet wird.
- * - **Versand** -- ueber das eigene Postfach, wenn hinterlegt, sonst ueber
- *   den Versand der Plattform.
+ * - **Versand** -- ueber das eigene Postfach, **und nur darueber** (B22).
+ *   Ohne eigenen Mailserver geht keine Mail an eine Patientin hinaus:
+ *   keine Terminmail, keine Antwort aus dem Posteingang, kein Angebot von
+ *   der Warteliste.
  *
- * **Warum das eigene Postfach der bessere Weg ist:** eine Mail mit der
- * Adresse der Praxis im Absender, die aus unserer Infrastruktur kommt,
- * besteht SPF und DKIM nur, wenn jemand die DNS-Eintraege der Domain
- * entsprechend gesetzt hat. Wer stattdessen seine Zugangsdaten eintraegt,
- * schickt die Antwort denselben Weg wie jede andere Mail seiner Praxis.
+ * **Warum kein Rueckfall mehr:** eine Mail mit der Adresse der Praxis im
+ * Absender, die aus unserer Infrastruktur kommt, besteht SPF und DKIM nur,
+ * wenn jemand die DNS-Eintraege der Domain entsprechend gesetzt hat. Wer
+ * seine Zugangsdaten eintraegt, schickt jede Mail denselben Weg wie jede
+ * andere Mail seiner Praxis.
  */
 final class PostfachController extends Controller
 {
@@ -153,8 +155,14 @@ final class PostfachController extends Controller
             return back();
         }
 
-        if (! $this->verbindung() instanceof ChannelConnection) {
+        $verbindung = $this->verbindung();
+
+        if (! $verbindung instanceof ChannelConnection) {
             return back()->withErrors(['smtp_host' => 'Zuerst das Postfach speichern.']);
+        }
+
+        if (! $verbindung->hatEigenesPostfach()) {
+            return back()->withErrors(['smtp_host' => 'Ohne eigenen Mailserver gibt es nichts zu prüfen.']);
         }
 
         PostfachPruefen::dispatch((string) $organisation->uuid, (string) $benutzer->email);

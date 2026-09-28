@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Jobs;
 
 use App\Benachrichtigung\Mailmarke;
+use App\Benachrichtigung\Versand\KeinPraxispostfach;
+use App\Kanaele\Email\Postfach;
 use App\Models\Appointment;
 use App\Models\AppointmentNotification;
 use App\Models\Organization;
@@ -78,6 +80,19 @@ final class TerminnachrichtVersenden implements ShouldQueue
                 // Terminansicht sichtbar.
                 $zeile->failed_at = CarbonImmutable::now();
                 $zeile->failure = 'no_channel';
+                $zeile->save();
+
+                return;
+            }
+
+            if (! app(Postfach::class)->versandbereit()) {
+                // **Kein Rueckfall auf die Plattform** (B22): ohne eigenes
+                // Postfach geht keine Mail an eine Patientin hinaus. Die
+                // Zeile sagt es, das Dashboard auch. Die Erinnerung ist eine
+                // eigene Zeile: steht das Postfach bis zu ihrem Zeitpunkt,
+                // geht sie hinaus.
+                $zeile->failed_at = CarbonImmutable::now();
+                $zeile->failure = KeinPraxispostfach::GRUND;
                 $zeile->save();
 
                 return;

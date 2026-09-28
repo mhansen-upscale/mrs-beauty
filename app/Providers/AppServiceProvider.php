@@ -12,11 +12,14 @@ use App\Anzeigen\KeinBildmodell;
 use App\Anzeigen\KieAi\KieModell;
 use App\Audit\AuditLogger;
 use App\Audit\ImpersonationContext;
+use App\Benachrichtigung\Plattformmails;
+use App\Benachrichtigung\Versand\Plattformversand;
 use App\Betrieb\Warteschlangen;
 use App\Datenschutz\ClamAvPruefung;
 use App\Datenschutz\ClamAvVerbindung;
 use App\Datenschutz\KeineVirenpruefung;
 use App\Datenschutz\Virenpruefung;
+use App\Kanaele\Email\Postfach;
 use App\Kanaele\Kanaleingaenge;
 use App\Kanaele\Kanalversender;
 use App\Models\User;
@@ -30,10 +33,12 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Symfony\Component\Mailer\Transport\TransportInterface;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -146,31 +151,38 @@ class AppServiceProvider extends ServiceProvider
      */
     private function configureMails(): void
     {
+        // **Texte und Aussehen aus dem Register** (WP-37): Die Rueckrufe
+        // bleiben an VerifyEmail und ResetPassword haengen -- sie gelten auch
+        // fuer EmailBestaetigen und PasswortZuruecksetzen --, der Text kommt
+        // aber aus Standardtexte oder der Vorlage des Betreibers.
         VerifyEmail::toMailUsing(function (User $benutzer, string $url): MailMessage {
-            return (new MailMessage)
-                ->subject('E-Mail-Adresse bestätigen')
-                ->greeting('Willkommen bei '.config('app.name').'.')
-                ->line('Bitte bestätigen Sie Ihre E-Mail-Adresse, dann ist Ihr Zugang vollständig.')
-                ->action('E-Mail-Adresse bestätigen', $url)
-                ->line('Der Link gilt '.(int) config('auth.verification.expire', 60).' Minuten.')
-                ->line('Wenn Sie keinen Zugang angelegt haben, können Sie diese Nachricht ignorieren.')
-                ->salutation('Viele Grüße von '.config('app.name'));
+            return app(Plattformmails::class)->emailBestaetigen(
+                (string) $benutzer->name,
+                $url,
+                (int) config('auth.verification.expire', 60),
+            );
         });
 
         ResetPassword::toMailUsing(function (User $benutzer, string $merkmal): MailMessage {
-            $minuten = (int) config('auth.passwords.users.expire', 60);
-
-            return (new MailMessage)
-                ->subject('Passwort zurücksetzen')
-                ->line('Sie erhalten diese Nachricht, weil für Ihren Zugang ein neues Passwort angefordert wurde.')
-                ->action('Neues Passwort vergeben', url(route('password.reset', [
+            return app(Plattformmails::class)->passwort(
+                (string) $benutzer->name,
+                url(route('password.reset', [
                     'token' => $merkmal,
                     'email' => $benutzer->getEmailForPasswordReset(),
-                ], false)))
-                ->line('Der Link gilt '.$minuten.' Minuten.')
-                ->line('Haben Sie das nicht angefordert, ist nichts zu tun — Ihr Passwort bleibt unverändert.')
-                ->salutation('Viele Grüße von '.config('app.name'));
+                ], false)),
+                (int) config('auth.passwords.users.expire', 60),
+            );
         });
+
+        // **Die beiden Versandwege als eigene Transporte** (A15). Sie bauen
+        // denselben SMTP-Transport wie Laravel -- aber unter einem Namen, den
+        // ein Test gegen eine Attrappe tauschen kann: Mail::fake() faengt
+        // Mail::build() nicht, und ohne Naht verbaende ein Test wirklich mit
+        // einem Mailserver.
+        foreach ([Postfach::TRANSPORT, Plattformversand::TRANSPORT] as $transport) {
+            Mail::extend($transport, fn (array $konfiguration): TransportInterface => app('mail.manager')
+                ->createSymfonyTransport([...$konfiguration, 'transport' => 'smtp']));
+        }
     }
 
     /**

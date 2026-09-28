@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Compliance;
 
 use App\Models\ComplianceCheck;
+use App\Models\MailTemplate;
 use App\Models\Treatment;
 use App\Models\WhatsAppTemplate;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,8 @@ use RuntimeException;
  * **Ein Template ist schon bei Meta genehmigt.** Die Ampel ist dort ein
  * Hinweis im Posteingang, keine Sperre -- Meta prueft keine HWG-Fragen, und
  * wer ein Marketing-Template verschickt, soll vorher sehen, was auffaellt.
+ *
+ * **Die Mailvorlage** (WP-36) pruefen wir wie das Template: als Hinweis.
  *
  * **Kein Regelwerk, keine Freigabe** -- dieselbe Richtung wie in Pruefung.
  */
@@ -51,6 +54,23 @@ final class Veroeffentlichungspruefung
         }
 
         return $this->halteFest($template, new Pruefgegenstand(text: $text, modell: $template));
+    }
+
+    /**
+     * Die Mailvorlage einer Praxis (WP-36, P12) -- **ein Hinweis, keine
+     * Sperre**, wie beim WhatsApp-Template. Eine Terminmail ist keine
+     * Publikumswerbung; wer in die Einleitung trotzdem ein Heilversprechen
+     * schreibt, soll es vorher sehen.
+     */
+    public function mailvorlage(MailTemplate $vorlage): ?ComplianceCheck
+    {
+        $text = $vorlage->pruefbarerText();
+
+        if ($text === '') {
+            return null;
+        }
+
+        return $this->halteFest($vorlage, new Pruefgegenstand(text: $text, modell: $vorlage));
     }
 
     /**

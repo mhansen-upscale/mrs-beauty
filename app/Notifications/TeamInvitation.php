@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Benachrichtigung\Plattformmails;
+use App\Benachrichtigung\Versand\PlattformMailkanal;
+use App\Contracts\Plattformmail;
 use App\Models\Invitation;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
@@ -24,8 +27,11 @@ use Illuminate\Notifications\Notification;
  * **Keine Einladung als Modell in der Nutzlast.** Invitation ist ein
  * TenantModel, und ein Arbeiter hat keinen Mandanten -- das Wiederherstellen
  * wuerfe. Was die Mail braucht, steht fest, bevor sie in die Schlange geht.
+ *
+ * Eine Mail des Produkts (WP-37): Text und Aussehen pflegt der Betreiber, es
+ * verschickt der Plattformversand.
  */
-final class TeamInvitation extends Notification implements ShouldBeEncrypted, ShouldQueue
+final class TeamInvitation extends Notification implements Plattformmail, ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 
@@ -47,24 +53,20 @@ final class TeamInvitation extends Notification implements ShouldBeEncrypted, Sh
     }
 
     /**
-     * @return list<string>
+     * @return list<class-string>
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return [PlattformMailkanal::class];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = route('invitations.show', ['token' => $this->merkmal]);
-
-        return (new MailMessage)
-            ->subject("Einladung zu {$this->organisationsname}")
-            ->greeting('Hallo,')
-            ->line("Sie wurden zu {$this->organisationsname} eingeladen.")
-            ->line('Ihre Rolle: '.$this->rolle.'.')
-            ->action('Einladung annehmen', $url)
-            ->line('Die Einladung gilt bis zum '.$this->frist.' Uhr.')
-            ->salutation('Viele Gruesse');
+        return app(Plattformmails::class)->einladung(
+            $this->organisationsname,
+            $this->rolle,
+            $this->frist,
+            route('invitations.show', ['token' => $this->merkmal]),
+        );
     }
 }

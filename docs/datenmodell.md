@@ -575,3 +575,32 @@ Rohereignis, Werbezahlen je Anzeige, Attributionsberührung. Durchgesetzt von
 `mrs:aufbewahrung` — nachts **als Vorschau**, scharf von Hand
 (`docs/betrieb.md`).
 
+## 12 · Mails (28.09.2026)
+
+**`mail_templates`** (Mandant, WP-36) — die Vorlage einer Praxis für eine
+ihrer fünf Terminmails. Eine Zeile je Praxis und Art
+(`mailvorlage_unique`), **nur wenn die Praxis etwas anders will** (D15):
+ohne Zeile gilt der Standard aus dem Code. Spalten `template` (Mailart),
+`subject`, `greeting`, `intro`, `outro`, `salutation`. Unverschlüsselt —
+Empfangstext der Praxis, kein Personendatum; die Werte der Platzhalter stehen
+nie hier. Die HWG-Prüfung hängt als `compliance_checks` daran (Hinweis, P12).
+
+**`brandings.mail_signature`** — die Signatur unter jeder Mail der Praxis,
+beim Erscheinungsbild wie Logo und Farbe. **Die Farbe der Mail ist
+`brandings.primary_color`**, keine zweite Spalte.
+
+**`platform_mail_settings`** (global, WP-37) — genau eine Zeile (`singleton`
+eindeutig, `CHECK singleton = 1`): Mailserver der Plattform, Absender,
+Aussehen der Produktmails. `smtp_username` und `smtp_password` mit dem
+App-Schlüssel verschlüsselt (Cast `encrypted`) — einen Schlüssel je
+Organisation gibt es hier nicht. **`smtp_version` zählt jede Änderung am
+Server**, `smtp_verified_version` nennt die Fassung, über die die Probemail
+ging; der Server gilt nur, wenn beide gleich sind (B23). Das Logo liegt
+unverschlüsselt auf dem Anhangsspeicher unter `plattform/mail/`.
+
+**`platform_mail_templates`** (global, WP-37) — Vorlagen der Produktmails,
+eine Zeile je Mailart, Überschreibung wie bei der Praxis.
+
+**`appointment_notifications.failure`** kennt einen neuen Grund:
+`no_mailer` — die Praxis hat kein sendebereites Postfach (B22).
+

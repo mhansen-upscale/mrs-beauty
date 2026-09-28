@@ -1,15 +1,17 @@
 {{--
-    Das Mailgeruest fuer Patientinnen -- mit der Praxis in Kopf und Fuss, nicht
-    mit uns (App\Benachrichtigung\Mailmarke). Der Rumpf entspricht Laravels
-    notifications::email; nur der Rahmen ist anders.
+    Das Mailgeruest -- fuer Mails der Praxis wie der Plattform (WP-36, WP-37).
+    Kopf, Fuss und Farbe traegt die Marke (App\Benachrichtigung\Mailmarke):
+    bei einer Terminmail die Praxis, bei einer Mail an ein Konto der Betreiber.
+    Der Rumpf entspricht Laravels notifications::email; nur der Rahmen ist
+    anders.
 --}}
-<x-mail::praxis-layout :titel="$marke->praxisname">
+<x-mail::rahmen-layout :titel="$marke->name">
 <x-slot:header>
-<x-mail::header :url="$marke->buchungsseite ?? '#'">
+<x-mail::header :url="$marke->startseite ?? '#'">
 @if ($marke->logo)
-<img src="{{ $marke->logo }}" alt="{{ $marke->praxisname }}" style="max-height: 48px; max-width: 240px;">
+<img src="{{ $marke->logo }}" alt="{{ $marke->name }}" style="max-height: 48px; max-width: 240px;">
 @else
-{{ $marke->praxisname }}
+{{ $marke->name }}
 @endif
 </x-mail::header>
 </x-slot:header>
@@ -38,6 +40,12 @@
 {{ $salutation }}
 @endif
 
+@if ($marke->signatur !== [])
+@foreach ($marke->signatur as $zeile)
+{{ \App\Benachrichtigung\Vorlagen\Textbaustein::maskiere($zeile) }}@if (! $loop->last)<br>@endif
+@endforeach
+@endif
+
 @isset($actionText)
 <x-slot:subcopy>
 <x-mail::subcopy>
@@ -48,13 +56,17 @@ Falls die Schaltfläche „{{ $actionText }}“ nicht funktioniert, kopieren Sie
 
 <x-slot:footer>
 <x-mail::footer>
-{{ $marke->praxisname }}
+{{ $marke->name }}
 @if ($marke->impressum || $marke->datenschutz)
 <br>
 @if ($marke->impressum)[Impressum]({{ $marke->impressum }})@endif
 @if ($marke->impressum && $marke->datenschutz) · @endif
 @if ($marke->datenschutz)[Datenschutz]({{ $marke->datenschutz }})@endif
 @endif
+@if ($marke->fussnote)
+<br>
+{{ \App\Benachrichtigung\Vorlagen\Textbaustein::maskiere($marke->fussnote) }}
+@endif
 </x-mail::footer>
 </x-slot:footer>
-</x-mail::praxis-layout>
+</x-mail::rahmen-layout>

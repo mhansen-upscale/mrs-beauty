@@ -108,6 +108,10 @@ final class InboxController extends Controller
                     'status' => $verbindung->status->value,
                     'statusLabel' => $verbindung->status->label(),
                     'stoerung' => $verbindung->status->brauchtAufmerksamkeit(),
+
+                    // Eine Mail geht nur ueber das Postfach der Praxis (B22)
+                    // -- ohne eigenen Server kommt keine Antwort an.
+                    'kannVersenden' => $verbindung->channel !== ChannelType::Email || $verbindung->kannVersenden(),
                 ])
                 ->values(),
 

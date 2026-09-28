@@ -28,6 +28,7 @@ enum OperatorAbility: string
     case FinanzenSehen = 'finanzen.sehen';
     case BetreiberVerwalten = 'betreiber.verwalten';
     case ProtokollSehen = 'protokoll.sehen';
+    case VersandVerwalten = 'versand.verwalten';
 
     public function label(): string
     {
@@ -43,6 +44,7 @@ enum OperatorAbility: string
             self::FinanzenSehen => 'Umsatz und Kosten sehen',
             self::BetreiberVerwalten => 'Betreiberkonten verwalten',
             self::ProtokollSehen => 'Betreiberprotokoll sehen',
+            self::VersandVerwalten => 'Mailversand und Produktmails verwalten',
         };
     }
 }

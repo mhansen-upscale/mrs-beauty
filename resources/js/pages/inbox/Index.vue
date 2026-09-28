@@ -108,13 +108,22 @@ const props = defineProps<{
     searchField: string | null;
     conversation: Verlauf | null;
     ausgewaehlt: boolean;
-    connections: { channel: string; label: string; status: string; statusLabel: string; stoerung: boolean }[];
+    connections: { channel: string; label: string; status: string; statusLabel: string; stoerung: boolean; kannVersenden: boolean }[];
     kontaktsuche: { uuid: string; name: string }[];
     darfAntworten: boolean;
     darfZuordnen: boolean;
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Posteingang', href: '/posteingang' }];
+
+/**
+ * B22: eine Mail geht nur über das Postfach der Praxis. Ohne eigenen Server
+ * scheitert die Antwort — besser, man sieht es vor dem Schreiben.
+ */
+const mailOhnePostfach = computed(
+    () =>
+        props.conversation?.channel === 'email' && !(props.connections.find((verbindung) => verbindung.channel === 'email')?.kannVersenden ?? false),
+);
 
 /* Filter ------------------------------------------------------------------ */
 
@@ -563,6 +572,13 @@ const zuordnen = (kontakt: string) => {
 
                         <p v-else-if="conversation.agent.fehler === 'no_model'" class="text-xs text-muted-foreground">
                             Kein Assistent angebunden — es wird nichts vorgeschlagen.
+                        </p>
+
+                        <p v-if="mailOhnePostfach" class="flex items-start gap-2 text-xs text-warning">
+                            <AlertTriangle class="mt-0.5 size-3.5 shrink-0" />
+                            <span
+                                >Ohne eigenes Postfach der Praxis geht keine Antwort per Mail hinaus. Einrichten unter Einstellungen → Postfach.</span
+                            >
                         </p>
 
                         <template v-if="darfAntworten">

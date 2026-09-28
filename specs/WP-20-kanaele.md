@@ -230,6 +230,36 @@ die Anzeige „dieses Template kostet" baut WP-21, die Abrechnung WP-06.
 **Die Qualitätsbewertung** der Rufnummer. Meta meldet sie über einen eigenen
 Webhook-Ereignistyp; die Spalten dafür gibt es noch nicht.
 
+## Nachtrag 28.09.2026 · Die Zustellung über den Webhook
+
+**Kein Test schickte eine WhatsApp-Zustellung über `/webhooks/meta`.** Die
+Kriterien 1 bis 9 prüfen den Leser, indem sie die Nutzlast direkt an die
+Eingangsverarbeitung geben. Den HTTP-Weg prüft WP-19, aber nur mit einem
+Testkanal (`object: page`). Zwischen beiden lag ungeprüft, was nur WhatsApp
+betrifft: `whatsapp_business_account` führt zum Kanal WhatsApp, und der
+Mandant wird über die WABA gefunden, nicht über die Rufnummern-ID. Das ist
+der Fallstrick oben, bisher ohne Test.
+
+**Empfang über den Webhook**
+
+29. Eine signierte WhatsApp-Zustellung über `/webhooks/meta` legt Nachricht
+    und Konversation bei der Praxis an, deren WABA sie trägt. Bei keiner
+    anderen Praxis entsteht etwas.
+30. Eine Zustellung, deren `entry.id` die Rufnummern-ID statt der WABA ist,
+    findet keinen Mandanten. Sie speichert nichts und wird trotzdem
+    quittiert.
+31. Eine WhatsApp-Zustellung mit falscher Signatur wird verworfen, ohne dass
+    etwas gespeichert wird.
+32. Kommt dieselbe WhatsApp-Zustellung zweimal über den Webhook, entsteht eine
+    Nachricht, nicht zwei.
+
+**Stand.** Alle vier Kriterien stehen in
+`tests/Feature/Kanaele/WhatsAppWebhookTest.php` und waren ohne Änderung am
+Code grün. Der Weg funktionierte also, er war nur nicht belegt. Signiert wird
+dort über genau den Rumpf, der ankommt, wie bei Meta. `postJson()` mit
+nachträglichem `json_encode()` stimmt nur, solange beide Seiten gleich
+kodieren.
+
 ---
 
 # Session b · E-Mail
@@ -356,3 +386,9 @@ dass niemand antwortet.
 
 **Die Oberfläche** (WP-21). Einen Kanal einzurichten geht bisher nur über die
 Datenbank; eine Eingangsadresse zu vergeben gehört in die Verwaltung.
+
+> **Nachtrag 28.09.2026 (WP-36, B22).** Der Rückfall auf den Versand der
+> Plattform ist gestrichen. Ohne eigenen Mailserver scheitert eine Antwort
+> per Mail als `no_mailer`, sichtbar im Posteingang. `Postfach::mailer()`
+> wirft `KeinPraxispostfach`; die Verschlüsselung übersetzt jetzt
+> `Smtpzugang` (Laravel las `encryption` nie).

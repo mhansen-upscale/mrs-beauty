@@ -290,6 +290,47 @@ neueren, laufenden Konversation gehören. Der Inhalt ist weg, die Zuordnung
 zur Person bleibt bis zu deren Löschung — das ist eine bewusste Grenze und
 gehört bei der DSGVO-Abnahme (WP-01) auf den Tisch.
 
+## Nachtrag 28.09.2026 · Wiedereinspielen
+
+**Schritt 5 war nur zur Hälfte gebaut.** `Rohereignisse::offene()` gab es,
+aufgerufen hat es niemand, und `docs/betrieb.md` versprach das
+Wiedereinspielen trotzdem. Was fehlte, merkt man erst im Ernstfall: Ein
+Auftrag, der nie angelaufen ist, steht nicht in `failed_jobs`. So war es in
+WP-33, als lokal kein Worker `realtime` abholte. `queue:retry` erreicht ihn
+also nicht, und nach 14 Tagen räumt die Aufbewahrung die Nachricht weg.
+
+`mrs:rohereignisse-einspielen` spielt **synchron** ein, am Worker vorbei. Ein
+Fehler erscheint dann sofort in der Konsole, und der Befehl hilft auch, wenn
+gerade der Worker fehlt. Folgeaufträge wie Einordnung und Medien laufen
+weiter über die Queue.
+
+**Wiedereinspielen**
+
+27. Ein liegengebliebenes Rohereignis wird eingespielt. Dabei entsteht seine
+    Nachricht, und das Ereignis gilt danach als verarbeitet.
+28. `--nur-zeigen` verändert nichts.
+29. Ein verarbeitetes Rohereignis wird nicht noch einmal eingespielt.
+30. Ein Rohereignis, das jünger als die Wartezeit ist, bleibt liegen: Vielleicht
+    arbeitet gerade ein Worker daran.
+31. Eine Nachricht, die es schon gibt, entsteht beim Einspielen kein zweites
+    Mal.
+32. Jede Praxis wird in ihrem eigenen Mandanten eingespielt.
+    `--organisation` beschränkt den Lauf auf eine Praxis.
+33. `--kanal` beschränkt den Lauf auf einen Kanal.
+34. Ein Fehlschlag wird mit Kurzgrund vermerkt und hält die übrigen Ereignisse
+    nicht auf. Der Befehl endet dann mit 1.
+35. Die Ausgabe enthält weder Nutzlast noch Nachrichtentext (Regel 3).
+
+**Stand.** Alle neun Kriterien sind in
+`tests/Feature/Kanaele/WiedereinspielenTest.php` umgesetzt (11 Tests). Neu
+ist der Befehl `mrs:rohereignisse-einspielen`, außerdem der Scope
+`ChannelRawEvent::liegengeblieben()` und die Konstante
+`mrs.meta.raw_event_replay_after_minutes`. Die Betriebslage zählt über
+denselben Scope. Vorher stand dort eine feste Stunde, und Befehl und
+Übersicht hätten unter „liegengeblieben“ Verschiedenes verstanden. Einen
+Zeitplan hat der Befehl nicht: Wiedereinspielen ist eine Entscheidung, die
+jemand trifft, nachdem die Ursache behoben ist.
+
 ---
 
 ## Nebenbei: der Buchungslink steht jetzt im Produkt

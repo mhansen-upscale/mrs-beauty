@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
+use App\Benachrichtigung\Plattformmails;
+use App\Benachrichtigung\Versand\PlattformMailkanal;
+use App\Contracts\Plattformmail;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,9 +26,10 @@ use Illuminate\Notifications\Notification;
  * Der Code steht nicht im Betreff: der erscheint in Benachrichtigungen auf
  * dem Sperrbildschirm, auch wenn das Telefon jemand anderes in der Hand hat.
  *
- * Im Produktlayout, nicht in dem der Praxis -- die Mail kommt vom Produkt.
+ * Im Rahmen des Produkts, nicht in dem der Praxis -- die Mail kommt vom
+ * Produkt (WP-37). Der Code steht im festen Kern, nie in der Vorlage.
  */
-final class Anmeldecode extends Notification implements ShouldBeEncrypted, ShouldQueue
+final class Anmeldecode extends Notification implements Plattformmail, ShouldBeEncrypted, ShouldQueue
 {
     use Queueable;
 
@@ -39,28 +44,20 @@ final class Anmeldecode extends Notification implements ShouldBeEncrypted, Shoul
     }
 
     /**
-     * @return list<string>
+     * @return list<class-string>
      */
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return [PlattformMailkanal::class];
     }
 
     public function toMail(object $notifiable): MailMessage
     {
-        $nachricht = (new MailMessage)
-            ->subject($this->einrichtung ? 'Code zur Einrichtung des zweiten Faktors' : 'Ihr Anmeldecode')
-            ->greeting('Guten Tag,')
-            ->line($this->einrichtung
-                ? 'mit diesem Code schalten Sie den zweiten Faktor per E-Mail ein:'
-                : 'mit diesem Code schließen Sie Ihre Anmeldung ab:')
-            ->line("**{$this->code}**")
-            ->line("Der Code gilt {$this->minuten} Minuten und nur einmal.");
-
-        return $nachricht
-            ->line($this->einrichtung
-                ? 'Haben Sie das nicht angefordert? Dann kennt jemand Ihr Passwort — bitte ändern Sie es.'
-                : 'Haben Sie sich nicht gerade angemeldet? Dann kennt jemand Ihr Passwort — bitte ändern Sie es.')
-            ->salutation('Viele Grüße von '.config('app.name'));
+        return app(Plattformmails::class)->anmeldecode(
+            $this->code,
+            $this->minuten,
+            $this->einrichtung,
+            $notifiable instanceof User ? (string) $notifiable->name : '',
+        );
     }
 }

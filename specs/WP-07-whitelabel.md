@@ -245,3 +245,8 @@ richtig.
 - **Kein Zuschnitt, keine Vorschau des Logos in Originalgröße.** Was
   hochgeladen wird, erscheint in 32 Pixel Höhe — wer ein breites Logo hat,
   sieht es klein.
+
+> **Nachtrag 28.09.2026 (WP-36).** Die Markenfarbe steht jetzt auch in den
+> Terminmails — abgedunkelt wie auf der Buchungsseite, über das Mail-Theme
+> `mrs`. Dazu eine Signatur (`brandings.mail_signature`), gepflegt unter
+> *Einstellungen → E-Mails*.

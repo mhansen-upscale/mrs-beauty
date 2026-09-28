@@ -107,21 +107,21 @@ const probeSenden = () => router.post(route('postfach.pruefen'), {}, { preserveS
 
                     <HeadingSmall
                         title="Eigener Mailserver"
-                        description="Optional. Ohne Angaben verschicken wir für Sie — mit Ihrer Adresse als Absender."
+                        description="Pflicht für Mails an Patientinnen. Ohne eigenen Server gehen keine Terminbestätigungen, Erinnerungen und Antworten hinaus."
                     />
 
                     <!--
                         Der Grund gehört an diese Stelle: wer die Felder leer
-                        lässt, soll wissen, was er dafür in Kauf nimmt.
+                        lässt, soll wissen, dass dann nichts hinausgeht (B22).
                     -->
                     <div class="flex items-start gap-3 rounded-md border bg-muted/40 px-4 py-3 text-sm">
                         <Info class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                         <div class="space-y-1">
-                            <p class="font-medium">Warum das hilft</p>
+                            <p class="font-medium">Warum es ohne nicht geht</p>
                             <p class="text-muted-foreground">
-                                Eine Mail mit Ihrer Adresse im Absender, die aus unserer Infrastruktur kommt, wird von vielen Postfächern geprüft
-                                (SPF, DKIM) — und im Zweifel als Spam einsortiert. Über Ihren eigenen Mailserver geht sie denselben Weg wie jede
-                                andere Mail Ihrer Praxis.
+                                Eine Mail mit Ihrer Adresse im Absender, die aus fremder Infrastruktur kommt, wird von vielen Postfächern geprüft
+                                (SPF, DKIM) — und im Zweifel als Spam einsortiert. Deshalb verschicken wir nicht in Ihrem Namen: Über Ihren eigenen
+                                Mailserver geht jede Mail denselben Weg wie jede andere Mail Ihrer Praxis.
                             </p>
                             <p class="text-muted-foreground">
                                 Nutzen Sie nach Möglichkeit ein <strong>App-Passwort</strong> Ihres Anbieters, kein Hauptpasswort.
@@ -197,7 +197,9 @@ const probeSenden = () => router.post(route('postfach.pruefen'), {}, { preserveS
                         </Badge>
                         <Badge v-else variant="secondary">Noch nicht geprüft</Badge>
 
-                        <span v-if="!eigenesPostfach" class="text-muted-foreground">Versand über die Plattform</span>
+                        <span v-if="!eigenesPostfach" class="text-warning"
+                            >Kein eigener Mailserver — es gehen keine Mails an Patientinnen hinaus</span
+                        >
                     </div>
 
                     <p v-if="letzterFehler === 'smtp_failed'" class="text-sm text-destructive">
@@ -206,7 +208,7 @@ const probeSenden = () => router.post(route('postfach.pruefen'), {}, { preserveS
                     </p>
 
                     <div class="flex flex-wrap items-center gap-2">
-                        <Button type="button" variant="outline" @click="probeSenden">Probemail senden</Button>
+                        <Button type="button" variant="outline" :disabled="!eigenesPostfach" @click="probeSenden">Probemail senden</Button>
                         <span class="min-w-0 break-all text-xs text-muted-foreground">an {{ probeAn }}</span>
                     </div>
 

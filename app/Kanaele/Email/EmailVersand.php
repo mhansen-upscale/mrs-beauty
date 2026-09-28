@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Kanaele\Email;
 
+use App\Benachrichtigung\Versand\KeinPraxispostfach;
 use App\Enums\MessageCostCategory;
 use App\Enums\MessageDirection;
 use App\Kanaele\Kanalfehler;
@@ -29,8 +30,10 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
  * Antwort im Postfach der Praxis und nicht in der Inbox, und die Haelfte des
  * Gespraechs fehlt.
  *
- * **Ueber welchen Weg**, entscheidet Postfach: das eigene der Praxis, wenn
- * hinterlegt, sonst der Versand der Plattform.
+ * **Nur ueber das Postfach der Praxis** (B22). Ohne eigenen Mailserver
+ * scheitert die Antwort sichtbar (`no_mailer`), statt unter fremdem Namen
+ * aus unserer Infrastruktur zu gehen -- bis zum 28.09.2026 ging sie dann
+ * ueber den Versand der Plattform.
  */
 final class EmailVersand implements Kanalversand
 {
@@ -45,6 +48,10 @@ final class EmailVersand implements Kanalversand
             throw new Kanalfehler(new Fehlereinordnung('invalid_recipient', wiederholen: false, zustand: null));
         }
 
+        if (! $verbindung->kannVersenden()) {
+            throw new Kanalfehler(new Fehlereinordnung(KeinPraxispostfach::GRUND, wiederholen: false, zustand: null));
+        }
+
         $kennung = $this->eigeneKennung($verbindung);
         $bezug = $this->letzteEingehende($nachricht);
 
@@ -57,7 +64,7 @@ final class EmailVersand implements Kanalversand
                 $bezug,
             ): void {
                 $mail->to($empfaenger)
-                    ->from($verbindung->sender_id ?? $verbindung->external_id, $verbindung->display_name)
+                    ->from((string) $verbindung->sender_id, $verbindung->display_name)
                     ->replyTo($verbindung->external_id)
                     ->subject($this->betreff($nachricht));
 

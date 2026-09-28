@@ -4,10 +4,21 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Bot, ChartNoAxesCombined, CreditCard, KeyRound, Mail, MessageCircle, Palette, ShieldCheck, User } from 'lucide-vue-next';
+import { Bot, ChartNoAxesCombined, CreditCard, KeyRound, Mail, Mails, MessageCircle, Palette, ShieldCheck, User } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 import type { SharedData } from '@/types';
+
+withDefaults(
+    defineProps<{
+        /**
+         * Für Seiten, die mehr als ein Formular zeigen — etwa den Mail-Editor
+         * mit Vorschau daneben. Sonst bleibt die Spalte schmal.
+         */
+        breit?: boolean;
+    }>(),
+    { breit: false },
+);
 
 const page = usePage<SharedData>();
 
@@ -29,12 +40,20 @@ const sidebarNavItems = computed<NavItem[]>(() => [
               { title: 'Tracking', href: '/settings/tracking', icon: ChartNoAxesCombined },
           ]
         : []),
-    ...(darf('whitelabel.manage') ? [{ title: 'Erscheinungsbild', href: '/settings/erscheinungsbild', icon: Palette }] : []),
+    ...(darf('whitelabel.manage')
+        ? [
+              { title: 'Erscheinungsbild', href: '/settings/erscheinungsbild', icon: Palette },
+              { title: 'E-Mails', href: '/settings/mails', icon: Mails },
+          ]
+        : []),
     ...(darf('agent.manage') ? [{ title: 'Assistent', href: '/settings/assistent', icon: Bot }] : []),
     ...(darf('billing.manage') ? [{ title: 'Abo', href: '/settings/abo', icon: CreditCard }] : []),
 ]);
 
 const currentPath = computed((): string => page.url.split('?')[0]);
+
+// Eine Unterseite (/settings/mails/erinnerung) gehört zu ihrem Menüpunkt.
+const aktiv = (href: string): boolean => currentPath.value === href || currentPath.value.startsWith(`${href}/`);
 </script>
 
 <template>
@@ -48,7 +67,7 @@ const currentPath = computed((): string => page.url.split('?')[0]);
                         v-for="item in sidebarNavItems"
                         :key="item.href"
                         variant="ghost"
-                        :class="['w-full justify-start', { 'bg-muted': currentPath === item.href }]"
+                        :class="['w-full justify-start', { 'bg-muted': aktiv(item.href) }]"
                         as-child
                     >
                         <Link :href="item.href">
@@ -62,7 +81,7 @@ const currentPath = computed((): string => page.url.split('?')[0]);
             <Separator class="my-6 lg:hidden" />
 
             <div class="flex-1">
-                <section class="max-w-xl space-y-12">
+                <section :class="['space-y-12', breit ? 'max-w-6xl' : 'max-w-xl']">
                     <slot />
                 </section>
             </div>

@@ -9,6 +9,7 @@ use App\Abrechnung\Paket;
 use App\Betrieb\Betriebslage;
 use App\Enums\BookingChannel;
 use App\Enums\CalendarConnectionStatus;
+use App\Enums\ChannelType;
 use App\Enums\ConnectionStatus;
 use App\Enums\SubscriptionAccess;
 use App\Enums\SubscriptionStatus;
@@ -67,6 +68,7 @@ final class Installationskennzahlen
                 'betrieb' => [
                     ...$this->lage->fuerInstallation($jetzt),
                     'praxenMitStoerung' => $this->praxenMitStoerung(),
+                    'praxenOhnePostfach' => $this->praxenOhnePostfach(),
                 ],
             ],
         );
@@ -188,6 +190,33 @@ final class Installationskennzahlen
                 ->whereIn('booked_via', array_map(fn (BookingChannel $kanal): string => $kanal->value, self::SELBST_GEBUCHT))
                 ->count(),
         ];
+    }
+
+    /**
+     * Wie viele Praxen keine Mail an eine Patientin verschicken koennen (B22).
+     *
+     * **Die Zahl fuer den Rollout von WP-36**: ohne eigenes Postfach gehen
+     * weder Terminmails noch Antworten hinaus. Gesperrte Praxen zaehlen nicht
+     * -- sie verschicken ohnehin nichts.
+     */
+    private function praxenOhnePostfach(): int
+    {
+        $mitPostfach = ChannelConnection::query()
+            ->where('channel', ChannelType::Email->value)
+            ->whereNotNull('smtp_host')
+            ->whereNotNull('smtp_port')
+            ->whereNotNull('sender_id')
+            ->whereIn('status', [ConnectionStatus::Active->value, ConnectionStatus::Degraded->value])
+            ->pluck('organization_id')
+            ->map(strval(...))
+            ->unique();
+
+        return Organization::query()
+            ->whereNull('suspended_at')
+            ->pluck('id')
+            ->map(strval(...))
+            ->diff($mitPostfach)
+            ->count();
     }
 
     /**

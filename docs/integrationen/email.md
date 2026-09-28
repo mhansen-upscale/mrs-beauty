@@ -85,28 +85,37 @@ wurde. Ein Unzustellbarkeitsbericht kommt als neue Mail und ist eine.
 **Kein Opt-in nach Metas Regeln.** Was für Werbung per Mail gilt, steht im
 UWG und nicht bei Meta; die Einwilligungen aus WP-18 bilden es ab.
 
-## Zustellbarkeit: zwei Wege
+## Zustellbarkeit: ein Weg (B22, seit 28.09.2026)
 
-Wir senden im Namen der Praxis. Ob das ankommt, hängt daran, wer die Mail
-tatsächlich verschickt.
-
-**Eigenes Postfach** (empfohlen). Die Praxis hinterlegt unter *Einstellungen
-→ Postfach* Server, Port, Verschlüsselung, Benutzername und Passwort. Die
-Antwort geht dann denselben Weg wie jede andere Mail dieser Praxis — SPF und
-DKIM stimmen von selbst, ohne dass jemand DNS anfassen muss. Zugangsdaten
-liegen verschlüsselt an der Kanalverbindung (Regel 3); empfohlen wird ein
+Wir senden im Namen der Praxis — **nur über ihr eigenes Postfach**. Die
+Praxis hinterlegt unter *Einstellungen → Postfach* Server, Port,
+Verschlüsselung, Benutzername und Passwort. Jede Mail an eine Patientin —
+Antwort aus dem Posteingang, Wartelisten-Angebot, Terminmail (WP-36) — geht
+dann denselben Weg wie jede andere Mail dieser Praxis: SPF und DKIM stimmen
+von selbst, ohne dass jemand DNS anfassen muss. Zugangsdaten liegen
+verschlüsselt an der Kanalverbindung (Regel 3); empfohlen wird ein
 **App-Passwort** des Anbieters, kein Hauptpasswort.
 
-**Versand über die Plattform** (Rückfall). Ohne hinterlegte Zugangsdaten
-verschicken wir, mit der Adresse der Praxis im Absender. Das besteht die
-Prüfungen empfangender Postfächer nur, wenn `SPF` und `DKIM` der Domain das
-zulassen — **Betriebsarbeit je Kunde**. Der Rückfall ist trotzdem kein
-Notbehelf: er hält eine Praxis arbeitsfähig, die gerade erst anfängt.
+**Kein Rückfall mehr.** Bis zum 28.09.2026 verschickten wir ohne
+Zugangsdaten selbst, mit der Adresse der Praxis im Absender — ein Weg, der
+Prüfungen nur bestand, wenn jemand SPF und DKIM der Praxisdomain gesetzt
+hatte, und auf dem unsere Infrastruktur für fremde Post haftete. Jetzt
+scheitert eine Mail ohne Postfach sichtbar: die Antwort als `no_mailer` im
+Posteingang, die Terminmail als `no_mailer` an ihrer Zeile, und das
+Dashboard sagt es.
 
-`ChannelConnection::hatEigenesPostfach()` entscheidet, `App\Kanaele\Email\
-Postfach` baut den Mailer je Verbindung. Ein benannter Mailer in der
-Konfiguration käme nicht in Frage: die Zugangsdaten gehören einem Mandanten,
-nicht einer Datei, die alle teilen.
+`ChannelConnection::kannVersenden()` entscheidet (eigener Server,
+Absenderadresse, Verbindung nicht gestört), `App\Kanaele\Email\Postfach`
+baut den Mailer je Verbindung und wirft `KeinPraxispostfach`, wenn es keinen
+gibt. Ein benannter Mailer in der Konfiguration käme nicht in Frage: die
+Zugangsdaten gehören einem Mandanten, nicht einer Datei, die alle teilen —
+und ein benannter Mailer bliebe im Arbeiter mit den Zugangsdaten der vorigen
+Praxis hängen (A15).
+
+**Verschlüsselung, wie gewählt.** Laravel liest den Schlüssel `encryption`
+nicht; `App\Benachrichtigung\Versand\Smtpzugang` übersetzt ihn: `ssl` oder
+Port 465 heißt implizites TLS, `tls` heißt **erzwungenes** STARTTLS, „keine“
+heißt ohne.
 
 ## Die Probemail
 

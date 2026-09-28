@@ -15,6 +15,7 @@ Route::get('dashboard', DashboardController::class)
     ->name('dashboard');
 
 require __DIR__.'/buchung.php';
+require __DIR__.'/mail.php';
 require __DIR__.'/termine.php';
 require __DIR__.'/stammdaten.php';
 require __DIR__.'/kalender.php';

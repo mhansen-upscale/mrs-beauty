@@ -767,6 +767,12 @@ return [
         // erneut eingespielt werden koennen.
         'raw_event_retention_days' => 14,
 
+        // Ab wann ein unverarbeitetes Rohereignis als liegengeblieben gilt
+        // (WP-19, Nachtrag 28.09.2026). Juenger koennte gerade ein Worker
+        // daran sitzen. Dieselbe Grenze gilt fuer die Betriebslage und fuer
+        // mrs:rohereignisse-einspielen -- beide sollen dasselbe meinen.
+        'raw_event_replay_after_minutes' => 60,
+
         // Service-Fenster fuer WhatsApp, Instagram und Messenger.
         'service_window_hours' => 24,
 
@@ -1025,6 +1031,54 @@ return [
             'brief_max' => 300,
         ],
 
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mails der Praxis und der Plattform (WP-36, WP-37)
+    |--------------------------------------------------------------------------
+    |
+    | Fundstelle: specs/WP-36-mails-der-praxis.md, specs/WP-37-plattformmails.md;
+    | Entscheidungen P12, B22, B23, C17, D15.
+    |
+    */
+
+    'mail' => [
+
+        // Die Farbe, wenn eine Marke keine hat: Petrol-600, dieselbe wie
+        // --primary im Admin-Bereich (resources/css/app.css,
+        // docs/design/farben.md) -- als Hex, weil eine Mail keine
+        // CSS-Variablen kennt.
+        'produktfarbe' => '#1F5D5B',
+
+        // Obergrenzen je Feld einer Vorlage, in Zeichen. Der Betreff passt
+        // damit noch in jede Vorschauzeile; ein Text von 2.000 Zeichen ist
+        // eine lange Mail, keine kurze Geschichte.
+        'laenge' => [
+            'subject' => 200,
+            'greeting' => 200,
+            'salutation' => 300,
+            'text' => 2000,
+            'signatur' => 600,
+            'fussnote' => 600,
+        ],
+
+        // Bezeichnungen, die im Betreff auffallen (C17) -- dieselbe Grenze
+        // wie App\Werbung\Namenspruefung: "PRP" traefe sonst zu viel.
+        'betreff_mindestlaenge' => 4,
+
+        // Wie lange ein Mailserver fuer eine Antwort bekommt, in Sekunden.
+        // Laenger haelt einen Arbeiter der schnellen Schlange fest.
+        'smtp_timeout' => 15,
+
+        // Wie weit das Dashboard auf gescheiterte Terminmails zurueckschaut
+        // (Regel 4: ein Ausfall erzeugt einen Hinweis im Produkt).
+        'fehlschlag_rueckblick_tage' => 7,
+
+        // Das Logo der Produktmails (WP-37). **Nur PNG und JPEG**: Outlook
+        // zeigt kein WebP, und ein SVG kann Skript tragen.
+        'logo_mimes' => ['image/png', 'image/jpeg'],
+        'logo_max_kb' => 512,
     ],
 
     /*

@@ -140,6 +140,8 @@ it('schickt Erinnerungen an gebuchte Termine trotz Abo-Sperre', function (): voi
     Notification::fake();
 
     alsMandant(organisation());
+    // Terminmails gehen nur ueber das Postfach der Praxis (B22).
+    praxispostfach();
     $szenario = new Szenario;
     $termin = app(Terminplaner::class)->buche($szenario->vorschlag(), $szenario->kontakt, status: AppointmentStatus::Confirmed, jetzt: $szenario->jetzt());
 

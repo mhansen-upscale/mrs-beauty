@@ -73,8 +73,10 @@ it('verschickt auch das Mailgeruest auf Deutsch', function (): void {
     // ueber lang/de.json ersetzen.
     $html = (string) (new VerifyEmail)->toMail($benutzer)->render();
 
-    expect($html)->toContain('nicht anklicken lässt')
-        ->and($html)->toContain('Alle Rechte vorbehalten.')
+    // Seit WP-37 im eigenen Rahmen (mail.rahmen): der Satz unter der
+    // Schaltflaeche steht dort auf Deutsch, der Fuss nennt das Produkt.
+    expect($html)->toContain('nicht funktioniert, kopieren Sie diese Adresse')
+        ->and($html)->toContain((string) config('app.name'))
         ->and($html)->not->toContain('having trouble')
         ->and($html)->not->toContain('All rights reserved');
 });
@@ -115,10 +117,11 @@ it('verschickt den Anmeldecode auf Deutsch und im Produktlayout (WP-35, AK 46)',
         // Ohne Knopf stehen alle Zeilen oben -- der Rat zum Passwort auch.
         ->and(implode(' ', $nachricht->introLines))->toContain('ändern Sie es')
         ->and($nachricht->salutation)->toContain('Viele Grüße')
-        // Das Layout der Praxis traegt ihr Logo und ihre Farbe. Diese Mail
-        // kommt vom Produkt, nicht von der Praxis.
-        ->and($nachricht->markdown)->toBe('notifications::email')
-        ->and($html)->toContain('Alle Rechte vorbehalten.');
+        // Der Rahmen traegt die Marke des Produkts, nicht die einer Praxis
+        // (WP-37): diese Mail kommt vom Produkt.
+        ->and($nachricht->markdown)->toBe('mail.rahmen')
+        ->and($html)->toContain((string) config('app.name'))
+        ->and($html)->not->toContain('All rights reserved');
 
     $einrichtung = (new Anmeldecode('123456', 10, true))->toMail($benutzer);
 

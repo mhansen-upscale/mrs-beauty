@@ -2,12 +2,16 @@
 
 declare(strict_types=1);
 
+use App\Enums\Mailart;
+use App\Enums\Versandweg;
 use App\Http\Controllers\Auth\ZweiFaktorAnmeldungController;
 use App\Http\Controllers\Backoffice\BackofficeController;
 use App\Http\Controllers\Backoffice\BetreiberAnmeldungController;
 use App\Http\Controllers\Backoffice\BetreiberController;
 use App\Http\Controllers\Backoffice\BetreiberprotokollController;
 use App\Http\Controllers\Backoffice\PaketController;
+use App\Http\Controllers\Backoffice\PlattformmailController;
+use App\Http\Controllers\Backoffice\VersandController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -72,6 +76,35 @@ Route::middleware(['auth', 'verified', 'betreiber'])->prefix('backoffice')->grou
     Route::middleware('betreiber:paket.verwalten')->group(function () {
         Route::get('paket', [PaketController::class, 'index'])->name('backoffice.paket');
         Route::post('paket', [PaketController::class, 'store'])->name('backoffice.paket.store');
+    });
+
+    // Der Versand der Plattform und die Produktmails (WP-37, B23) -- nur
+    // Super-Admin. Wer den Mailserver aendert, entscheidet, ob Anmeldecodes
+    // ankommen.
+    Route::middleware('betreiber:versand.verwalten')->group(function () {
+        Route::get('versand', [VersandController::class, 'edit'])->name('backoffice.versand');
+        Route::put('versand', [VersandController::class, 'update'])->name('backoffice.versand.update');
+        Route::post('versand/probe', [VersandController::class, 'probe'])
+            ->middleware('throttle:6,1')
+            ->name('backoffice.versand.probe');
+        Route::post('versand/logo', [VersandController::class, 'logo'])->name('backoffice.versand.logo');
+        Route::delete('versand/logo', [VersandController::class, 'logoEntfernen'])->name('backoffice.versand.logo.entfernen');
+
+        $produktmails = array_map(fn (Mailart $art): string => $art->value, Mailart::vorlagen(Versandweg::Plattform));
+
+        Route::get('mails', [PlattformmailController::class, 'index'])->name('backoffice.mails');
+        Route::get('mails/{mailart}', [PlattformmailController::class, 'edit'])
+            ->whereIn('mailart', $produktmails)->name('backoffice.mails.edit');
+        Route::put('mails/{mailart}', [PlattformmailController::class, 'update'])
+            ->whereIn('mailart', $produktmails)->name('backoffice.mails.update');
+        Route::delete('mails/{mailart}', [PlattformmailController::class, 'destroy'])
+            ->whereIn('mailart', $produktmails)->name('backoffice.mails.destroy');
+        Route::post('mails/{mailart}/vorschau', [PlattformmailController::class, 'vorschau'])
+            ->whereIn('mailart', $produktmails)->name('backoffice.mails.vorschau');
+        Route::post('mails/{mailart}/probe', [PlattformmailController::class, 'probe'])
+            ->whereIn('mailart', $produktmails)
+            ->middleware('throttle:6,1')
+            ->name('backoffice.mails.probe');
     });
 
     Route::get('protokoll', [BetreiberprotokollController::class, 'index'])

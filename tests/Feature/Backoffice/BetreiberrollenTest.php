@@ -62,6 +62,19 @@ function betreiberrouten(Organization $praxis, User $anderer): array
         'backoffice.betreiber.zwei-faktor' => ['methode' => 'post', 'parameter' => $konto, 'faehigkeit' => OperatorAbility::BetreiberVerwalten],
         'backoffice.betreiber.loeschen' => ['methode' => 'delete', 'parameter' => $konto, 'faehigkeit' => OperatorAbility::BetreiberVerwalten],
         'backoffice.protokoll' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::ProtokollSehen],
+
+        // Der Versand der Plattform und die Produktmails (WP-37 AK 1).
+        'backoffice.versand' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.versand.update' => ['methode' => 'put', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.versand.probe' => ['methode' => 'post', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.versand.logo' => ['methode' => 'post', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.versand.logo.entfernen' => ['methode' => 'delete', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.mails' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.mails.edit' => ['methode' => 'get', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.mails.update' => ['methode' => 'put', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.mails.destroy' => ['methode' => 'delete', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.mails.vorschau' => ['methode' => 'post', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+        'backoffice.mails.probe' => ['methode' => 'post', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
         'impersonation.store' => ['methode' => 'post', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],
         'impersonation.destroy' => ['methode' => 'delete', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],
     ];

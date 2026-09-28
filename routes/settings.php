@@ -2,9 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Enums\Mailart;
+use App\Enums\Versandweg;
 use App\Http\Controllers\Audit\ImpersonationController;
 use App\Http\Controllers\Settings\AgentController;
 use App\Http\Controllers\Settings\EinfuehrungController;
+use App\Http\Controllers\Settings\MailvorlagenController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PostfachController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -85,6 +88,24 @@ Route::middleware('auth')->group(function () {
         Route::put('settings/erscheinungsbild', [ErscheinungsbildController::class, 'update'])->name('erscheinungsbild.update');
         Route::post('settings/erscheinungsbild/logo', [ErscheinungsbildController::class, 'logo'])->name('erscheinungsbild.logo');
         Route::delete('settings/erscheinungsbild/logo', [ErscheinungsbildController::class, 'logoEntfernen'])->name('erscheinungsbild.logo.entfernen');
+
+        // Die Mails der Praxis (WP-36, P12): welche hinausgehen, und die
+        // fuenf Terminmails als Vorlagen. **Nur die Mailarten der Praxis** --
+        // die Mails an Konten gestaltet der Betreiber (WP-37).
+        $terminmails = array_map(fn (Mailart $art): string => $art->value, Mailart::vorlagen(Versandweg::Praxis));
+
+        Route::get('settings/mails', [MailvorlagenController::class, 'index'])->name('mailvorlagen.index');
+        Route::put('settings/mails/signatur', [MailvorlagenController::class, 'signatur'])->name('mailvorlagen.signatur');
+        Route::get('settings/mails/{mailart}', [MailvorlagenController::class, 'edit'])
+            ->whereIn('mailart', $terminmails)->name('mailvorlagen.edit');
+        Route::put('settings/mails/{mailart}', [MailvorlagenController::class, 'update'])
+            ->whereIn('mailart', $terminmails)->name('mailvorlagen.update');
+        Route::delete('settings/mails/{mailart}', [MailvorlagenController::class, 'destroy'])
+            ->whereIn('mailart', $terminmails)->name('mailvorlagen.destroy');
+        Route::post('settings/mails/{mailart}/vorschau', [MailvorlagenController::class, 'vorschau'])
+            ->whereIn('mailart', $terminmails)->name('mailvorlagen.vorschau');
+        Route::post('settings/mails/{mailart}/probe', [MailvorlagenController::class, 'probe'])
+            ->whereIn('mailart', $terminmails)->middleware('throttle:6,1')->name('mailvorlagen.probe');
     });
 
     // Der Assistent (WP-23): Not-Aus und Konfidenzschwelle. Eigene

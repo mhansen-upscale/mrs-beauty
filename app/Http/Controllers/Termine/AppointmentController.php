@@ -393,6 +393,9 @@ final class AppointmentController extends Controller
                         $zeile->failed_at !== null => match ($zeile->failure) {
                             'no_channel' => 'kein Kontaktweg hinterlegt',
                             'mail' => 'Mail ließ sich nicht verschicken',
+                            // B22: ohne eigenes Postfach geht keine Mail an
+                            // eine Patientin hinaus.
+                            'no_mailer' => 'kein Postfach der Praxis eingerichtet',
                             default => (string) $zeile->failure,
                         },
                         default => $zeile->scheduled_for === null

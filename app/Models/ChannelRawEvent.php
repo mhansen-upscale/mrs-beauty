@@ -81,4 +81,19 @@ class ChannelRawEvent extends TenantModel implements HasPersonalData
     {
         return $query->whereNull('processed_at');
     }
+
+    /**
+     * Offen und alt genug, dass kein Worker mehr daran sitzt.
+     *
+     * @param  Builder<ChannelRawEvent>  $query
+     * @return Builder<ChannelRawEvent>
+     */
+    public function scopeLiegengeblieben(Builder $query, CarbonImmutable $jetzt): Builder
+    {
+        return $query->offen()->where(
+            'created_at',
+            '<',
+            $jetzt->subMinutes((int) config('mrs.meta.raw_event_replay_after_minutes')),
+        );
+    }
 }

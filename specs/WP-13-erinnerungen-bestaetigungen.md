@@ -210,3 +210,10 @@ Mailgerüst trägt bis dahin noch unseren Namen.
 Das Mailgerüst (Kopf und Fuß der Nachricht) trägt `config('app.name')`. Für
 die Buchungsseite ist das gelöst, für die Mail nicht — sie gehört mit zum
 Whitelabel (WP-07).
+
+> **Nachtrag 28.09.2026 (WP-36).** Die fünf Texte sind jetzt Vorlagen der
+> Praxis (P12) — ohne Vorlage gelten wörtlich die bisherigen. Der Betreff
+> nennt weiter keine Behandlung; geprüft wird beim Speichern und beim
+> Erzeugen (C17). **Versendet wird nur noch über das Postfach der Praxis**
+> (B22): Absenderadresse und Anzeigename sind ihre, ohne Postfach steht die
+> Zeile als `no_mailer`. Die Farbe der Praxis steht jetzt auch in der Mail.

@@ -36,9 +36,13 @@ interface Kennzahlen {
         offeneEreignisse: number;
         mandanten: number;
         praxenMitStoerung: number;
+        /** WP-36, B22: ohne eigenes Postfach gehen keine Patientenmails hinaus. */
+        praxenOhnePostfach: number;
         gescheiterteAboEingriffe: number;
         gescheitertePaketfassungen: number;
         paketHinweise: number;
+        /** WP-37, B23: der hinterlegte Mailserver -- oder `.env`. */
+        plattformversand: { hinterlegt: boolean; gilt: boolean; stoerung: string | null };
     };
 }
 
@@ -152,6 +156,12 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' 
                         :ton="betrieb.praxenMitStoerung > 0 ? 'warnung' : null"
                     />
                     <Kennzahl
+                        titel="Praxen ohne Postfach"
+                        :wert="zahl(betrieb.praxenOhnePostfach)"
+                        zusatz="verschicken keine Mails an Patientinnen"
+                        :ton="betrieb.praxenOhnePostfach > 0 ? 'warnung' : null"
+                    />
+                    <Kennzahl
                         titel="Fehlgeschlagene Aufträge"
                         :wert="zahl(betrieb.fehlgeschlageneAuftraege)"
                         :zusatz="betrieb.juengsterFehlschlag ? `zuletzt ${datum(betrieb.juengsterFehlschlag)}` : null"
@@ -169,6 +179,19 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Dashboard', href: '/dashboard' 
                         :wert="zahl(betrieb.gescheiterteAboEingriffe + betrieb.gescheitertePaketfassungen + betrieb.paketHinweise)"
                         :zusatz="`${zahl(betrieb.gescheiterteAboEingriffe)} Eingriffe · ${zahl(betrieb.gescheitertePaketfassungen)} Paketfassungen · ${zahl(betrieb.paketHinweise)} Abos`"
                         :ton="betrieb.gescheiterteAboEingriffe + betrieb.gescheitertePaketfassungen + betrieb.paketHinweise > 0 ? 'kritisch' : null"
+                    />
+                    <!-- Scheitert der hinterlegte Server, gehen die Produktmails über .env (B23). -->
+                    <Kennzahl
+                        titel="Plattformversand"
+                        :wert="betrieb.plattformversand.stoerung ? 'Gestört' : betrieb.plattformversand.gilt ? 'Eigener Server' : 'Umgebung'"
+                        :zusatz="
+                            betrieb.plattformversand.stoerung
+                                ? 'Mails gehen über die Umgebung (.env)'
+                                : betrieb.plattformversand.hinterlegt && !betrieb.plattformversand.gilt
+                                  ? 'Server hinterlegt, noch nicht geprüft'
+                                  : null
+                        "
+                        :ton="betrieb.plattformversand.stoerung ? 'kritisch' : null"
                     />
                     <!-- Etwas liegt, und niemand holt es ab: ein Arbeiter fehlt. -->
                     <Kennzahl
