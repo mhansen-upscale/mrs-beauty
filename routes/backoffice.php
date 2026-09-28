@@ -65,6 +65,7 @@ Route::middleware(['auth', 'verified', 'betreiber'])->prefix('backoffice')->grou
         Route::post('betreiber/{betreiber}/deaktivieren', [BetreiberController::class, 'deaktivieren'])->name('backoffice.betreiber.deaktivieren');
         Route::post('betreiber/{betreiber}/reaktivieren', [BetreiberController::class, 'reaktivieren'])->name('backoffice.betreiber.reaktivieren');
         Route::post('betreiber/{betreiber}/zwei-faktor-zuruecksetzen', [BetreiberController::class, 'zweiFaktorZuruecksetzen'])->name('backoffice.betreiber.zwei-faktor');
+        Route::delete('betreiber/{betreiber}', [BetreiberController::class, 'loeschen'])->name('backoffice.betreiber.loeschen');
     });
 
     // Das Paket in Fassungen (WP-06b, B20): Speichern legt eine neue an.

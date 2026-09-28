@@ -402,8 +402,56 @@ Anzeige.
 - Weiterhin gilt: kein `db:seed` außerhalb der Entwicklung (Seeder-Konten
   mit bekanntem Passwort). Siehe `docs/betrieb.md`.
 
+## Nachtrag 28.09.2026: Betreiberkonten löschen
+
+Auf Wunsch: Ein Super-Admin kann ein Betreiberkonto nicht nur deaktivieren,
+sondern endgültig löschen (`DELETE backoffice/betreiber/{betreiber}`,
+`betreiber.verwalten`). Deaktivieren bleibt der Weg für eine Pause, denn es
+lässt sich rückgängig machen.
+
+- **Dieselben Grenzen wie beim Deaktivieren:** nicht das eigene Konto, nicht
+  der letzte aktive Super-Admin, das eigene Passwort im Dialog, nur
+  Betreiberkonten (ein Praxiskonto ergibt 404).
+- **Eine Stelle:** `Betreiberkonten::loesche()`. Sie beendet eine laufende
+  Impersonation (`ended_reason = account_deleted`), schreibt
+  `operator.deleted` mit der Rolle und ohne Name oder Adresse (C5), löscht
+  einen offenen Passwortlink und dann das Konto, alles in einer Transaktion.
+- **Das Protokoll bleibt.** `audit_logs` hat keinen Fremdschlüssel auf
+  `users`, und `actor_label` hält den Namen fest. Das Betreiberprotokoll
+  fand die Handlungen an Praxen bisher über die vorhandenen Betreiberkonten.
+  Jetzt findet es auch die eines gelöschten Kontos, und zwar über dessen
+  Eintrag `operator.deleted`. Mit dem Ablauf der Frist dieses Eintrags (C7)
+  verschwinden sie hier, im Protokoll der Praxis bleiben sie.
+- **Die Paketfassung** eines gelöschten Kontos nennt „Gelöschtes Konto“ als
+  Urheber, nicht „Migration“.
+- **Die Lücke im Profil ist zu.** Unter Einstellungen → Profil konnte sich
+  jedes Konto selbst löschen, auch der letzte Super-Admin, und das ohne
+  Protokolleintrag und ohne Ende der Impersonation. Für Betreiberkonten ist
+  der Weg jetzt gesperrt und der Abschnitt ausgeblendet.
+
+**Abnahmekriterien**
+
+23. Ein Super-Admin löscht ein CS-Konto. Das Konto und sein offener
+    Passwortlink sind weg.
+24. `operator.deleted` steht ohne Organisation mit Handelndem im Protokoll,
+    ohne Name und Adresse des gelöschten Kontos.
+25. Ohne richtiges Passwort wird nichts gelöscht.
+26. Weder das eigene Konto noch der letzte aktive Super-Admin lassen sich
+    löschen. Ein deaktivierter Super-Admin lässt sich löschen, solange ein
+    aktiver bleibt.
+27. Eine laufende Impersonation des Kontos endet mit dem Löschen.
+28. Die Handlungen des Kontos an Praxen stehen weiter im Betreiberprotokoll,
+    mit seinem Namen.
+29. Ein Betreiberkonto kann sich unter Einstellungen nicht selbst löschen.
+
+Abgedeckt in `BetreiberverwaltungTest` (23–29), `BetreiberrollenTest`
+(Route in der Tabelle) und `PaketverwaltungTest` (Urheber einer Fassung).
+
 ## Offen
 
+- **Der Filter „Betreiber“ im Betreiberprotokoll** kennt nur vorhandene
+  Konten. Die Einträge eines gelöschten Kontos erscheinen ungefiltert, sie
+  lassen sich aber nicht nach der Person auswählen.
 - ~~**Zweiter Faktor** (C14, zurückgestellt).~~ Freiwillig, mit WP-35 (C16).
 - **Den Rollenkatalog bestätigen.** Die Tabelle oben ist abgeleitet.
 - **Die Mail zum Passwort** sagt auch einem neuen Konto „weil für Ihren

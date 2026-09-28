@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Backoffice;
 
 use App\Audit\AuditLogger;
+use App\Audit\Impersonation;
 use App\Enums\AuditEvent;
 use App\Enums\OperatorRole;
+use App\Models\ImpersonationSession;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -27,10 +30,17 @@ use RuntimeException;
  * **Ohne Mail** (Staging, oder der letzte Super-Admin hat sein Passwort
  * verloren) setzt allein die Konsole ein Passwort: `neuesPasswort()`. Es
  * steht einmal in deren Ausgabe und sonst nirgends.
+ *
+ * **Geloescht wird nur hier** (Nachtrag 28.09.2026), nicht ueber das Profil:
+ * dort fehlten der Protokolleintrag, das Ende der Impersonation und der
+ * Schutz des letzten Super-Admins.
  */
 final class Betreiberkonten
 {
-    public function __construct(private readonly AuditLogger $protokoll) {}
+    public function __construct(
+        private readonly AuditLogger $protokoll,
+        private readonly Impersonation $impersonation,
+    ) {}
 
     /**
      * @throws RuntimeException Wenn die Adresse einem Praxiskonto gehoert
@@ -99,5 +109,43 @@ final class Betreiberkonten
         );
 
         return $passwort;
+    }
+
+    /**
+     * Loescht ein Betreiberkonto endgueltig.
+     *
+     * Wer das darf, pruefen die Aufrufer -- nie das eigene Konto, nie den
+     * letzten aktiven Super-Admin.
+     *
+     * **Das Protokoll bleibt.** Es haelt den Namen der Handelnden in
+     * `actor_label` fest, und `audit_logs` kennt keinen Fremdschluessel auf
+     * `users`. Der Eintrag `operator.deleted` nennt die Rolle, nicht Name oder
+     * Adresse (C5); ueber ihn findet das Betreiberprotokoll die Handlungen
+     * der Person weiter.
+     */
+    public function loesche(User $konto): void
+    {
+        DB::transaction(function () use ($konto): void {
+            // Das Konto meldet sich nie mehr ab -- ohne das hier stuende in
+            // der Praxis bis zum Ablauf "Support hat Zugriff".
+            $sitzung = $this->impersonation->laufendeVon($konto);
+
+            if ($sitzung instanceof ImpersonationSession) {
+                $this->impersonation->end($sitzung, 'account_deleted');
+            }
+
+            $this->protokoll->record(
+                ereignis: AuditEvent::OperatorDeleted,
+                gegenstand: $konto,
+                kontext: ['rolle' => $konto->betreiberRolle()?->value],
+                ohneOrganisation: true,
+            );
+
+            // Ein offener Link aus der Mail gaelte sonst fuer ein Konto, das
+            // spaeter jemand unter derselben Adresse neu anlegt.
+            Password::deleteToken($konto);
+
+            $konto->delete();
+        });
     }
 }

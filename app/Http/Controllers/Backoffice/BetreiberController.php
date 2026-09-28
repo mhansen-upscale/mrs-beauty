@@ -168,6 +168,29 @@ final class BetreiberController extends Controller
     }
 
     /**
+     * Loescht ein Betreiberkonto endgueltig (Nachtrag 28.09.2026). Dieselben
+     * Grenzen wie beim Deaktivieren -- nur ohne Weg zurueck.
+     */
+    public function loeschen(Request $request, User $betreiber): RedirectResponse
+    {
+        $this->nurBetreiber($betreiber);
+
+        $request->validate(BackofficeController::PASSWORT);
+
+        if ($betreiber->is($request->user()) || $betreiber->istLetzterSuperAdmin()) {
+            throw ValidationException::withMessages([
+                'betreiber' => $betreiber->istLetzterSuperAdmin()
+                    ? 'Das ist der letzte aktive Super-Admin. Ernennen Sie zuerst einen weiteren.'
+                    : 'Das eigene Konto löscht jemand anderes.',
+            ]);
+        }
+
+        $this->konten->loesche($betreiber);
+
+        return back()->with('erfolg', 'Konto gelöscht.');
+    }
+
+    /**
      * Setzt den zweiten Faktor eines anderen Betreibers zurueck (WP-35). Den
      * eigenen aendert jede Person unter Einstellungen; den des letzten
      * Super-Admins, der nicht mehr hineinkommt, die Konsole.

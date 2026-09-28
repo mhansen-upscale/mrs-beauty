@@ -60,6 +60,7 @@ function betreiberrouten(Organization $praxis, User $anderer): array
         'backoffice.betreiber.deaktivieren' => ['methode' => 'post', 'parameter' => $konto, 'faehigkeit' => OperatorAbility::BetreiberVerwalten],
         'backoffice.betreiber.reaktivieren' => ['methode' => 'post', 'parameter' => $konto, 'faehigkeit' => OperatorAbility::BetreiberVerwalten],
         'backoffice.betreiber.zwei-faktor' => ['methode' => 'post', 'parameter' => $konto, 'faehigkeit' => OperatorAbility::BetreiberVerwalten],
+        'backoffice.betreiber.loeschen' => ['methode' => 'delete', 'parameter' => $konto, 'faehigkeit' => OperatorAbility::BetreiberVerwalten],
         'backoffice.protokoll' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::ProtokollSehen],
         'impersonation.store' => ['methode' => 'post', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],
         'impersonation.destroy' => ['methode' => 'delete', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],

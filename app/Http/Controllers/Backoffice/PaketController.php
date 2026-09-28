@@ -81,7 +81,7 @@ final class PaketController extends Controller
                 'aktuell' => $fassung->is($aktuell),
                 'bestand' => $fassung->migrate_existing,
                 'grund' => $fassung->reason,
-                'von' => $namen->get((string) $fassung->getAttributes()['created_by_user_id']),
+                'von' => $this->urheber($fassung, $namen),
                 'angelegt' => $fassung->created_at?->toIso8601String(),
                 'abos' => $abos['je'][(string) $fassung->getKey()] ?? 0,
                 'wartend' => $abos['wartend'][(string) $fassung->getKey()] ?? 0,
@@ -179,6 +179,24 @@ final class PaketController extends Controller
             'blockAgentenlaeufe' => $fassung->topup_agent_runs,
             'testphaseTage' => $fassung->trial_days,
         ];
+    }
+
+    /**
+     * Wer die Fassung angelegt hat. **Ohne Kennung war es die Migration**;
+     * mit einer, die keinen Namen mehr findet, ein geloeschtes Betreiberkonto
+     * (28.09.2026). Den Namen von damals hat das Protokoll.
+     *
+     * @param  Collection<string, string>  $namen
+     */
+    private function urheber(PlanVersion $fassung, Collection $namen): ?string
+    {
+        $kennung = $fassung->getAttributes()['created_by_user_id'] ?? null;
+
+        if (! is_string($kennung)) {
+            return null;
+        }
+
+        return $namen->get($kennung) ?? 'Gelöschtes Konto';
     }
 
     /**

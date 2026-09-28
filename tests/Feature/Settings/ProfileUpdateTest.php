@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Settings;
 
+use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -97,5 +98,76 @@ class ProfileUpdateTest extends TestCase
             ->assertRedirect('/settings/profile');
 
         $this->assertNotNull($user->fresh());
+    }
+
+    /*
+     * Die letzte Inhaberin muss bleiben (WP-04) -- auch gegen sich selbst.
+     * Sonst sperrt sich die Praxis aus ihrem eigenen Produkt aus, und niemand
+     * ausser dem Betreiber kommt wieder hinein.
+     */
+
+    public function test_laesst_die_letzte_inhaberin_ihr_konto_nicht_loeschen(): void
+    {
+        $praxis = alsMandant(organisation('Demo-Praxis'));
+        $inhaberin = User::factory()->fuer($praxis, Role::Owner)->create();
+        // Eine deaktivierte Inhaberin kommt nicht hinein -- sie zaehlt nicht.
+        User::factory()->fuer($praxis, Role::Owner)->deaktiviert()->create();
+        ohneMandant();
+
+        $response = $this
+            ->actingAs($inhaberin)
+            ->from('/settings/profile')
+            ->delete('/settings/profile', [
+                'password' => 'password',
+            ]);
+
+        $response
+            ->assertSessionHasErrors('password')
+            ->assertRedirect('/settings/profile');
+
+        $this->assertAuthenticatedAs($inhaberin);
+        $this->assertNotNull($inhaberin->fresh());
+    }
+
+    public function test_loescht_eine_inhaberin_wenn_eine_weitere_bleibt(): void
+    {
+        $praxis = alsMandant(organisation('Demo-Praxis'));
+        $inhaberin = User::factory()->fuer($praxis, Role::Owner)->create();
+        User::factory()->fuer($praxis, Role::Owner)->create();
+        ohneMandant();
+
+        $response = $this
+            ->actingAs($inhaberin)
+            ->delete('/settings/profile', [
+                'password' => 'password',
+            ]);
+
+        $response
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/');
+
+        $this->assertGuest();
+        $this->assertNull($inhaberin->fresh());
+    }
+
+    public function test_loescht_ein_mitglied_ohne_inhaberrolle(): void
+    {
+        $praxis = alsMandant(organisation('Demo-Praxis'));
+        User::factory()->fuer($praxis, Role::Owner)->create();
+        $empfang = User::factory()->fuer($praxis, Role::Reception)->create();
+        ohneMandant();
+
+        $response = $this
+            ->actingAs($empfang)
+            ->delete('/settings/profile', [
+                'password' => 'password',
+            ]);
+
+        $response
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/');
+
+        $this->assertGuest();
+        $this->assertNull($empfang->fresh());
     }
 }

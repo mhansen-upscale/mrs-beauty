@@ -409,6 +409,12 @@ const Ziggy = {
             parameters: ['betreiber'],
             bindings: { betreiber: 'uuid' },
         },
+        'backoffice.betreiber.loeschen': {
+            uri: 'backoffice\/betreiber\/{betreiber}',
+            methods: ['DELETE'],
+            parameters: ['betreiber'],
+            bindings: { betreiber: 'uuid' },
+        },
         'backoffice.paket': { uri: 'backoffice\/paket', methods: ['GET', 'HEAD'] },
         'backoffice.paket.store': { uri: 'backoffice\/paket', methods: ['POST'] },
         'backoffice.protokoll': { uri: 'backoffice\/protokoll', methods: ['GET', 'HEAD'] },

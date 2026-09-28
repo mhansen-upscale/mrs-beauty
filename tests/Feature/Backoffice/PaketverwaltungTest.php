@@ -741,6 +741,25 @@ it('zeigt vor dem Speichern, wie viele Abos eine Umstellung trifft', function ()
     expect($test)->toBeInstanceOf(Organization::class);
 });
 
+it('nennt als Urheber einer Fassung ein geloeschtes Konto, nicht die Migration', function (): void {
+    // Nachtrag 28.09.2026: Betreiberkonten lassen sich loeschen. Die Fassung
+    // behaelt die Kennung ihres Urhebers -- nur findet sie keinen Namen mehr.
+    $ehemalige = User::factory()->superAdmin()->create();
+    paketSpeichern(wer: $ehemalige)->assertSessionHasNoErrors();
+
+    $bleibende = User::factory()->superAdmin()->create();
+
+    actingAs($bleibende)
+        ->delete(route('backoffice.betreiber.loeschen', ['betreiber' => $ehemalige->uuid]), ['current_password' => 'password'])
+        ->assertSessionHasNoErrors();
+
+    actingAs($bleibende)
+        ->get(route('backoffice.paket'))
+        ->assertInertia(fn (Assert $seite) => $seite
+            ->where('fassungen.0.von', 'Gelöschtes Konto')
+            ->where('fassungen.1.von', null));
+});
+
 it('bietet in der Kasse keine Auswahl -- es gibt ein Paket', function (): void {
     mitStripe();
     $alt = paketMitStripe();

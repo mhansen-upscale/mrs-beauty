@@ -192,10 +192,7 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
                 description="Ein Paket in Fassungen. Speichern legt eine neue an — die vorige bleibt, wie sie war, und jedes Abo zeigt auf seine."
             />
 
-            <p
-                v-if="!stripeAngebunden"
-                class="flex max-w-3xl items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
-            >
+            <p v-if="!stripeAngebunden" class="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
                 <FlaskConical class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 Testbetrieb: Stripe ist in dieser Umgebung nicht angebunden. Eine neue Fassung gilt sofort, ohne Preise bei Stripe — und wer den
                 Bestand umstellt, stellt ihn sofort um, nicht erst zum nächsten Zeitraum.
@@ -203,7 +200,7 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
 
             <p
                 v-if="ohneStripePreise && !inArbeit"
-                class="flex max-w-3xl items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"
+                class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"
             >
                 <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 Stripe ist angebunden, aber Fassung {{ aktuell.number }} hat dort keine Preise — die Kasse öffnet nicht. Legen Sie eine neue Fassung
@@ -212,7 +209,7 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
 
             <p
                 v-if="gescheitert"
-                class="flex max-w-3xl items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                class="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
             >
                 <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 <span>
@@ -221,7 +218,7 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
                 </span>
             </p>
 
-            <section class="max-w-3xl space-y-4 rounded-lg border p-4">
+            <section class="space-y-4 rounded-lg border p-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 class="text-base font-medium">{{ aktuell.name }}</h2>

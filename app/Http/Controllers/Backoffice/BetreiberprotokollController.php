@@ -13,6 +13,7 @@ use App\Support\Uuid;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -61,7 +62,16 @@ final class BetreiberprotokollController extends Controller
             fn () => AuditLog::query()
                 ->where(fn (Builder $abfrage) => $abfrage
                     ->whereNull('organization_id')
-                    ->orWhereIn('actor_user_id', $betreiber->modelKeys()))
+                    ->orWhereIn('actor_user_id', $betreiber->modelKeys())
+                    // Ein geloeschtes Konto steht nicht mehr in users. Seine
+                    // Handlungen an Praxen findet das Protokoll ueber den
+                    // Eintrag, der das Loeschen festhaelt (28.09.2026).
+                    ->orWhereIn('actor_user_id', fn (QueryBuilder $geloeschte) => $geloeschte
+                        ->select('subject_id')
+                        ->from('audit_logs')
+                        ->whereNull('organization_id')
+                        ->where('event', AuditEvent::OperatorDeleted->value)
+                        ->where('subject_type', (new User)->getMorphClass())))
                 ->when($ereignis instanceof AuditEvent, fn (Builder $abfrage) => $abfrage->where('event', $ereignis?->value))
                 ->when($gefiltert instanceof User, fn (Builder $abfrage) => $abfrage->where('actor_user_id', $gefiltert?->getKey()))
                 ->when($seit instanceof CarbonImmutable, fn (Builder $abfrage) => $abfrage->where('occurred_at', '>=', $seit))

@@ -57,6 +57,11 @@ enum AuditEvent: string
     case OperatorReactivated = 'operator.reactivated';
     case OperatorPasswordSet = 'operator.password_set';
 
+    /* Endgueltig (Nachtrag 28.09.2026). Der Eintrag ist zugleich das, was
+       vom Konto bleibt: das Betreiberprotokoll findet ueber ihn die Handlungen
+       einer Person, die es in users nicht mehr gibt. */
+    case OperatorDeleted = 'operator.deleted';
+
     /* Der zweite Faktor (WP-35, C16). Bei Praxispersonen im Protokoll der
        Praxis, bei Betreibern ohne Organisation. Im Kontext hoechstens das
        Verfahren oder die Zahl der uebrigen Codes -- nie das Geheimnis, nie
@@ -122,6 +127,7 @@ enum AuditEvent: string
             self::OperatorDeactivated => 'Betreiberkonto deaktiviert',
             self::OperatorReactivated => 'Betreiberkonto reaktiviert',
             self::OperatorPasswordSet => 'Betreiberpasswort auf der Konsole gesetzt',
+            self::OperatorDeleted => 'Betreiberkonto gelöscht',
             self::TwoFactorEnabled => 'Zweiter Faktor eingeschaltet',
             self::TwoFactorDisabled => 'Zweiter Faktor abgeschaltet',
             self::TwoFactorReset => 'Zweiter Faktor zurückgesetzt',

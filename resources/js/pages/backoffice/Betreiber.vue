@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type SharedData, type Spalte } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, CircleSlash, ShieldCheck, ShieldOff, UserCog, UserPlus } from 'lucide-vue-next';
+import { CheckCircle2, CircleSlash, ShieldCheck, ShieldOff, Trash2, UserCog, UserPlus } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -143,6 +143,33 @@ const zustandSpeichern = () => {
     );
 };
 
+/* Löschen (Nachtrag 28.09.2026) --------------------------------------------- */
+
+const loeschenOffen = ref(false);
+const loeschen = useForm({ current_password: '' });
+const loeschenFehler = computed(() => (loeschen.errors as Record<string, string | undefined>).betreiber);
+
+const loeschenOeffnen = (konto: Konto) => {
+    gewaehlt.value = konto;
+    loeschen.clearErrors();
+    loeschen.current_password = '';
+    loeschenOffen.value = true;
+};
+
+const kontoLoeschen = () => {
+    if (!gewaehlt.value) {
+        return;
+    }
+
+    loeschen.delete(route('backoffice.betreiber.loeschen', { betreiber: gewaehlt.value.uuid }), {
+        preserveScroll: true,
+        onSuccess: () => {
+            loeschenOffen.value = false;
+        },
+        onFinish: () => loeschen.reset('current_password'),
+    });
+};
+
 /* Zweiten Faktor zurücksetzen (WP-35) --------------------------------------- */
 
 const faktorOffen = ref(false);
@@ -235,15 +262,21 @@ const faktorZuruecksetzen = () => {
                         beschriftung="Zweiten Faktor zurücksetzen"
                         @click="faktorOeffnen(zeile)"
                     />
+                    <AktionsButton
+                        :icon="Trash2"
+                        beschriftung="Konto löschen"
+                        :disabled="zeile.email === selbst || zeile.letzterSuperAdmin"
+                        @click="loeschenOeffnen(zeile)"
+                    />
                 </template>
 
                 <template #leer>Noch kein Betreiberkonto.</template>
             </DataTable>
 
             <p class="text-xs text-muted-foreground">
-                Den letzten aktiven Super-Admin kann niemand herabstufen oder deaktivieren, das eigene Konto auch nicht. Für den Notfall gibt es auf
-                der Konsole <code>php artisan mrs:betreiber</code>. Einen verlorenen zweiten Faktor setzt ein anderes Konto hier zurück, den eigenen
-                niemand — dafür gibt es <code>php artisan mrs:zwei-faktor-zuruecksetzen</code>.
+                Den letzten aktiven Super-Admin kann niemand herabstufen, deaktivieren oder löschen, das eigene Konto auch nicht. Für den Notfall gibt
+                es auf der Konsole <code>php artisan mrs:betreiber</code>. Einen verlorenen zweiten Faktor setzt ein anderes Konto hier zurück, den
+                eigenen niemand — dafür gibt es <code>php artisan mrs:zwei-faktor-zuruecksetzen</code>.
             </p>
         </div>
 
@@ -329,6 +362,21 @@ const faktorZuruecksetzen = () => {
                 <Label for="zustand-passwort">Ihr Passwort</Label>
                 <Input id="zustand-passwort" v-model="zustand.current_password" type="password" autocomplete="current-password" />
                 <InputError :message="zustand.errors.current_password ?? zustandFehler" />
+            </div>
+        </FormularDialog>
+
+        <FormularDialog
+            v-model:offen="loeschenOffen"
+            :titel="`${gewaehlt?.name ?? ''} löschen`"
+            beschreibung="Endgültig: Das Konto lässt sich nicht wiederherstellen. Die Person ist sofort abgemeldet, eine laufende Impersonation endet. Ihre Einträge im Protokoll bleiben, mit Namen. Für eine Pause genügt Deaktivieren."
+            :laeuft="loeschen.processing"
+            absende-text="Endgültig löschen"
+            @absenden="kontoLoeschen"
+        >
+            <div class="grid gap-2">
+                <Label for="loeschen-passwort">Ihr Passwort</Label>
+                <Input id="loeschen-passwort" v-model="loeschen.current_password" type="password" autocomplete="current-password" />
+                <InputError :message="loeschen.errors.current_password ?? loeschenFehler" />
             </div>
         </FormularDialog>
 

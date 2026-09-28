@@ -2,20 +2,29 @@
 
 declare(strict_types=1);
 
+use App\Audit\Impersonation;
 use App\Enums\AuditEvent;
 use App\Enums\OperatorRole;
 use App\Enums\Role;
 use App\Models\AuditLog;
+use App\Models\ImpersonationSession;
 use App\Models\User;
 use App\Notifications\PasswortZuruecksetzen;
+use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Testing\TestResponse;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\post;
 use function Pest\Laravel\travelTo;
+
+use Symfony\Component\HttpFoundation\Response;
 
 /*
 |--------------------------------------------------------------------------
@@ -163,9 +172,15 @@ it('verwaltet ueber diese Seite nur Betreiberkonten', function (): void {
     $inhaberin = User::factory()->fuer($praxis, Role::Owner)->create();
     ohneMandant();
 
-    actingAs(verwaltender())
+    $verwaltender = verwaltender();
+
+    actingAs($verwaltender)
         ->post(route('backoffice.betreiber.deaktivieren', ['betreiber' => $inhaberin->uuid]), ['current_password' => 'password'])
         ->assertNotFound();
+
+    betreiberLoeschen($verwaltender, $inhaberin)->assertNotFound();
+
+    expect($inhaberin->fresh())->not->toBeNull();
 
     actingAs(verwaltender())
         ->get(route('backoffice.betreiber.index'))
@@ -206,6 +221,136 @@ it('protokolliert jede Aenderung an einem Betreiberkonto mit Handelndem', functi
     // Die Rolle darf mit Wert ins Protokoll, sie ist kein Personenbezug.
     expect(AuditLog::query()->withoutGlobalScopes()->where('event', AuditEvent::OperatorRoleChanged->value)->first()?->context)
         ->toBe(['von' => OperatorRole::CustomerSuccess->value, 'nach' => OperatorRole::Finanzen->value]);
+});
+
+/*
+|--------------------------------------------------------------------------
+| Nachtrag 28.09.2026 -- ein Betreiberkonto loeschen
+|--------------------------------------------------------------------------
+|
+| Deaktivieren laesst sich rueckgaengig machen, Loeschen nicht. Was bleibt,
+| ist das Protokoll: mit dem Namen der Handelnden, wie er beim Eintrag war.
+|
+*/
+
+/**
+ * @return TestResponse<Response>
+ */
+function betreiberLoeschen(User $wer, User $konto, string $passwort = 'password'): TestResponse
+{
+    return actingAs($wer)->delete(route('backoffice.betreiber.loeschen', ['betreiber' => $konto->uuid]), ['current_password' => $passwort]);
+}
+
+it('loescht ein Betreiberkonto endgueltig, samt offenem Passwortlink', function (): void {
+    $konto = User::factory()->customerSuccess()->create(['name' => 'Clara Service', 'email' => 'clara@mrs-beauty.test']);
+    Password::createToken($konto);
+
+    betreiberLoeschen(verwaltender(), $konto)->assertRedirect()->assertSessionHasNoErrors();
+
+    expect(User::query()->whereKey($konto->getKey())->exists())->toBeFalse()
+        // Sonst setzte der Link aus der Mail ein Passwort fuer ein Konto, das
+        // jemand spaeter unter derselben Adresse neu anlegt.
+        ->and(DB::table('password_reset_tokens')->where('email', 'clara@mrs-beauty.test')->exists())->toBeFalse();
+});
+
+it('protokolliert das Loeschen mit Handelndem und ohne Personendaten des Kontos', function (): void {
+    $konto = User::factory()->customerSuccess()->create(['name' => 'Clara Service', 'email' => 'clara@mrs-beauty.test']);
+    $verwaltender = verwaltender();
+
+    betreiberLoeschen($verwaltender, $konto)->assertSessionHasNoErrors();
+
+    $eintrag = AuditLog::query()->withoutGlobalScopes()->where('event', AuditEvent::OperatorDeleted->value)->first();
+
+    expect($eintrag?->actor_user_id)->toBe($verwaltender->getKey())
+        ->and($eintrag?->subject_id)->toBe($konto->getKey())
+        ->and($eintrag?->organization_id)->toBeNull()
+        ->and($eintrag?->context)->toBe(['rolle' => OperatorRole::CustomerSuccess->value])
+        // C5: weder Name noch Adresse des geloeschten Kontos.
+        ->and(AuditLog::query()->withoutGlobalScopes()->get()->toJson())->not->toContain('Clara Service')
+        ->and(AuditLog::query()->withoutGlobalScopes()->get()->toJson())->not->toContain('clara@mrs-beauty.test');
+});
+
+it('loescht nicht ohne das richtige eigene Passwort', function (): void {
+    $konto = User::factory()->customerSuccess()->create();
+
+    betreiberLoeschen(verwaltender(), $konto, 'falsch')->assertSessionHasErrors('current_password');
+
+    expect($konto->fresh())->not->toBeNull();
+});
+
+it('laesst weder das eigene Konto noch den letzten aktiven Super-Admin loeschen', function (): void {
+    $letzter = verwaltender();
+
+    betreiberLoeschen($letzter, $letzter)->assertSessionHasErrors('betreiber');
+
+    $zweite = verwaltender();
+
+    // Auch mit einem zweiten Super-Admin: das eigene Konto loescht jemand
+    // anderes.
+    betreiberLoeschen($zweite, $zweite)->assertSessionHasErrors('betreiber');
+
+    expect($letzter->fresh())->not->toBeNull()
+        ->and($zweite->fresh())->not->toBeNull();
+});
+
+it('loescht einen deaktivierten Super-Admin, wenn ein aktiver bleibt', function (): void {
+    $ruhender = User::factory()->superAdmin()->create(['deactivated_at' => CarbonImmutable::now()]);
+
+    betreiberLoeschen(verwaltender(), $ruhender)->assertSessionHasNoErrors();
+
+    expect($ruhender->fresh())->toBeNull();
+});
+
+it('beendet beim Loeschen eine laufende Impersonation', function (): void {
+    $praxis = alsMandant(organisation('Demo-Praxis'));
+    $konto = User::factory()->customerSuccess()->create();
+    app(Impersonation::class)->start($konto, $praxis, 'Ticket 4711, Termin fehlt');
+    ohneMandant();
+
+    betreiberLoeschen(verwaltender(), $konto)->assertSessionHasNoErrors();
+
+    $sitzung = app(TenantContext::class)->runAs($praxis, fn (): ?ImpersonationSession => ImpersonationSession::query()->first());
+
+    // Sonst stuende in der Praxis bis zum Ablauf "Support hat Zugriff" --
+    // fuer ein Konto, das es nicht mehr gibt und das sich nie mehr abmeldet.
+    expect($sitzung?->ended_at)->not->toBeNull()
+        ->and($sitzung?->ended_reason)->toBe('account_deleted');
+});
+
+it('zeigt die Handlungen eines geloeschten Kontos weiter im Betreiberprotokoll', function (): void {
+    $praxis = organisation('Demo-Praxis');
+    $ehemalige = User::factory()->superAdmin()->create(['name' => 'Ehemalige Kollegin']);
+    $bleibende = verwaltender();
+
+    actingAs($ehemalige)->post(route('backoffice.sperren', ['organisation' => $praxis->uuid]), [
+        'grund' => 'Zahlungsausfall nach dritter Mahnung',
+        'current_password' => 'password',
+    ])->assertSessionHasNoErrors();
+
+    betreiberLoeschen($bleibende, $ehemalige)->assertSessionHasNoErrors();
+
+    actingAs($bleibende)
+        ->get(route('backoffice.protokoll'))
+        ->assertInertia(fn ($seite) => $seite
+            ->where('eintraege', fn (Collection $eintraege): bool => $eintraege->contains(
+                fn (array $eintrag): bool => $eintrag['ereignis'] === AuditEvent::TenantSuspended->value
+                    && $eintrag['praxis'] === 'Demo-Praxis'
+                    && $eintrag['handelnde'] === 'Ehemalige Kollegin'
+            ))
+        );
+});
+
+it('laesst ein Betreiberkonto sich nicht in den Einstellungen selbst loeschen', function (): void {
+    // Der Weg an der Betreiberverwaltung vorbei: sonst loeschte sich hier
+    // auch der letzte Super-Admin.
+    $letzter = verwaltender();
+
+    actingAs($letzter)
+        ->from(route('profile.edit'))
+        ->delete(route('profile.destroy'), ['password' => 'password'])
+        ->assertSessionHasErrors('password');
+
+    expect($letzter->fresh())->not->toBeNull();
 });
 
 it('legt den ersten Super-Admin auf der Konsole an', function (): void {

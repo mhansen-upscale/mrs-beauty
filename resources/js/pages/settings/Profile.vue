@@ -35,6 +35,10 @@ const user = page.props.auth.user as User;
 // (WP-35) — sie ändert sich erst nach einem Wechsel des Verfahrens.
 const adresseGesperrt = page.props.auth.zweiFaktor?.verfahren === 'email';
 
+// Ein Betreiberkonto löscht ein Super-Admin unter Betreiberkonten, nicht die
+// Person selbst (28.09.2026).
+const betreiber = page.props.auth.betreiber !== null;
+
 const form = useForm({
     name: user.name,
     email: user.email,
@@ -118,7 +122,7 @@ const submit = () => {
                 </form>
             </div>
 
-            <DeleteUser />
+            <DeleteUser v-if="!betreiber" />
         </SettingsLayout>
     </AppLayout>
 </template>
