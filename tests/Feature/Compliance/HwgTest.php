@@ -28,9 +28,10 @@ use function Pest\Laravel\travelTo;
 |
 | Die Abnahmekriterien aus specs/WP-30-hwg-compliance.md.
 |
-| **Der Testsatz ist nicht juristisch geprueft.** Er bildet ab, was die
-| Regeln tun sollen, nicht was ein Medizinrechtler bestaetigt hat -- das
-| Abnahmekriterium dazu bleibt offen, und das Produkt sagt es an jeder Ampel.
+| **Die Regeln sind juristisch durchgesehen**, Fassung 1 unveraendert
+| bestaetigt (27.09.2026). Der Testsatz hier bildet ab, was sie tun sollen.
+| Das Produkt nennt die Durchsicht trotzdem nicht (Entscheidung C18): die
+| Ampel ist eine Pruefhilfe, keine Rechtsgrundlage.
 |
 */
 
@@ -231,18 +232,27 @@ it('prueft ohne Regelwerk gar nicht', function (): void {
     expect(fn () => pruefe('Irgendetwas'))->toThrow(RuntimeException::class);
 });
 
-it('sagt, dass das Regelwerk juristisch ungeprueft ist', function (): void {
-    // **Eine Ampel, der jemand vertraut, ohne dass sie geprueft ist, ist
-    // gefaehrlicher als gar keine.**
+it('nennt keinen Pruefer -- die Ampel bleibt eine Hilfe (C18)', function (): void {
+    // **Kein Pruefsiegel**, auch nicht nach der juristischen Durchsicht: ein
+    // "geprueft von ... am ..." waere das, worauf sich eine Praxis bei einer
+    // Abmahnung beruft. Die Spalten duerfen gefuellt sein -- hinaus geht
+    // davon nichts.
     $organisation = alsMandant(organisation('Demo-Praxis'));
 
-    expect(ComplianceRuleset::geltend()?->juristischGeprueft())->toBeFalse()
-        ->and(pruefe('Ein Satz.')->regelwerkGeprueft)->toBeFalse();
+    ComplianceRuleset::query()->update(['reviewed_by' => 'Kanzlei im Test', 'reviewed_at' => '2026-09-27']);
+
+    expect(pruefe('Ein Satz.')->toArray())->not->toHaveKey('regelwerkGeprueft');
 
     actingAs(User::factory()->fuer($organisation, Role::Owner)->create())
         ->get(route('hwg.index'))
         ->assertOk()
-        ->assertInertia(fn ($seite) => $seite->where('regelwerk.geprueft', false));
+        ->assertInertia(fn ($seite) => $seite
+            ->where('regelwerk.version', 1)
+            ->has('regelwerk.rechtsstand')
+            ->missing('regelwerk.geprueft')
+            ->missing('regelwerk.geprueftVon')
+            ->missing('regelwerk.geprueftAm'))
+        ->assertDontSee('Kanzlei im Test');
 });
 
 /*

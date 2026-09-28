@@ -58,16 +58,16 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 
 | | Paket | Hinweis |
 |---|---|---|
-| WP-26 | Ad-Account-Anbindung & Sync | steht: Werbekonto verbinden, Struktur lesend spiegeln, **schreibt bei Meta nichts** — Login-Konfiguration und App Review offen |
-| WP-27 | Kampagnenverwaltung | steht: anlegen, pausieren, Budget — schreibend, an **einer** Stelle; braucht `ads_management` |
-| WP-27b | Anzeigen schalten | steht: aus freigegebenem Entwurf mit Grafik wird Creative und Anzeige; Kampagne bearbeiten (Budget, Zielgruppe); braucht `ads_management` und eine Facebook-Seite |
+| WP-26 | Ad-Account-Anbindung & Sync | steht: Werbekonto verbinden, Struktur lesend spiegeln, **schreibt bei Meta nichts**; App Review und Login-Konfiguration durch (28.09.2026) |
+| WP-27 | Kampagnenverwaltung | steht: anlegen, pausieren, Budget — schreibend, an **einer** Stelle; `ads_management` erteilt |
+| WP-27b | Anzeigen schalten | steht: aus freigegebenem Entwurf mit Grafik wird Creative und Anzeige; Kampagne bearbeiten (Budget, Zielgruppe); `ads_management` erteilt, braucht eine Facebook-Seite |
 | WP-28 | Insights & Aggregation | steht: Tageszahlen je Ebene, Summen und Quoten gerechnet, P9 über die Aufbewahrung |
 | WP-29 | Brand Guide | steht: Tonalität, Wortwahl, Referenzmaterial mit Erklärung im Wortlaut; liefert `banned_terms` an WP-30 |
-| WP-30 | HWG-Compliance-Engine | Differenzierungsmerkmal; steht — **aber juristisch ungeprüft**, und das Produkt sagt es; Buchungsseite und Templates angeschlossen (C11) |
+| WP-30 | HWG-Compliance-Engine | Differenzierungsmerkmal; steht; juristisch durchgesehen (27.09.2026), im Produkt **bewusst nur Prüfhilfe**, ohne Prüfsiegel (C18); Buchungsseite, Templates und Mailvorlagen angeschlossen (C11) |
 | WP-31 | Anzeigenvorschläge | steht: wöchentliche Textentwürfe aus dem Brand Guide, HWG-geprüft, Bild auf Wunsch über kie.ai |
 | WP-31b | Anzeigenformate | Nachtrag zu WP-31 und WP-27b: jede Grafik in 1:1, 4:5 und 9:16, bei Meta je Platzierung zugeordnet (C13); ein Formatsatz zählt als eine Grafik (B13) |
 | WP-32 | Attribution & ROI-Dashboard | rechtfertigt das Abo; **zwei Sitzungen**, beide stehen — 32a Erfassung und Zuordnung, 32b Kennzahlen, Dashboard und Conversions API |
-| WP-32c | Conversions API mit dem Token der Praxis | offen: Token aus der Werbekonto-Verbindung statt Plattformschlüssel (B16), Pixel als Asset in der Login-Konfiguration; sendet erst nach App Review |
+| WP-32c | Conversions API mit dem Token der Praxis | offen: Token aus der Werbekonto-Verbindung statt Plattformschlüssel (B16), Pixel als Asset in der Login-Konfiguration; die Voraussetzungen bei Meta sind erfüllt (28.09.2026), das Paket wirkt sofort |
 
 ## Querschnitt
 
@@ -85,20 +85,17 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 
 ## Außerhalb des Repositories
 
-- **WP-00 Meta App Review & Business-Verifizierung** — Handarbeit, startet sofort und parallel zu WP-02. Kritischer Pfad des gesamten Projekts. Kein Paket ab WP-19 beginnen, ohne die Berechtigungen zu prüfen.
-- **WP-01 Datenschutz-Dokumentation** — AV-Vertrag, TOM, Verzeichnis, Löschkonzept, Prüfung durch einen Medizinrechtler. Voraussetzung für WP-30 und für den ersten zahlenden Kunden. **Offen seit WP-22/23:** Anthropic ist Unterauftragsverarbeiter für Nachrichteninhalte mit Gesundheitsbezug — AV-Vertrag, **Zero Data Retention** und Datenregion gehören in die Unterlagen (Entscheidung G10). *Stand 26.09.2026: wird vom Betreiber extern erstellt.* Aus dem Code dazu gehören: die Anonymisierung lässt die Kanalidentität stehen (WP-19), das Öffnen von Chat-Anhängen wird protokolliert (C12), Stripe und Microsoft sind weitere Empfänger.
+- **WP-00 Meta App Review & Business-Verifizierung** — **erledigt** (Stand 28.09.2026): App Review, Business-Verifizierung und Login-Konfiguration samt Asset-Typ Datensatz.
+- **WP-01 Datenschutz-Dokumentation** — AV-Vertrag, TOM, Verzeichnis, Löschkonzept, Prüfung durch einen Medizinrechtler. Voraussetzung für den ersten zahlenden Kunden. **Offen seit WP-22/23:** Anthropic ist Unterauftragsverarbeiter für Nachrichteninhalte mit Gesundheitsbezug — AV-Vertrag, **Zero Data Retention** und Datenregion gehören in die Unterlagen (Entscheidung G10). *Stand 28.09.2026: in Arbeit beim Betreiber.* Aus dem Code dazu gehören: die Anonymisierung lässt die Kanalidentität stehen (WP-19), das Öffnen von Chat-Anhängen wird protokolliert (C12), Stripe und Microsoft sind weitere Empfänger; Mails an Patientinnen gehen über das Postfach der Praxis (B22), Produktmails über den Mailserver, den der Betreiber hinterlegt (B23).
 
 ## Was außerhalb des Codes noch aussteht
 
-Stand 26.09.2026 — alles, was sich im Repository nicht erledigen lässt:
+Stand 28.09.2026 — alles, was sich im Repository nicht erledigen lässt:
 
 | | Was | Wo es steht |
 |---|---|---|
-| **Meta** | App Review (`ads_management`, `ads_read`, `business_management`, WhatsApp), Business-Verifizierung, `META_LOGIN_CONFIG_ID`, Asset-Typ Datensatz in der Login-Konfiguration (B16) | WP-00, WP-32c, `docs/integrationen/meta.md` |
 | **Microsoft** | App-Registrierung in Entra ID, Herausgeberüberprüfung | `docs/integrationen/kalender.md`, „Einrichtung Microsoft" |
-| **Stripe** | `STRIPE_SECRET` setzen, dann im Backoffice unter *Paket* eine Fassung speichern — sie legt Produkt und Preise an (die vier Preis-IDs in der Umgebung liest nur noch die Migration für Fassung 1); einen Gutschein 100 %, einmalig, anlegen (`STRIPE_FREE_MONTH_COUPON_ID`); API-Version des Webhook-Endpunkts festlegen, dieselbe wie im Client | `docs/betrieb.md`; WP-06b, WP-34c |
-| **Datenschutz** | AV, TOM, Verzeichnis, Löschkonzept | WP-01 (extern) |
-| **HWG** | juristische Durchsicht des Regelwerks — bewusst offen: die Ampel ist eine Hilfe und sagt es überall | WP-30 |
+| **Stripe** | je Umgebung `STRIPE_SECRET` eintragen, `php artisan mrs:stripe-einrichten` ausführen (Webhook auf der festen API-Version, Gutschein, Kundenportal) und das ausgegebene `STRIPE_WEBHOOK_SECRET` eintragen; im Backoffice unter *Paket* die Fassung einmal speichern, auch unverändert — sie legt Produkt und Preise an; im Dashboard **Stripe Tax** mit Registrierung Deutschland, **SEPA-Lastschrift** und bei fehlgeschlagenen Zahlungen „Abo als **unbezahlt** markieren" | `docs/betrieb.md`; WP-06, WP-06b, WP-34c |
 | **Entscheidung** | `Schedule` und `Contact` an die Conversions API — ja oder nein (C8) | WP-32b, „Offen" |
 | **Entscheidung** | Rollenkatalog der Betreiber bestätigen; Agent und Buchungsseite bei Abo-Sperre (B17); Praxen in der Testphase wechseln immer auf die neue Paketfassung (B20) | WP-34a, WP-34c, WP-06b |
 | **Mailversand** | **Vor dem Ausrollen von WP-36 jede Praxis ohne eigenes Postfach informieren** — ab dann gehen ihre Terminmails, Posteingang-Antworten und Wartelisten-Angebote nicht mehr über die Plattform (B22); die Zahl steht im Betreiber-Dashboard. Im Backoffice unter *Versand* den Plattformserver hinterlegen und mit der Probemail prüfen (B23) | WP-36, WP-37, `docs/betrieb.md` |

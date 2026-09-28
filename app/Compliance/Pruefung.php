@@ -62,7 +62,6 @@ final class Pruefung
             version: $fassung->version,
             rechtsstand: $fassung->legal_as_of,
             geprueftAm: $jetzt,
-            regelwerkGeprueft: $fassung->juristischGeprueft(),
         );
     }
 

@@ -24,7 +24,6 @@ final class Pruefergebnis
         public readonly int $version,
         public readonly CarbonImmutable $rechtsstand,
         public readonly CarbonImmutable $geprueftAm,
-        public readonly bool $regelwerkGeprueft,
     ) {}
 
     /**
@@ -39,7 +38,6 @@ final class Pruefergebnis
             'version' => $this->version,
             'rechtsstand' => $this->rechtsstand->toDateString(),
             'geprueftAm' => $this->geprueftAm->toIso8601String(),
-            'regelwerkGeprueft' => $this->regelwerkGeprueft,
         ];
     }
 }

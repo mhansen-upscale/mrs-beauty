@@ -108,6 +108,19 @@ final class Stripeclient
             'payment_method_types[0]' => 'card',
             'payment_method_types[1]' => 'sepa_debit',
 
+            // **Netto zuzueglich USt., die Stripe Tax rechnet**
+            // (docs/produkt.md). Die Preise tragen `tax_behavior=exclusive` --
+            // ohne diese Angabe zoege Stripe trotzdem nur den Nettobetrag
+            // ein. Stripe braucht dafuer die Anschrift; der Kunde steht
+            // schon, also schreibt die Kasse sie an ihn zurueck. Die
+            // USt-IdNr. der Praxis gehoert auf die Rechnung, bei Oesterreich
+            // wegen der Umkehr der Steuerschuld.
+            'automatic_tax[enabled]' => 'true',
+            'billing_address_collection' => 'required',
+            'customer_update[address]' => 'auto',
+            'customer_update[name]' => 'auto',
+            'tax_id_collection[enabled]' => 'true',
+
             'metadata[artikel]' => (string) $artikel,
             'metadata[menge]' => (string) max(1, $menge),
         ]);
@@ -117,13 +130,20 @@ final class Stripeclient
         return $antwort->successful() && is_string($adresse) ? $adresse : null;
     }
 
-    /** Das Kundenportal: Rechnungen, Zahlungsart, Kuendigung. */
+    /**
+     * Das Kundenportal: Rechnungen, Zahlungsart, Kuendigung.
+     *
+     * **Mit der eigenen Konfiguration**, wenn `mrs:stripe-einrichten` sie
+     * angelegt hat -- sonst haengt das Portal an einer Standardkonfiguration,
+     * die jemand im Dashboard gespeichert haben muss.
+     */
     public function portal(string $kunde, string $zurueck): ?string
     {
-        $antwort = $this->anfrage()->asForm()->post($this->adresse('billing_portal/sessions'), [
+        $antwort = $this->anfrage()->asForm()->post($this->adresse('billing_portal/sessions'), array_filter([
             'customer' => $kunde,
             'return_url' => $zurueck,
-        ]);
+            'configuration' => $this->eigenePortalkonfiguration(),
+        ], fn (?string $wert): bool => $wert !== null));
 
         $adresse = data_get($antwort->json(), 'url');
 
@@ -216,6 +236,33 @@ final class Stripeclient
     }
 
     /**
+     * Der Gutschein fuer den Gratismonat -- **angelegt, wenn es ihn nicht
+     * gibt** (28.09.2026). Bis hier entstand er von Hand im Dashboard, und
+     * ohne seine Kennung in der Umgebung ging kein Gratismonat.
+     *
+     * Die Kennung ist fest gewaehlt, nicht von Stripe vergeben: ein zweiter
+     * Lauf findet ihn wieder, statt einen zweiten anzulegen.
+     */
+    public function stelleGutscheinSicher(string $gutschein, string $idempotenz): ClientResponse
+    {
+        $vorhanden = $this->anfrage()->get($this->adresse('coupons/'.rawurlencode($gutschein)));
+
+        if ($vorhanden->status() !== 404) {
+            return $vorhanden;
+        }
+
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('coupons'), [
+                'id' => $gutschein,
+                'name' => 'Gratismonat',
+                'percent_off' => 100,
+                'duration' => 'once',
+            ]);
+    }
+
+    /**
      * @param  array<string, mixed>  $felder
      */
     private function aendereAbo(string $abo, string $idempotenz, array $felder): ClientResponse
@@ -302,6 +349,131 @@ final class Stripeclient
             'items[0][price]' => $preis,
             'proration_behavior' => 'none',
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Einrichtung (mrs:stripe-einrichten)
+    |--------------------------------------------------------------------------
+    |
+    | **Nur noch Schluessel eintragen** (28.09.2026). Webhook-Endpunkt,
+    | Gutschein und Kundenportal entstehen aus dem Befehl, nicht von Hand im
+    | Dashboard -- je Umgebung, Test wie Live. Jeder Aufruf findet zuerst, was
+    | es schon gibt; ein zweiter Lauf legt nichts an.
+    |
+    */
+
+    /** Test oder Live -- am Praefix des Schluessels. */
+    public function live(): bool
+    {
+        $schluessel = (string) config('services.stripe.key');
+
+        return str_starts_with($schluessel, 'sk_live_') || str_starts_with($schluessel, 'rk_live_');
+    }
+
+    public function webhookEndpunkte(): ClientResponse
+    {
+        return $this->anfrage()->get($this->adresse('webhook_endpoints'), ['limit' => 100]);
+    }
+
+    /**
+     * **Auf der festgenagelten Version** (WP-34c) -- der Endpunkt liefert in
+     * der Form, in der der Client liest. Eine Version laesst sich an einem
+     * bestehenden Endpunkt nicht aendern; deshalb hier und nur hier.
+     *
+     * Die Antwort traegt das Signaturgeheimnis. **Stripe nennt es nur dieses
+     * eine Mal.**
+     *
+     * @param  list<string>  $ereignisse
+     */
+    public function legeWebhookAn(string $adresse, array $ereignisse, string $idempotenz): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('webhook_endpoints'), [
+                'url' => $adresse,
+                'api_version' => (string) config('services.stripe.api_version'),
+                'enabled_events' => $ereignisse,
+                'description' => 'Mrs. Beauty -- Abo und Kasse',
+                'metadata[mrs]' => 'webhook',
+            ]);
+    }
+
+    /** @param  list<string>  $ereignisse */
+    public function aendereWebhook(string $endpunkt, array $ereignisse, string $idempotenz): ClientResponse
+    {
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse('webhook_endpoints/'.rawurlencode($endpunkt)), ['enabled_events' => $ereignisse]);
+    }
+
+    public function entferneWebhook(string $endpunkt): ClientResponse
+    {
+        return $this->anfrage()->delete($this->adresse('webhook_endpoints/'.rawurlencode($endpunkt)));
+    }
+
+    public function portalkonfigurationen(): ClientResponse
+    {
+        return $this->anfrage()->get($this->adresse('billing_portal/configurations'), ['limit' => 100, 'active' => 'true']);
+    }
+
+    /**
+     * Legt die Konfiguration des Kundenportals an oder gleicht sie ab.
+     *
+     * **Kein Tarifwechsel, keine Menge** -- das Paket wird im Produkt gepflegt
+     * (B20), eine Stufe bleibt eine Stufe (B10). Gekuendigt wird zum
+     * Periodenende; der Monat ist bezahlt.
+     */
+    public function speicherePortalkonfiguration(?string $vorhanden, string $idempotenz): ClientResponse
+    {
+        $felder = [
+            'business_profile[headline]' => (string) config('app.name'),
+            'features[invoice_history][enabled]' => 'true',
+            'features[payment_method_update][enabled]' => 'true',
+            'features[customer_update][enabled]' => 'true',
+            'features[customer_update][allowed_updates]' => ['name', 'address', 'tax_id'],
+            'features[subscription_cancel][enabled]' => 'true',
+            'features[subscription_cancel][mode]' => 'at_period_end',
+            'features[subscription_update][enabled]' => 'false',
+            'metadata[mrs]' => 'portal',
+        ];
+
+        $pfad = $vorhanden === null ? 'billing_portal/configurations' : 'billing_portal/configurations/'.rawurlencode($vorhanden);
+
+        return $this->anfrage()
+            ->withHeaders(['Idempotency-Key' => $idempotenz])
+            ->asForm()
+            ->post($this->adresse($pfad), $felder);
+    }
+
+    /** Die Konfiguration, die `mrs:stripe-einrichten` angelegt hat -- oder keine. */
+    public function eigenePortalkonfiguration(): ?string
+    {
+        try {
+            $antwort = $this->portalkonfigurationen();
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $antwort->successful()) {
+            return null;
+        }
+
+        foreach ((array) data_get($antwort->json(), 'data', []) as $konfiguration) {
+            if (data_get($konfiguration, 'metadata.mrs') === 'portal' && is_string(data_get($konfiguration, 'id'))) {
+                return (string) data_get($konfiguration, 'id');
+            }
+        }
+
+        return null;
+    }
+
+    /** Rechnet Stripe Tax? Ohne lehnt jede Kasse mit `automatic_tax` ab. */
+    public function steuereinstellungen(): ClientResponse
+    {
+        return $this->anfrage()->get($this->adresse('tax/settings'));
     }
 
     private function adresse(string $pfad): string

@@ -343,9 +343,20 @@ Fall nur mit gesetztem Schlüssel auf.
 
 ## Offen
 
-- **Die API-Version des Webhook-Endpunkts bei Stripe** auf
-  `2025-02-24.acacia` stellen, dieselbe wie `STRIPE_API_VERSION`.
-- **Den Gutschein anlegen** (100 %, einmal) und als
-  `STRIPE_FREE_MONTH_COUPON_ID` setzen.
+> **Nachtrag 28.09.2026.** Beide Handgriffe bei Stripe sind keine mehr.
+> `php artisan mrs:stripe-einrichten` legt den Webhook-Endpunkt auf
+> `STRIPE_API_VERSION` an — über die API, die jede Version annimmt, auch eine,
+> die das Dashboard nicht mehr anbietet. Den **Gutschein** legt der Gratismonat
+> selbst an, wenn es ihn nicht gibt (`Stripeclient::stelleGutscheinSicher()`,
+> feste Kennung `mrs_gratismonat`); die Ablehnung „kein Gutschein hinterlegt"
+> im Mandantenblatt ist entfallen. `STRIPE_FREE_MONTH_COUPON_ID` bleibt als
+> Übersteuerung für einen Gutschein, den es im Konto schon gibt. Geprüft in
+> `AboEingriffeTest.php` („legt den Gutschein selbst an …") und
+> `StripeEinrichtenTest.php`.
+
+- ~~**Die API-Version des Webhook-Endpunkts bei Stripe** auf
+  `2025-02-24.acacia` stellen, dieselbe wie `STRIPE_API_VERSION`.~~
+- ~~**Den Gutschein anlegen** (100 %, einmal) und als
+  `STRIPE_FREE_MONTH_COUPON_ID` setzen.~~
 - **Einen gescheiterten Eingriff erneut versuchen.** Heute legt man ihn neu
   an; ein Knopf „erneut" wäre bequemer.

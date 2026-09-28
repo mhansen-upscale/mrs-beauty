@@ -26,9 +26,6 @@ const props = defineProps<{
         version: number;
         rechtsstand: string;
         changelog: string | null;
-        geprueft: boolean;
-        geprueftVon: string | null;
-        geprueftAm: string | null;
     } | null;
     probe:
         | ({ text: string; hatBild: boolean; ampel: string; befunde: Befund[]; version: number; rechtsstand: string } & Record<string, unknown>)
@@ -75,24 +72,12 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
             </div>
 
             <!--
-                Ein Regelwerk, das niemand mit Zulassung durchgesehen hat,
-                sagt das. Eine Ampel, der jemand vertraut, ohne dass sie
-                geprüft ist, ist gefährlicher als gar keine.
+                **Kein Prüfsiegel** (Entscheidung C18). Die Ampel ist eine
+                Hilfe, keine Rechtsgrundlage — ein „geprüft von … am …" hier
+                wäre das, worauf sich eine Praxis bei einer Abmahnung beruft.
             -->
-            <div v-if="regelwerk && !regelwerk.geprueft" class="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-                <p class="flex items-center gap-2 font-medium">
-                    <AlertTriangle class="size-4 shrink-0" />
-                    Dieses Regelwerk ist noch nicht juristisch geprüft
-                </p>
-                <p>
-                    Fassung {{ regelwerk.version }}, Rechtsstand {{ datum(regelwerk.rechtsstand) }}. Die Regeln bilden das ab, was wir aus Gesetz und
-                    Rechtsprechung entnommen haben — eine anwaltliche Durchsicht steht aus. Nehmen Sie die Ampel als Hinweis, nicht als Freigabe.
-                </p>
-            </div>
-
-            <p v-else-if="regelwerk" class="rounded-md border border-success/40 bg-success/5 p-4 text-sm">
-                Regelwerk Fassung {{ regelwerk.version }}, Rechtsstand {{ datum(regelwerk.rechtsstand) }} — geprüft von {{ regelwerk.geprueftVon }} am
-                {{ datum(regelwerk.geprueftAm) }}.
+            <p v-if="regelwerk" class="text-sm text-muted-foreground">
+                Regelwerk Fassung {{ regelwerk.version }}, Rechtsstand {{ datum(regelwerk.rechtsstand) }}.
             </p>
 
             <!-- Text prüfen -->

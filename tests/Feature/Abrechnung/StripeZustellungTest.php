@@ -74,6 +74,38 @@ it('schreibt eine doppelt zugestellte Aufstockung nur einmal gut', function (): 
     expect(zugestelltesAbo($praxis)->extra_messages)->toBe((int) config('mrs.billing.topup.messages'));
 });
 
+it('schreibt eine SEPA-Aufstockung erst gut, wenn das Geld da ist -- und nur einmal', function (): void {
+    // **SEPA ist eine verzoegerte Zahlungsart.** Die Kasse schliesst mit
+    // `unpaid`, das Geld folgt Tage spaeter als eigenes Ereignis. Bis zum
+    // 28.09.2026 kannte der Webhook das zweite nicht: wer per Lastschrift
+    // aufstockte, bezahlte und bekam nichts.
+    $praxis = zustellungspraxis();
+
+    $kasse = fn (string $kennung, string $art, string $status): array => [
+        'id' => $kennung,
+        'type' => $art,
+        'created' => 1000,
+        'data' => ['object' => [
+            'id' => 'cs_sepa',
+            'customer' => 'cus_1',
+            'mode' => 'payment',
+            'payment_status' => $status,
+            'metadata' => ['artikel' => 'nachrichten', 'menge' => '1'],
+        ]],
+    ];
+
+    stripeZustellen($kasse('evt_sepa_1', 'checkout.session.completed', 'unpaid'));
+
+    expect(zugestelltesAbo($praxis)->extra_messages)->toBe(0);
+
+    $bezahlt = $kasse('evt_sepa_2', 'checkout.session.async_payment_succeeded', 'paid');
+
+    stripeZustellen($bezahlt);
+    stripeZustellen($bezahlt);
+
+    expect(zugestelltesAbo($praxis)->extra_messages)->toBe((int) config('mrs.billing.topup.messages'));
+});
+
 it('laesst ein aelteres Ereignis kein neueres ueberschreiben', function (): void {
     $praxis = zustellungspraxis();
 

@@ -231,9 +231,11 @@ return [
         // muss auf dieselbe Version stehen.
         'api_version' => env('STRIPE_API_VERSION', '2025-02-24.acacia'),
 
-        // Der Gutschein fuer den Gratismonat (B17): 100 %, einmal. Einmal im
-        // Stripe-Konto angelegt, wie die Preise.
-        'free_month_coupon' => env('STRIPE_FREE_MONTH_COUPON_ID'),
+        // Der Gutschein fuer den Gratismonat (B17): 100 %, einmal. **Legt das
+        // Produkt selbst an** unter dieser festen Kennung, beim ersten
+        // Gratismonat oder mit `mrs:stripe-einrichten`. Die Umgebung braucht
+        // ihn nur fuer einen Gutschein, den es im Konto schon gibt.
+        'free_month_coupon' => env('STRIPE_FREE_MONTH_COUPON_ID') ?: 'mrs_gratismonat',
     ],
 
 ];

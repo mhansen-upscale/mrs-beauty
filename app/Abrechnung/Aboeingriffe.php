@@ -141,7 +141,6 @@ final class Aboeingriffe
             $aktion === SubscriptionChangeAction::CancelPeriodEnd && ($abo->cancel_at_period_end || $abo->status === SubscriptionStatus::Canceled) => 'Das Abo ist bereits gekündigt.',
             $aktion === SubscriptionChangeAction::RevokeCancel && ! $abo->cancel_at_period_end => 'Es gibt keine Kündigung zum Periodenende, die sich zurücknehmen ließe.',
             $aktion === SubscriptionChangeAction::CancelNow && $abo->status === SubscriptionStatus::Canceled => 'Das Abo ist bereits beendet.',
-            $aktion === SubscriptionChangeAction::FreeMonth && $mitStripe && ! is_string(config('services.stripe.free_month_coupon')) => 'Für den Gratismonat ist kein Gutschein hinterlegt (STRIPE_FREE_MONTH_COUPON_ID).',
             default => null,
         };
 

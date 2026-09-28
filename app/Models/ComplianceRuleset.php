@@ -18,6 +18,11 @@ use Illuminate\Database\Eloquent\Model;
  *
  * Die Ausnahme steht in tests/Feature/Tenancy/ArchitekturTest.php namentlich.
  *
+ * **`reviewed_by` und `reviewed_at` sind intern und werden nie angezeigt**
+ * (Entscheidung C18). Fassung 1 ist juristisch durchgesehen, aber das
+ * Produkt liefert eine Pruefhilfe, keine Rechtsgrundlage -- ein Pruefsiegel
+ * waere das, worauf sich eine Praxis bei einer Abmahnung beruft.
+ *
  * @property int $version
  * @property CarbonImmutable $legal_as_of
  * @property CarbonImmutable $valid_from
@@ -44,19 +49,6 @@ class ComplianceRuleset extends Model
             'valid_until' => 'immutable_date',
             'reviewed_at' => 'immutable_date',
         ];
-    }
-
-    /**
-     * **Ungeprueft, bis jemand mit Zulassung hingesehen hat.**
-     *
-     * specs/WP-30 nennt als Abnahmekriterium einen Testsatz echter Anzeigen,
-     * "geprueft durch einen Medizinrechtler". Solange das aussteht, sagt das
-     * Produkt es -- eine Ampel, der jemand vertraut, ohne dass sie geprueft
-     * ist, ist gefaehrlicher als gar keine.
-     */
-    public function juristischGeprueft(): bool
-    {
-        return $this->reviewed_at !== null && is_string($this->reviewed_by) && $this->reviewed_by !== '';
     }
 
     public static function geltend(?CarbonImmutable $jetzt = null): ?self

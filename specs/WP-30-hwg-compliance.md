@@ -77,6 +77,15 @@ Das ist die einzige ehrliche Form, in der diese Funktion vor WP-01 existieren
 kann. Eine Ampel, der jemand vertraut, ohne dass sie geprüft ist, ist
 gefährlicher als gar keine.
 
+> **Nachtrag 27.09.2026.** Die juristische Durchsicht ist erfolgt; Fassung 1
+> wurde **unverändert bestätigt**. Der Warnblock ist entfallen — aber an seine
+> Stelle tritt **kein** „geprüft von … am …" (Entscheidung C18): Das Produkt
+> liefert eine Prüfhilfe, niemals eine Rechtsgrundlage, auf die sich eine
+> Praxis gegenüber einer Abmahnung berufen könnte. Es bleibt der Block „Eine
+> Prüfhilfe, keine Rechtsberatung" und die Zeile mit Fassung und Rechtsstand.
+> `reviewed_by` und `reviewed_at` bleiben als Spalten, werden nie angezeigt;
+> `ComplianceRuleset::juristischGeprueft()` ist entfernt.
+
 ## Was das Bauen zutage gefördert hat
 
 **Die Maschine entscheidet nicht über Bilder.** Geteilte Bilder, Pfeile,
@@ -111,6 +120,10 @@ wirft, statt grün zu liefern.
 > begründeter Übersteuerung im Katalog; die Prüfung trägt einen Fingerabdruck
 > des geprüften Texts. Die juristische Durchsicht bleibt bewusst offen — die
 > Ampel ist eine Hilfe und sagt es.
+>
+> **Nachtrag 27.09.2026.** Die juristische Durchsicht ist erfolgt, Fassung 1
+> unverändert bestätigt. Das Produkt nennt sie nicht (C18) — siehe „Was offen
+> bleibt".
 
 - **Die juristische Durchsicht** (WP-01). Bis dahin steht der Warnblock.
 - **Die Bildprüfung selbst.** Sie erkennt Wörter, keine Kompositionen. Ein

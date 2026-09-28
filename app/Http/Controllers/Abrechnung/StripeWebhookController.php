@@ -108,7 +108,14 @@ final class StripeWebhookController extends Controller
 
             $mandant->runAs($organisation, function () use ($art, $gegenstand, $zeitpunkt): void {
                 match ($art) {
-                    'checkout.session.completed' => $this->nachKasse($gegenstand),
+                    'checkout.session.completed',
+
+                    // **SEPA zahlt spaeter** (28.09.2026). Die Kasse schliesst
+                    // mit `unpaid`; das Geld meldet dieses Ereignis, Tage
+                    // danach. Ohne es bekam, wer per Lastschrift aufstockte,
+                    // nichts -- gutgeschrieben wird nur bei `paid`, also nie
+                    // zweimal fuer dieselbe Kasse.
+                    'checkout.session.async_payment_succeeded' => $this->nachKasse($gegenstand),
                     'customer.subscription.created',
                     'customer.subscription.updated' => $this->zustand($gegenstand, $zeitpunkt),
                     'customer.subscription.deleted' => $this->beendet($zeitpunkt),
@@ -124,7 +131,9 @@ final class StripeWebhookController extends Controller
      * Eine Aufstockung ist bezahlt.
      *
      * **Erst jetzt gebucht** -- wer sie beim Oeffnen der Kasse gutschriebe,
-     * verschenkte Kontingent an jeden, der sie wieder schliesst.
+     * verschenkte Kontingent an jeden, der sie wieder schliesst. Bei Karte
+     * meldet es `checkout.session.completed`, bei SEPA erst
+     * `checkout.session.async_payment_succeeded`.
      *
      * @param  array<string, mixed>  $gegenstand
      */

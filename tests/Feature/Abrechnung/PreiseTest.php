@@ -44,6 +44,25 @@ it('nimmt die Einrichtung beim ersten Abschluss mit in die Kasse', function (): 
         && ($anfrage->data()['line_items[1][price]'] ?? null) === 'price_einrichtung');
 });
 
+it('laesst Stripe die Umsatzsteuer rechnen -- im Abo wie in der Aufstockung', function (string $was): void {
+    // **Netto zuzueglich USt.** (docs/produkt.md). Die Preise tragen
+    // `tax_behavior=exclusive`; ohne `automatic_tax` zoege Stripe trotzdem
+    // nur den Nettobetrag ein. Bis zum 28.09.2026 fehlte es.
+    $organisation = alsMandant(organisation('Demo-Praxis'));
+    $inhaberin = User::factory()->fuer($organisation, Role::Owner)->create();
+
+    neuesPaket(['stripe_price_topup' => 'price_block']);
+
+    actingAs($inhaberin)->post(route('abo.kasse'), ['was' => $was]);
+
+    Http::assertSent(fn (Request $anfrage): bool => str_ends_with($anfrage->url(), '/v1/checkout/sessions')
+        && ($anfrage->data()['automatic_tax[enabled]'] ?? null) === 'true'
+        && ($anfrage->data()['tax_id_collection[enabled]'] ?? null) === 'true'
+        && ($anfrage->data()['customer_update[address]'] ?? null) === 'auto'
+        && ($anfrage->data()['customer_update[name]'] ?? null) === 'auto'
+        && ($anfrage->data()['billing_address_collection'] ?? null) === 'required');
+})->with(['abo', 'nachrichten']);
+
 it('berechnet die Einrichtung nach einer Kuendigung nicht noch einmal', function (): void {
     $organisation = alsMandant(organisation('Demo-Praxis'));
     $inhaberin = User::factory()->fuer($organisation, Role::Owner)->create();

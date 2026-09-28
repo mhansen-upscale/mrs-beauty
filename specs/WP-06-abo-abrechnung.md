@@ -141,6 +141,30 @@ noch.
 > ab, geprüft in `tests/Feature/Abrechnung/AbrechnungTest.php` („raeumt auch
 > gekaufte Bilder … ab").
 
+> **Nachtrag 28.09.2026 — drei Lücken vor der ersten echten Zahlung.**
+>
+> - **Keine Umsatzsteuer.** `docs/produkt.md` sagt „netto, zuzüglich USt.,
+>   die Stripe Tax rechnet", die Preise tragen `tax_behavior=exclusive` —
+>   aber die Kasse setzte kein `automatic_tax`. Stripe hätte glatt 790 €
+>   eingezogen. Jetzt: `automatic_tax`, Rechnungsanschrift Pflicht, an den
+>   bestehenden Kunden zurückgeschrieben, und die USt-IdNr. der Praxis
+>   (`PreiseTest.php`). **Stripe Tax muss dafür im Konto aktiv sein**, auch im
+>   Testmodus — sonst lehnt Stripe jede Kasse ab.
+> - **SEPA-Aufstockungen kamen nie an.** SEPA ist eine verzögerte
+>   Zahlungsart: die Kasse schließt mit `unpaid`, das Geld meldet Tage später
+>   `checkout.session.async_payment_succeeded` — und das kannte der Webhook
+>   nicht. Wer per Lastschrift aufstockte, bezahlte und bekam nichts
+>   (`StripeZustellungTest.php`).
+> - **Handarbeit im Dashboard.** `php artisan mrs:stripe-einrichten` legt je
+>   Umgebung den Webhook-Endpunkt auf der festen API-Version an, den
+>   Gutschein und eine eigene Konfiguration des Kundenportals (kein
+>   Tarifwechsel, Kündigung zum Periodenende), die `portal()` ausdrücklich
+>   übergibt. Er prüft Stripe Tax lesend und nennt, was nur im Dashboard
+>   geht. Wiederholbar; das Webhook-Geheimnis nennt er einmal, wie Stripe
+>   (`StripeEinrichtenTest.php`). Die Paketpreise legt weiter die Fassung an
+>   (WP-06b): `PaketfassungAnlegen` nimmt keine Fassung, die schon gilt —
+>   der Befehl sagt dann, dass sie im Backoffice einmal zu speichern ist.
+
 **Die Sperre trifft nie eine Antwort.** Entscheidung B12 ist im Code genau
 eine Stelle: die Prüfung sitzt im Zweig *außerhalb des Service-Fensters*, wo
 ein Template nötig ist — der Zweig, der Geld kostet. Der Test schickt bei

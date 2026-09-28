@@ -203,7 +203,10 @@ it('kuendigt sofort und sperrt nach dem Webhook', function (): void {
 });
 
 it('schenkt einen Monat ueber den Gutschein', function (): void {
-    Http::fake(['stripe.test/v1/subscriptions/sub_1' => Http::response(['id' => 'sub_1'])]);
+    Http::fake([
+        'stripe.test/v1/coupons/gratis-monat' => Http::response(['id' => 'gratis-monat']),
+        'stripe.test/v1/subscriptions/sub_1' => Http::response(['id' => 'sub_1']),
+    ]);
 
     $praxis = stripepraxis();
 
@@ -211,11 +214,42 @@ it('schenkt einen Monat ueber den Gutschein', function (): void {
 
     Http::assertSent(fn (Request $anfrage): bool => ($anfrage->data()['discounts[0][coupon]'] ?? null) === 'gratis-monat');
 
+    // Den Gutschein gibt es schon -- es wird keiner angelegt.
+    Http::assertNotSent(fn (Request $anfrage): bool => $anfrage->method() === 'POST' && str_ends_with($anfrage->url(), '/v1/coupons'));
+
     // Ein Gutschein fuer einmal traegt kein Enddatum -- er gilt fuer die
     // naechste Rechnung, also die am Periodenende.
     aboZustellung(['discount' => ['coupon' => ['id' => 'gratis-monat', 'duration' => 'once'], 'end' => null]], 1000);
 
     expect(aboVon($praxis)->discount_ends_at?->toDateString())->toBe('2027-02-01');
+});
+
+it('legt den Gutschein selbst an, wenn es ihn bei Stripe noch nicht gibt', function (): void {
+    // **Nur noch Schluessel eintragen** (28.09.2026). Bis hier musste der
+    // Gutschein von Hand im Dashboard entstehen und seine Kennung in die
+    // Umgebung; ohne sie lehnte das Mandantenblatt den Gratismonat ab.
+    config()->set('services.stripe.free_month_coupon', 'mrs_gratismonat');
+
+    Http::fake([
+        'stripe.test/v1/coupons/mrs_gratismonat' => Http::response(['error' => ['code' => 'resource_missing', 'message' => 'No such coupon']], 404),
+        'stripe.test/v1/coupons' => Http::response(['id' => 'mrs_gratismonat']),
+        'stripe.test/v1/subscriptions/sub_1' => Http::response(['id' => 'sub_1']),
+    ]);
+
+    $praxis = stripepraxis();
+
+    eingriff($praxis, 'free_month')->assertSessionHasNoErrors();
+
+    Http::assertSent(fn (Request $anfrage): bool => $anfrage->method() === 'POST'
+        && str_ends_with($anfrage->url(), '/v1/coupons')
+        && $anfrage->hasHeader('Idempotency-Key')
+        && ($anfrage->data()['id'] ?? null) === 'mrs_gratismonat'
+        && (string) ($anfrage->data()['percent_off'] ?? '') === '100'
+        && ($anfrage->data()['duration'] ?? null) === 'once');
+
+    Http::assertSent(fn (Request $anfrage): bool => ($anfrage->data()['discounts[0][coupon]'] ?? null) === 'mrs_gratismonat');
+
+    expect(eingriffVon($praxis)->status)->toBe(SubscriptionChangeStatus::Done);
 });
 
 /* Fehlschlaege ------------------------------------------------------------- */

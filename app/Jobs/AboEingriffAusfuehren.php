@@ -142,9 +142,22 @@ final class AboEingriffAusfuehren implements ShouldBeUnique, ShouldQueue
             SubscriptionChangeAction::CancelPeriodEnd => $stripe->kuendigeZumPeriodenende($abo, $schluessel),
             SubscriptionChangeAction::RevokeCancel => $stripe->nimmKuendigungZurueck($abo, $schluessel),
             SubscriptionChangeAction::CancelNow => $stripe->kuendigeSofort($abo, $schluessel),
-            SubscriptionChangeAction::FreeMonth => $stripe->gewaehreGutschein($abo, (string) config('services.stripe.free_month_coupon'), $schluessel),
+            SubscriptionChangeAction::FreeMonth => $this->gratismonat($stripe, $abo, $schluessel),
             SubscriptionChangeAction::ExtendTrial => throw new RuntimeException('Die Testphase lebt nicht bei Stripe.'),
         };
+    }
+
+    /**
+     * Erst der Gutschein, dann das Abo. Fehlt der Gutschein bei Stripe, legt
+     * der Auftrag ihn an -- mit eigenem Idempotenzschluessel, damit eine
+     * Wiederholung nicht an einem zweiten scheitert.
+     */
+    private function gratismonat(Stripeclient $stripe, string $abo, string $schluessel): Response
+    {
+        $gutschein = (string) config('services.stripe.free_month_coupon');
+        $vorhanden = $stripe->stelleGutscheinSicher($gutschein, $schluessel.':gutschein');
+
+        return $vorhanden->successful() ? $stripe->gewaehreGutschein($abo, $gutschein, $schluessel) : $vorhanden;
     }
 
     private function scheitere(SubscriptionChange $eingriff, string $grund, AuditLogger $protokoll): void

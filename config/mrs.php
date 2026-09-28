@@ -657,6 +657,19 @@ return [
         'service_window' => [
             'price_tenth_cents' => (int) round(((float) env('WHATSAPP_SERVICEFENSTER_CENT', 0)) * 10),
         ],
+
+        // **Was der Webhook liest** (StripeWebhookController) -- und genau
+        // das abonniert `mrs:stripe-einrichten` am Endpunkt. Wer hier eines
+        // ergaenzt, ergaenzt es dort im `match`, und umgekehrt.
+        // `async_payment_succeeded` ist die SEPA-Zahlung, die Tage nach der
+        // Kasse eingeht (28.09.2026, WP-06).
+        'stripe_ereignisse' => [
+            'checkout.session.completed',
+            'checkout.session.async_payment_succeeded',
+            'customer.subscription.created',
+            'customer.subscription.updated',
+            'customer.subscription.deleted',
+        ],
     ],
 
     /*

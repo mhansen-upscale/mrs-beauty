@@ -16,6 +16,8 @@ Gilt für WP-00, WP-19 bis WP-22, WP-26 bis WP-28, WP-31, WP-32.
 | `whatsapp_business_messaging` | WhatsApp senden und empfangen |
 | `whatsapp_business_management` | Templates, Rufnummern, Konten verwalten |
 
+> **Stand 28.09.2026: durch** — App Review, Business-Verifizierung und Login-Konfiguration samt Asset-Typ Datensatz (WP-00). Der Abschnitt bleibt als Begründung stehen.
+
 **App Review ist der kritische Pfad des gesamten Projekts.** Meta verlangt eine funktionierende Demo je Berechtigung. Das erzeugt eine Henne-Ei-Situation: Du brauchst ein Stück Produkt, um die Berechtigung zu bekommen, die du fürs Produkt brauchst. Plane eine minimale Demo-Oberfläche ein, die nur der Review dient. Ablehnungen sind der Normalfall.
 
 Voraussetzungen vor der Einreichung: Unternehmensverifizierung, Domain-Verifizierung, Datenschutzerklärung, Endpunkt zur Datenlöschung, Tech-Provider-Status.

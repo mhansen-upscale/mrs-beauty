@@ -143,9 +143,9 @@ Stripe (WP-34c, WP-06b):
   Bestand" stellt sofort um.
 
 **Beim Anbinden** hat die geltende Fassung keine Preise bei Stripe. Die
-Paketseite warnt dann. Eine Fassung speichern, auch unverändert, legt
-Produkt und Preise an. Bis dahin meldet die Kasse „Für dieses Paket fehlt
-der Preis bei Stripe".
+Paketseite warnt dann, `php artisan mrs:stripe-einrichten` auch. Eine
+Fassung speichern, auch unverändert, legt Produkt und Preise an. Bis dahin
+meldet die Kasse „Für dieses Paket fehlt der Preis bei Stripe".
 
 ## Überwachung
 
@@ -274,14 +274,34 @@ Was trotzdem bei uns liegt:
 
 ## Einmalig je Installation
 
-- **Stripe:** `STRIPE_SECRET` und `STRIPE_WEBHOOK_SECRET` setzen, dann im
-  Backoffice unter **Paket** eine Fassung speichern (WP-06b). Sie legt
-  Produkt und alle Preise selbst an; Preise von Hand anlegen ist nicht mehr
-  nötig. Die Startwerte der ersten Fassung (790 €/Monat, Aufstockung 59 €,
-  Bild 2 €, Einrichtung 1.490 €) kommen aus `config/mrs.php` (B15). Dazu
-  einen Gutschein 100 %, einmal, als `STRIPE_FREE_MONTH_COUPON_ID`
-  (Gratismonat, WP-34c), und die API-Version des Webhook-Endpunkts auf
-  `STRIPE_API_VERSION` stellen.
+- **Stripe**, je Umgebung (Testmodus für Staging, Live für Produktion —
+  die Kennungen unterscheiden sich):
+  1. `STRIPE_SECRET` setzen.
+  2. `php artisan mrs:stripe-einrichten` ausführen. Der Befehl ist
+     wiederholbar und legt nur an, was fehlt: den **Webhook-Endpunkt** auf
+     `STRIPE_API_VERSION` mit allen Ereignissen, die das Produkt liest, den
+     **Gutschein** für den Gratismonat (WP-34c) und die Konfiguration des
+     **Kundenportals**. Live fragt er vor dem Schreiben nach.
+  3. Das **einmal** ausgegebene `STRIPE_WEBHOOK_SECRET` setzen. Stripe zeigt
+     es danach nie wieder; verloren heißt `--webhook-neu`.
+  4. Im Backoffice unter **Paket** die Fassung speichern, auch unverändert
+     (WP-06b). Sie legt Produkt und alle Preise an; die Startwerte der ersten
+     Fassung (790 €/Monat, Aufstockung 59 €, Bild 2 €, Einrichtung 1.490 €)
+     kommen aus `config/mrs.php` (B15). Der Befehl nennt den Schritt, solange
+     er aussteht.
+  5. Im Dashboard, was die API nicht regelt: Geschäftsdaten und
+     Auszahlungskonto; **Stripe Tax** aktivieren samt Registrierung
+     Deutschland — auch im Testmodus, sonst lehnt Stripe jede Kasse ab, weil
+     sie die Umsatzsteuer berechnen lässt; **SEPA-Lastschrift** aktiv; unter
+     *Billing → Revenue recovery* „wenn alle Versuche scheitern: Abo als
+     **unbezahlt** markieren", nicht kündigen — die Sperre ist auf `unpaid`
+     gebaut (WP-06), und nur ein unbezahltes Abo löst sich mit einer
+     Zahlung. Der Befehl prüft Stripe Tax lesend und nennt die übrigen
+     Punkte am Ende.
+
+  Lokal legt der Befehl keinen Webhook an; dort trägt
+  `stripe listen --forward-to localhost/webhooks/stripe` die Zustellungen
+  und nennt sein eigenes Geheimnis.
 - **Mit bestehenden Preisen:** Wer die vier Preis-IDs schon vor der
   Migration `2026_09_27_140000_paketfassungen` in der Umgebung hat, bekommt
   sie in Fassung 1 übernommen. **Danach liest sie niemand mehr**: Eine
@@ -296,7 +316,8 @@ Was trotzdem bei uns liegt:
   Backoffice unter **E-Mails**.
 - **Microsoft Entra ID:** App-Registrierung, Geheimnis mit Ablaufdatum im
   Betriebskalender.
-- **Meta:** App Review und Business-Verifizierung (WP-00).
+- **Meta:** App Review, Business-Verifizierung und Login-Konfiguration samt
+  Asset-Typ Datensatz — erledigt am 28.09.2026 (WP-00).
 
 ## Umgebungsvariablen, die im Betrieb gesetzt sein müssen
 
@@ -311,7 +332,7 @@ META_CAPI_TOKEN=…
 KIE_API_KEY=…
 STRIPE_SECRET=…              STRIPE_WEBHOOK_SECRET=…
 STRIPE_API_VERSION=2025-02-24.acacia
-STRIPE_FREE_MONTH_COUPON_ID=…
+STRIPE_FREE_MONTH_COUPON_ID=           (optional: nur für einen schon bestehenden Gutschein)
 WHATSAPP_SERVICEFENSTER_CENT=0
 GOOGLE_CLIENT_ID=…           GOOGLE_CLIENT_SECRET=…
 MICROSOFT_CLIENT_ID=…        MICROSOFT_CLIENT_SECRET=…
@@ -333,8 +354,9 @@ liefert ein **Nutzertoken** — das funktioniert in der Entwicklung sofort und
 stirbt in Produktion mit dem ersten Mitarbeiter, der die Praxis verlässt.
 
 **`META_CAPI_TOKEN`** ist der Zugang zur Conversions API. Ohne ihn sendet das
-Produkt **keine** Ereignisse — kein Fehler, sondern der Normalfall vor dem
-App Review. Die Praxis merkt davon nichts; Meta ordnet dann weniger zu.
+Produkt **keine** Ereignisse — kein Fehler, sondern der Normalfall bis
+WP-32c, das ihn durch den Token der Praxis ersetzt (B16). Die Praxis merkt
+davon nichts; Meta ordnet dann weniger zu.
 
 **`KIE_API_KEY`** ist der Zugang zur Bilderzeugung (WP-31). Ohne ihn entstehen
 Anzeigentexte, aber keine Bilder — die Oberfläche sagt es, statt einen Fehler

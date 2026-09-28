@@ -39,9 +39,9 @@ final class HwgController extends Controller
                 'version' => $fassung->version,
                 'rechtsstand' => $fassung->legal_as_of->toDateString(),
                 'changelog' => $fassung->changelog,
-                'geprueft' => $fassung->juristischGeprueft(),
-                'geprueftVon' => $fassung->reviewed_by,
-                'geprueftAm' => $fassung->reviewed_at?->toDateString(),
+
+                // **Kein Pruefer, kein Pruefdatum** (Entscheidung C18): die
+                // Ampel ist eine Hilfe, keine Rechtsgrundlage.
             ],
 
             // Der zuletzt gepruefte Text samt Ergebnis -- er steht in der
