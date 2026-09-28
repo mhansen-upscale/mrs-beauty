@@ -58,6 +58,7 @@ steht sie im Enum, damit eine Korrektur eine Zeile kostet.
 | `finanzen.sehen` (WP-34d) | ✓ | – | ✓ |
 | `betreiber.verwalten` | ✓ | – | – |
 | `protokoll.sehen`: Betreiberprotokoll | ✓ | – | – |
+| `demoanfragen.verwalten`: Demo-Anfragen der Startseite (WP-38) | ✓ | ✓ | – |
 
 **Finanzen kommt nie in eine Praxis.** Wer Umsätze auswertet, braucht keinen
 Blick in einen Posteingang.

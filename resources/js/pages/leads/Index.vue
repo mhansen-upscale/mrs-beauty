@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, MessageSquareReply, Timer, XCircle } from 'lucide-vue-next';
+import { Check, CheckCircle2, MessageSquareReply, Timer, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface LeadItem extends Record<string, unknown> {
@@ -41,7 +41,8 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Anfragen', href: '/anfragen
 
 const spalten: Spalte<LeadItem>[] = [
     { schluessel: 'contact', titel: 'Kontakt' },
-    { schluessel: 'treatment', titel: 'Behandlung' },
+    // Auf dem Handy steht die Behandlung unter dem Kontakt (sm:hidden in der ersten Zelle).
+    { schluessel: 'treatment', titel: 'Behandlung', ab: 'sm' },
     { schluessel: 'status', titel: 'Status' },
     { schluessel: 'source_label', titel: 'Herkunft', ab: 'md' },
     { schluessel: 'first_response_seconds', titel: 'Erste Reaktion', ab: 'lg' },
@@ -126,7 +127,8 @@ const verlieren = () => {
 
             <DataTable :spalten="spalten" :zeilen="leads" :suchfelder="['contact', 'treatment']" suchtext="Kontakt oder Behandlung">
                 <template #zelle-contact="{ zeile }">
-                    <span class="font-medium">{{ zeile.contact }}</span>
+                    <span class="break-words font-medium">{{ zeile.contact }}</span>
+                    <span class="block text-xs text-muted-foreground sm:hidden">{{ zeile.treatment ?? 'Behandlung noch offen' }}</span>
                 </template>
 
                 <template #zelle-treatment="{ zeile }">
@@ -179,6 +181,8 @@ const verlieren = () => {
             titel="Anfrage schließen"
             beschreibung="Ein Grund gehört dazu. Ohne ihn ist die Pipeline ein Friedhof und niemand lernt etwas daraus."
             :laeuft="verloren.processing"
+            absende-text="Anfrage schließen"
+            :absende-symbol="Check"
             @update:offen="(wert) => (verlorenVon = wert ? verlorenVon : null)"
             @absenden="verlieren"
         >

@@ -41,6 +41,7 @@ enum Mailart: string
 
     // Versand der Plattform, fest
     case Versandprobe = 'versandprobe';
+    case Demoanfrage = 'demoanfrage';
 
     public function versandweg(): Versandweg
     {
@@ -60,7 +61,18 @@ enum Mailart: string
     /** Laesst sich die Mail gestalten -- oder ist ihr Text Produkt? */
     public function istVorlage(): bool
     {
-        return ! in_array($this, [self::Posteingangsantwort, self::Wartelistenangebot, self::Postfachprobe, self::Versandprobe], true);
+        return ! in_array($this, [self::Posteingangsantwort, self::Wartelistenangebot, self::Postfachprobe, self::Versandprobe, self::Demoanfrage], true);
+    }
+
+    /**
+     * Geht sie an den Betreiber selbst, nicht an ein Konto einer Praxis?
+     *
+     * Dann gehoert sie nicht in die Uebersicht einer Praxis: "Welche Mails
+     * gehen hinaus?" meint dort die an das eigene Team und die Patientinnen.
+     */
+    public function anDenBetreiber(): bool
+    {
+        return in_array($this, [self::Versandprobe, self::Demoanfrage], true);
     }
 
     /**
@@ -122,6 +134,7 @@ enum Mailart: string
             self::Anmeldecode => 'Anmeldecode',
             self::Einrichtungscode => 'Code zur Einrichtung des zweiten Faktors',
             self::Versandprobe => 'Probemail des Plattformversands',
+            self::Demoanfrage => 'Neue Demo-Anfrage',
         };
     }
 
@@ -144,6 +157,7 @@ enum Mailart: string
             self::Anmeldecode => 'An Konten mit zweitem Faktor per E-Mail, bei der Anmeldung.',
             self::Einrichtungscode => 'An Konten, die den zweiten Faktor per E-Mail einschalten.',
             self::Versandprobe => 'An Sie, wenn Sie den Plattformserver prüfen.',
+            self::Demoanfrage => 'An den Vertrieb, wenn auf der Startseite eine Demo angefragt wurde — ohne die Angaben der Anfrage.',
         };
     }
 

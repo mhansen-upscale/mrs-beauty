@@ -35,7 +35,7 @@ enum OperatorRole: string
     {
         return match ($this) {
             self::SuperAdmin => 'Alles, einschließlich Sperren, Abo-Eingriffen, Paket, Mailversand und Betreiberkonten.',
-            self::CustomerSuccess => 'Praxen und Abos sehen, Kontingent gutschreiben, Testphase verlängern, mit Freigabe in eine Praxis sehen.',
+            self::CustomerSuccess => 'Praxen und Abos sehen, Kontingent gutschreiben, Testphase verlängern, mit Freigabe in eine Praxis sehen, Demo-Anfragen bearbeiten.',
             self::Finanzen => 'Praxen, Abos, Umsatz und Kosten sehen. Nie in eine Praxis.',
         };
     }
@@ -54,6 +54,9 @@ enum OperatorRole: string
                 OperatorAbility::KontingentGutschreiben,
                 OperatorAbility::TestphaseVerlaengern,
                 OperatorAbility::SupportZugriff,
+                // Wer mit Praxen spricht, spricht auch mit denen, die eine
+                // werden wollen (WP-38, zu bestaetigen).
+                OperatorAbility::DemoanfragenVerwalten,
             ],
 
             // **Finanzen kommt nie in eine Praxis.** Wer Umsaetze auswertet,

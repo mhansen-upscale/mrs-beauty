@@ -4,6 +4,8 @@ import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import Zeilenaktionen from '@/components/Zeilenaktionen.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,9 +14,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem, type Spalte } from '@/types';
+import { type BreadcrumbItem, type Spalte, type Zeilenaktion } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { CalendarOff, CheckCircle2, CircleSlash, Clock, ImagePlus, Pencil, Plus, Power, PowerOff, Trash2 } from 'lucide-vue-next';
+import {
+    AlertTriangle,
+    CalendarOff,
+    CheckCircle2,
+    CircleSlash,
+    Clock,
+    ImagePlus,
+    Pencil,
+    Plus,
+    Power,
+    PowerOff,
+    Save,
+    Trash2,
+    Upload,
+} from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface WorkingHour {
@@ -261,6 +277,20 @@ const deaktivieren = (behandler: PractitionerItem) =>
 const aktivieren = (behandler: PractitionerItem) =>
     router.put(route('practitioners.activate', { practitioner: behandler.uuid }), {}, { preserveScroll: true });
 
+/**
+ * Fünf Handlungen je Zeile. Bis September 2026 waren Arbeitszeiten unter `sm`
+ * und Bild und Abwesenheiten unter `lg` ausgeblendet — ohne einen anderen Weg
+ * dorthin. Jetzt stehen alle auf jeder Breite, auf dem Handy im Menü.
+ */
+const aktionen = (behandler: PractitionerItem): Zeilenaktion[] => [
+    { symbol: Pencil, beschriftung: 'Bearbeiten', aktion: () => bearbeitenOeffnen(behandler) },
+    { symbol: Clock, beschriftung: 'Arbeitszeiten', aktion: () => zeitenOeffnen(behandler) },
+    { symbol: ImagePlus, beschriftung: 'Bild', aktion: () => bildOeffnen(behandler) },
+    { symbol: CalendarOff, beschriftung: 'Abwesenheiten', aktion: () => abwesenheitenOeffnen(behandler) },
+    { symbol: PowerOff, beschriftung: 'Deaktivieren', aktion: () => deaktivieren(behandler), wenn: behandler.is_active },
+    { symbol: Power, beschriftung: 'Aktivieren', aktion: () => aktivieren(behandler), wenn: !behandler.is_active },
+];
+
 const standortName = (uuid: string | null): string => props.locations.find((eintrag) => eintrag.uuid === uuid)?.name ?? '—';
 
 const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -273,9 +303,10 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
         <div class="space-y-6 p-4">
             <Heading title="Behandler" description="Nicht jeder Behandler hat ein Benutzerkonto — die Verbindung ist optional." />
 
-            <p v-if="!locations.length" class="rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-                Zuerst einen Standort anlegen. Ohne Standort gibt es keine Arbeitszeit.
-            </p>
+            <Alert v-if="!locations.length" variant="warning">
+                <AlertTriangle />
+                <AlertDescription>Zuerst einen Standort anlegen. Ohne Standort gibt es keine Arbeitszeit.</AlertDescription>
+            </Alert>
 
             <DataTable :spalten="spalten" :zeilen="practitioners" :suchfelder="['name']" suchtext="Name">
                 <template #werkzeuge>
@@ -287,11 +318,11 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
 
                 <template #zelle-name="{ zeile }">
                     <span class="flex items-center gap-3">
-                        <Avatar class="size-9">
+                        <Avatar class="size-9 shrink-0">
                             <AvatarImage v-if="zeile.avatar_url" :src="zeile.avatar_url" :alt="zeile.name" />
                             <AvatarFallback class="text-xs">{{ zeile.initials }}</AvatarFallback>
                         </Avatar>
-                        <span class="font-medium">{{ zeile.name }}</span>
+                        <span class="min-w-0 break-words font-medium">{{ zeile.name }}</span>
                     </span>
                 </template>
 
@@ -322,17 +353,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 </template>
 
                 <template #aktionen="{ zeile }">
-                    <AktionsButton :icon="Pencil" beschriftung="Bearbeiten" @click="bearbeitenOeffnen(zeile)" />
-                    <AktionsButton :icon="Clock" beschriftung="Arbeitszeiten" class="hidden sm:inline-flex" @click="zeitenOeffnen(zeile)" />
-                    <AktionsButton :icon="ImagePlus" beschriftung="Bild" class="hidden lg:inline-flex" @click="bildOeffnen(zeile)" />
-                    <AktionsButton
-                        :icon="CalendarOff"
-                        beschriftung="Abwesenheiten"
-                        class="hidden lg:inline-flex"
-                        @click="abwesenheitenOeffnen(zeile)"
-                    />
-                    <AktionsButton v-if="zeile.is_active" :icon="PowerOff" beschriftung="Deaktivieren" @click="deaktivieren(zeile)" />
-                    <AktionsButton v-else :icon="Power" beschriftung="Aktivieren" @click="aktivieren(zeile)" />
+                    <Zeilenaktionen :aktionen="aktionen(zeile)" />
                 </template>
 
                 <template #leer>Noch kein Behandler angelegt.</template>
@@ -344,6 +365,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             :titel="bearbeitet ? 'Behandler bearbeiten' : 'Behandler anlegen'"
             :laeuft="formular.processing"
             :absende-text="bearbeitet ? 'Speichern' : 'Anlegen'"
+            :absende-symbol="bearbeitet ? Save : Plus"
             @absenden="speichern"
         >
             <div class="grid items-start gap-4 sm:grid-cols-3">
@@ -383,16 +405,20 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Mehrere Fenster je Tag sind erlaubt — die Mittagspause ist die Lücke dazwischen, kein eigener Eintrag."
             :laeuft="arbeitszeit.processing"
             absende-text="Hinzufügen"
+            :absende-symbol="Plus"
             breit
             @update:offen="(wert: boolean) => !wert && (zeitenVon = null)"
             @absenden="arbeitszeitAnlegen"
         >
             <ul v-if="zeiten.length" class="divide-y rounded-md border">
                 <li v-for="eintrag in zeiten" :key="eintrag.uuid" class="flex items-center gap-3 p-2 text-sm">
-                    <Badge variant="secondary">{{ eintrag.weekday_label }}</Badge>
-                    <span class="tabular-nums">{{ eintrag.starts_at.slice(0, 5) }}–{{ eintrag.ends_at.slice(0, 5) }}</span>
-                    <span class="text-muted-foreground">{{ standortName(eintrag.location) }}</span>
-                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" class="ml-auto" @click="arbeitszeitLoeschen(eintrag)" />
+                    <!-- Die Angaben brechen um, der Löschknopf bleibt rechts. -->
+                    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                        <Badge variant="secondary">{{ eintrag.weekday_label }}</Badge>
+                        <span class="tabular-nums">{{ eintrag.starts_at.slice(0, 5) }}–{{ eintrag.ends_at.slice(0, 5) }}</span>
+                        <span class="min-w-0 break-words text-muted-foreground">{{ standortName(eintrag.location) }}</span>
+                    </div>
+                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" class="shrink-0" @click="arbeitszeitLoeschen(eintrag)" />
                 </li>
             </ul>
 
@@ -440,15 +466,18 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Urlaub, Krankheit, Fortbildung. In diesen Zeiträumen wird nichts angeboten."
             :laeuft="abwesenheit.processing"
             absende-text="Hinzufügen"
+            :absende-symbol="Plus"
             breit
             @update:offen="(wert: boolean) => !wert && (abwesenheitenVon = null)"
             @absenden="abwesenheitAnlegen"
         >
             <ul v-if="abwesenheiten.length" class="divide-y rounded-md border">
                 <li v-for="eintrag in abwesenheiten" :key="eintrag.uuid" class="flex items-center gap-3 p-2 text-sm">
-                    <Badge variant="secondary">{{ eintrag.reason_label }}</Badge>
-                    <span class="text-muted-foreground">{{ datum(eintrag.starts_at) }} – {{ datum(eintrag.ends_at) }}</span>
-                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" class="ml-auto" @click="abwesenheitLoeschen(eintrag)" />
+                    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                        <Badge variant="secondary">{{ eintrag.reason_label }}</Badge>
+                        <span class="tabular-nums text-muted-foreground">{{ datum(eintrag.starts_at) }} – {{ datum(eintrag.ends_at) }}</span>
+                    </div>
+                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" class="shrink-0" @click="abwesenheitLoeschen(eintrag)" />
                 </li>
             </ul>
 
@@ -484,17 +513,18 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Das Portrait erscheint auf der öffentlichen Buchungsseite. Quadratisch wirkt es am besten, mindestens 200 × 200 Pixel."
             :laeuft="bild.processing"
             absende-text="Hochladen"
+            :absende-symbol="Upload"
             :absenden-aus="bild.avatar === null"
             @update:offen="(wert: boolean) => !wert && (bildVon = null)"
             @absenden="bildHochladen"
         >
             <div class="flex items-center gap-4">
-                <Avatar class="size-20">
+                <Avatar class="size-20 shrink-0">
                     <AvatarImage v-if="vorschau ?? portraet?.avatar_url" :src="(vorschau ?? portraet?.avatar_url) as string" :alt="portraet?.name" />
                     <AvatarFallback class="text-lg">{{ portraet?.initials }}</AvatarFallback>
                 </Avatar>
 
-                <div class="grid flex-1 gap-2">
+                <div class="grid min-w-0 flex-1 gap-2">
                     <Label for="portraet">Neues Bild</Label>
                     <Input
                         id="portraet"

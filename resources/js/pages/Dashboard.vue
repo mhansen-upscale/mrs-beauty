@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import Heading from '@/components/Heading.vue';
 import Kennzahl from '@/components/Kennzahl.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Check, ClipboardCheck, Copy, ExternalLink } from 'lucide-vue-next';
+import { AlertTriangle, Check, ClipboardCheck, Copy, CreditCard, ExternalLink } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Booking {
@@ -144,34 +146,35 @@ const kopieren = async (adresse: string) => {
             <Heading title="Dashboard" description="Was heute wichtig ist." />
 
             <!-- Was nicht läuft, steht oben. -->
-            <div v-if="betrieb && stoerungen > 0" class="space-y-2 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-                <p class="flex items-center gap-2 font-medium">
-                    <AlertTriangle class="size-4 shrink-0" />
-                    Es gibt etwas zu tun
-                </p>
+            <Alert v-if="betrieb && stoerungen > 0" variant="warning">
+                <AlertTriangle />
+                <AlertTitle>Es gibt etwas zu tun</AlertTitle>
+                <AlertDescription class="space-y-2">
+                    <p v-for="kanal in betrieb.gestoerteKanaele" :key="kanal.kanal">
+                        {{ kanal.kanal }}: {{ kanal.status }} — bitte die Verbindung erneuern.
+                    </p>
 
-                <p v-for="kanal in betrieb.gestoerteKanaele" :key="kanal.kanal">
-                    {{ kanal.kanal }}: {{ kanal.status }} — bitte die Verbindung erneuern.
-                </p>
+                    <p v-if="betrieb.gestoerteKalender > 0">{{ betrieb.gestoerteKalender }} Kalenderverbindung(en) brauchen Aufmerksamkeit.</p>
 
-                <p v-if="betrieb.gestoerteKalender > 0">{{ betrieb.gestoerteKalender }} Kalenderverbindung(en) brauchen Aufmerksamkeit.</p>
+                    <p v-if="betrieb.gestoerteWerbekonten > 0">Die Verbindung zum Werbekonto ist gestört — solange bleiben die Zahlen stehen.</p>
 
-                <p v-if="betrieb.gestoerteWerbekonten > 0">Die Verbindung zum Werbekonto ist gestört — solange bleiben die Zahlen stehen.</p>
+                    <p v-if="betrieb.liegengebliebeneEreignisse > 0">
+                        {{ betrieb.liegengebliebeneEreignisse }} eingegangene Nachricht(en) konnten nicht verarbeitet werden. Wir sehen uns das an.
+                    </p>
 
-                <p v-if="betrieb.liegengebliebeneEreignisse > 0">
-                    {{ betrieb.liegengebliebeneEreignisse }} eingegangene Nachricht(en) konnten nicht verarbeitet werden. Wir sehen uns das an.
-                </p>
+                    <p v-if="!betrieb.mailversand.bereit">
+                        Ohne eigenes Postfach gehen keine Mails an Patientinnen hinaus — keine Terminbestätigung, keine Erinnerung.
+                        <Link v-if="darfPostfachEinrichten" :href="route('postfach.edit')" class="underline underline-offset-4"
+                            >Postfach einrichten</Link
+                        >
+                    </p>
 
-                <p v-if="!betrieb.mailversand.bereit">
-                    Ohne eigenes Postfach gehen keine Mails an Patientinnen hinaus — keine Terminbestätigung, keine Erinnerung.
-                    <Link v-if="darfPostfachEinrichten" :href="route('postfach.edit')" class="underline underline-offset-4">Postfach einrichten</Link>
-                </p>
-
-                <p v-if="betrieb.mailversand.fehlgeschlagen > 0">
-                    {{ betrieb.mailversand.fehlgeschlagen }} Terminmail(s) sind in den letzten Tagen nicht hinausgegangen — die Terminansicht zeigt,
-                    welche.
-                </p>
-            </div>
+                    <p v-if="betrieb.mailversand.fehlgeschlagen > 0">
+                        {{ betrieb.mailversand.fehlgeschlagen }} Terminmail(s) sind in den letzten Tagen nicht hinausgegangen — die Terminansicht
+                        zeigt, welche.
+                    </p>
+                </AlertDescription>
+            </Alert>
 
             <!--
                 Was ein Mensch entscheiden muss, bevor es weitergeht: eine
@@ -246,13 +249,17 @@ const kopieren = async (adresse: string) => {
                 Mengen, keine Cent (B11). Ist ein Kontingent leer, sagt es das
                 in Worten — nicht nur mit einem roten Balken.
             -->
-            <section v-if="kontingente.length > 0" class="space-y-3 rounded-md border bg-card p-4">
-                <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <h2 class="text-sm font-medium">Kontingent in diesem Monat</h2>
-                    <Link :href="route('abo.edit')" class="text-xs text-muted-foreground underline underline-offset-4">Abo und Aufstockung</Link>
-                </div>
+            <Abschnitt v-if="kontingente.length > 0" titel="Kontingent in diesem Monat">
+                <template #aktionen>
+                    <Button variant="outline" size="sm" as-child>
+                        <Link :href="route('abo.edit')">
+                            <CreditCard />
+                            Abo und Aufstockung
+                        </Link>
+                    </Button>
+                </template>
 
-                <div class="grid gap-4 md:grid-cols-3">
+                <div class="grid items-start gap-4 @lg:grid-cols-3">
                     <div v-for="k in kontingente" :key="k.art" class="space-y-1.5">
                         <div class="flex items-baseline justify-between gap-2 text-sm">
                             <span>{{ k.titel }}</span>
@@ -277,26 +284,27 @@ const kopieren = async (adresse: string) => {
                         </p>
                     </div>
                 </div>
-            </section>
+            </Abschnitt>
 
             <!--
                 Der öffentliche Buchungslink war bis WP-19 nirgends im Produkt
                 zu finden — eine Praxis, die ihn auf ihre Website oder in die
                 Instagram-Biografie setzen wollte, musste ihn raten.
             -->
-            <div v-if="booking" class="rounded-md border bg-card p-4">
+            <Abschnitt
+                v-if="booking"
+                titel="Ihr Buchungslink"
+                beschreibung="Für die eigene Website, die Instagram-Biografie oder die E-Mail-Signatur. Wer ihn öffnet, sieht freie Termine und bucht selbst."
+            >
                 <div class="flex flex-wrap items-start gap-6">
                     <div class="min-w-0 flex-1 space-y-3 sm:min-w-64">
-                        <div>
-                            <h3 class="text-sm font-medium">Ihr Buchungslink</h3>
-                            <p class="text-xs text-muted-foreground">
-                                Für die eigene Website, die Instagram-Biografie oder die E-Mail-Signatur. Wer ihn öffnet, sieht freie Termine und
-                                bucht selbst.
-                            </p>
-                        </div>
-
                         <div class="flex flex-wrap items-center gap-2">
-                            <Input :model-value="booking.url" readonly class="min-w-0 flex-1 basis-full font-mono text-xs sm:basis-64" />
+                            <Input
+                                :model-value="booking.url"
+                                readonly
+                                aria-label="Buchungslink"
+                                class="min-w-0 flex-1 basis-full font-mono sm:basis-64"
+                            />
                             <Button variant="outline" @click="kopieren(booking.url)">
                                 <Check v-if="kopiert" />
                                 <Copy v-else />
@@ -319,7 +327,7 @@ const kopieren = async (adresse: string) => {
                     -->
                     <img :src="booking.qr" alt="QR-Code zur Buchungsseite" class="size-40 shrink-0 rounded-md border bg-background p-2" />
                 </div>
-            </div>
+            </Abschnitt>
         </div>
     </AppLayout>
 </template>

@@ -2,6 +2,7 @@
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +12,31 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, ArrowLeft, Clock, Mail, MessageCircle, NotebookPen, Paperclip, Search, Sparkles, Trash2, UserPlus, X } from 'lucide-vue-next';
+import {
+    AlertTriangle,
+    ArrowLeft,
+    Check,
+    CheckCircle2,
+    ClipboardPaste,
+    Clock,
+    EyeOff,
+    FileText,
+    Inbox,
+    LoaderCircle,
+    Mail,
+    MessageCircle,
+    NotebookPen,
+    Paperclip,
+    Play,
+    RotateCcw,
+    Search,
+    Send,
+    Sparkles,
+    Trash2,
+    UserCheck,
+    UserPlus,
+    X,
+} from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Kopfzeile extends Record<string, unknown> {
@@ -306,14 +331,10 @@ const zuordnen = (kontakt: string) => {
             <Heading title="Posteingang" :description="`Alles, was über WhatsApp und E-Mail hereinkommt — ${unread} ungelesen.`" />
 
             <!-- Ein Ausfall gehört ins Produkt, nicht nur ins Log (Regel 4). -->
-            <p
-                v-for="verbindung in stoerungen"
-                :key="verbindung.channel"
-                class="flex items-center gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"
-            >
-                <AlertTriangle class="size-4 shrink-0" />
-                {{ verbindung.label }}: {{ verbindung.statusLabel }} — bitte die Verbindung prüfen.
-            </p>
+            <Alert v-for="verbindung in stoerungen" :key="verbindung.channel" variant="warning">
+                <AlertTriangle />
+                <AlertDescription>{{ verbindung.label }}: {{ verbindung.statusLabel }} — bitte die Verbindung prüfen.</AlertDescription>
+            </Alert>
 
             <div class="grid gap-4 lg:grid-cols-[22rem_1fr]">
                 <!-- Liste -------------------------------------------------- -->
@@ -327,14 +348,14 @@ const zuordnen = (kontakt: string) => {
                     <div class="flex flex-wrap gap-2">
                         <div class="relative min-w-0 flex-1 basis-full sm:basis-auto">
                             <Search class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input v-model="suche" placeholder="Name, E-Mail, Nummer" class="pl-9" />
+                            <Input v-model="suche" placeholder="Name, E-Mail, Nummer" class="pl-9" aria-label="Gespräche suchen" />
                         </div>
 
                         <Select
                             :model-value="filter.kanal ?? 'alle'"
                             @update:model-value="(wert) => besuche({ kanal: wert === 'alle' ? null : String(wert), gespraech: null })"
                         >
-                            <SelectTrigger class="w-full sm:w-32"><SelectValue /></SelectTrigger>
+                            <SelectTrigger class="w-full sm:w-32" aria-label="Kanal"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="alle">Alle Kanäle</SelectItem>
                                 <SelectItem v-for="kanal in channels" :key="kanal.value" :value="kanal.value">{{ kanal.label }}</SelectItem>
@@ -353,22 +374,32 @@ const zuordnen = (kontakt: string) => {
                         Nachrichteninhalte sind verschlüsselt und nicht durchsuchbar.
                     </p>
 
-                    <div class="flex gap-2 text-sm">
+                    <div class="flex flex-wrap gap-2 text-sm">
                         <Button
                             :variant="filter.zustand === 'open' ? 'secondary' : 'ghost'"
                             size="sm"
+                            :aria-pressed="filter.zustand === 'open'"
                             @click="besuche({ zustand: 'open', gespraech: null })"
                         >
+                            <Inbox />
                             Offen
                         </Button>
                         <Button
                             :variant="filter.zustand === 'closed' ? 'secondary' : 'ghost'"
                             size="sm"
+                            :aria-pressed="filter.zustand === 'closed'"
                             @click="besuche({ zustand: 'closed', gespraech: null })"
                         >
+                            <CheckCircle2 />
                             Erledigt
                         </Button>
-                        <Button :variant="filter.ungelesen ? 'secondary' : 'ghost'" size="sm" @click="besuche({ ungelesen: !filter.ungelesen })">
+                        <Button
+                            :variant="filter.ungelesen ? 'secondary' : 'ghost'"
+                            size="sm"
+                            :aria-pressed="filter.ungelesen"
+                            @click="besuche({ ungelesen: !filter.ungelesen })"
+                        >
+                            <EyeOff />
                             Ungelesen
                         </Button>
                     </div>
@@ -438,7 +469,7 @@ const zuordnen = (kontakt: string) => {
                             :model-value="conversation.agent.modus"
                             @update:model-value="(wert) => modusUmstellen(String(wert))"
                         >
-                            <SelectTrigger class="w-full sm:w-36"><SelectValue /></SelectTrigger>
+                            <SelectTrigger class="w-full sm:w-36" aria-label="Assistent"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="off">Assistent aus</SelectItem>
                                 <SelectItem value="suggest">Vorschlagen</SelectItem>
@@ -446,8 +477,14 @@ const zuordnen = (kontakt: string) => {
                             </SelectContent>
                         </Select>
 
-                        <Button v-if="darfAntworten && conversation.status === 'open'" variant="ghost" @click="schliessen">Erledigt</Button>
-                        <Button v-else-if="darfAntworten" variant="ghost" @click="wiederOeffnen">Wieder öffnen</Button>
+                        <Button v-if="darfAntworten && conversation.status === 'open'" variant="ghost" @click="schliessen">
+                            <CheckCircle2 />
+                            Erledigt
+                        </Button>
+                        <Button v-else-if="darfAntworten" variant="ghost" @click="wiederOeffnen">
+                            <RotateCcw />
+                            Wieder öffnen
+                        </Button>
                     </div>
 
                     <!-- Nachrichten -->
@@ -491,12 +528,12 @@ const zuordnen = (kontakt: string) => {
                                         class="mb-1 max-h-48 max-w-full rounded border object-contain"
                                     />
                                     <span class="flex items-center gap-1">
-                                        <Paperclip class="size-3" />
-                                        {{ anhang.name }}
+                                        <Paperclip class="size-3 shrink-0" />
+                                        <span class="min-w-0 break-all">{{ anhang.name }}</span>
                                     </span>
                                 </a>
 
-                                <p class="flex items-center gap-2 text-[0.7rem] text-muted-foreground">
+                                <p class="flex flex-wrap items-center gap-x-2 text-[0.7rem] text-muted-foreground">
                                     <span>{{ zeitpunkt(nachricht.zeitpunkt) }}</span>
                                     <span v-if="!nachricht.eingehend">· {{ nachricht.statusLabel }}</span>
                                     <span v-if="nachricht.kosten && nachricht.kosten !== 'Ohne Kosten'">· {{ nachricht.kosten }}</span>
@@ -528,22 +565,22 @@ const zuordnen = (kontakt: string) => {
                             Der Agent schlägt vor, ein Mensch schickt ab. Der
                             Text steht bewusst nicht von selbst im Feld.
                         -->
-                        <div
-                            v-if="conversation.agent.vorschlag && darfAntworten"
-                            class="space-y-2 rounded-md border border-info/40 bg-info/5 px-3 py-2 text-sm"
-                        >
-                            <p class="flex items-center gap-2 text-xs font-medium text-info">
-                                <Sparkles class="size-3.5" />
-                                Vorschlag des Assistenten — nicht gesendet
-                            </p>
-                            <p class="whitespace-pre-wrap text-muted-foreground">{{ conversation.agent.vorschlag }}</p>
-                            <Button type="button" size="sm" variant="outline" @click="vorschlagUebernehmen">Übernehmen</Button>
-                        </div>
+                        <Alert v-if="conversation.agent.vorschlag && darfAntworten" variant="info">
+                            <Sparkles />
+                            <AlertTitle>Vorschlag des Assistenten — nicht gesendet</AlertTitle>
+                            <AlertDescription class="space-y-2">
+                                <p class="whitespace-pre-wrap break-words">{{ conversation.agent.vorschlag }}</p>
+                                <Button type="button" size="sm" variant="outline" @click="vorschlagUebernehmen">
+                                    <ClipboardPaste />
+                                    Übernehmen
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
 
-                        <div v-else-if="conversation.agent.aktion === 'escalated'" class="space-y-2">
-                            <p class="flex items-start gap-2 text-xs text-warning">
-                                <AlertTriangle class="mt-0.5 size-3.5 shrink-0" />
-                                <span>
+                        <Alert v-else-if="conversation.agent.aktion === 'escalated'" variant="warning">
+                            <AlertTriangle />
+                            <AlertDescription class="space-y-2">
+                                <p>
                                     <span v-if="conversation.agent.grund === 'complication'">
                                         Das klingt nach einer Komplikation — übergeben und das Team benachrichtigt.
                                     </span>
@@ -556,37 +593,42 @@ const zuordnen = (kontakt: string) => {
                                     </span>
                                     <span v-else>Der Assistent hat übergeben.</span>
 
-                                    <span v-if="conversation.agent.regeln.length" class="text-muted-foreground">
+                                    <span v-if="conversation.agent.regeln.length" class="break-words">
                                         ({{ conversation.agent.regeln.join(', ') }})
                                     </span>
-                                </span>
-                            </p>
+                                </p>
 
-                            <div v-if="conversation.agent.pausiertBis" class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span>Der Assistent bleibt in diesem Gespräch stumm.</span>
-                                <Button v-if="conversation.agent.darfSchalten" type="button" size="sm" variant="outline" @click="agentFortsetzen">
-                                    Wieder zulassen
-                                </Button>
-                            </div>
-                        </div>
+                                <div v-if="conversation.agent.pausiertBis" class="flex flex-wrap items-center gap-2">
+                                    <span>Der Assistent bleibt in diesem Gespräch stumm.</span>
+                                    <Button v-if="conversation.agent.darfSchalten" type="button" size="sm" variant="outline" @click="agentFortsetzen">
+                                        <Play />
+                                        Wieder zulassen
+                                    </Button>
+                                </div>
+                            </AlertDescription>
+                        </Alert>
 
                         <p v-else-if="conversation.agent.fehler === 'no_model'" class="text-xs text-muted-foreground">
                             Kein Assistent angebunden — es wird nichts vorgeschlagen.
                         </p>
 
-                        <p v-if="mailOhnePostfach" class="flex items-start gap-2 text-xs text-warning">
-                            <AlertTriangle class="mt-0.5 size-3.5 shrink-0" />
-                            <span
-                                >Ohne eigenes Postfach der Praxis geht keine Antwort per Mail hinaus. Einrichten unter Einstellungen → Postfach.</span
-                            >
-                        </p>
+                        <Alert v-if="mailOhnePostfach" variant="warning">
+                            <AlertTriangle />
+                            <AlertDescription>
+                                Ohne eigenes Postfach der Praxis geht keine Antwort per Mail hinaus. Einrichten unter Einstellungen → Postfach.
+                            </AlertDescription>
+                        </Alert>
 
                         <template v-if="darfAntworten">
                             <form v-if="!conversation.fenster.brauchtTemplate" class="space-y-2" @submit.prevent="senden">
-                                <Textarea v-model="antwort.body" rows="3" placeholder="Antwort schreiben …" />
+                                <Textarea v-model="antwort.body" rows="3" placeholder="Antwort schreiben …" aria-label="Antwort" />
                                 <InputError :message="antwort.errors.body" />
                                 <div class="flex justify-end">
-                                    <Button type="submit" :disabled="antwort.processing || !antwort.body.trim()">Senden</Button>
+                                    <Button type="submit" :disabled="antwort.processing || !antwort.body.trim()">
+                                        <LoaderCircle v-if="antwort.processing" class="animate-spin" />
+                                        <Send v-else />
+                                        Senden
+                                    </Button>
                                 </div>
                             </form>
 
@@ -603,6 +645,7 @@ const zuordnen = (kontakt: string) => {
                                         size="sm"
                                         @click="templateOeffnen(vorlage)"
                                     >
+                                        <FileText />
                                         {{ vorlage.name }}
                                         <Badge :variant="vorlage.kostet ? 'warning' : 'secondary'" groesse="klein" class="ml-2">
                                             {{ vorlage.kategorie }}
@@ -631,6 +674,7 @@ const zuordnen = (kontakt: string) => {
             beschreibung="Außerhalb des Antwortfensters nimmt WhatsApp nur genehmigte Templates an. Die Kategorie bestimmt die Kosten."
             :laeuft="templateFormular.processing"
             absende-text="Senden"
+            :absende-symbol="Send"
             @absenden="templateSenden"
         >
             <div v-for="(_, stelle) in templateFormular.werte" :key="stelle" class="grid gap-2">
@@ -647,14 +691,14 @@ const zuordnen = (kontakt: string) => {
                 Meta hat das Template genehmigt — HWG prüft Meta nicht. Die
                 Ampel ist ein Hinweis vor dem Absenden, keine Sperre.
             -->
-            <div
-                v-if="gewaehltesTemplate?.ampel === 'red' || gewaehltesTemplate?.ampel === 'yellow'"
-                class="rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-warning"
-            >
-                <p class="font-medium">Die HWG-Prüfung hat etwas gefunden:</p>
-                <p>{{ gewaehltesTemplate.befunde.join(' · ') }}</p>
-                <p class="mt-1 text-xs">Eine Prüfhilfe, keine Rechtsberatung.</p>
-            </div>
+            <Alert v-if="gewaehltesTemplate?.ampel === 'red' || gewaehltesTemplate?.ampel === 'yellow'" variant="warning">
+                <AlertTriangle />
+                <AlertTitle>Die HWG-Prüfung hat etwas gefunden:</AlertTitle>
+                <AlertDescription>
+                    <p class="break-words">{{ gewaehltesTemplate.befunde.join(' · ') }}</p>
+                    <p class="mt-1 text-xs">Eine Prüfhilfe, keine Rechtsberatung.</p>
+                </AlertDescription>
+            </Alert>
 
             <InputError :message="templateFormular.errors.template" />
         </FormularDialog>
@@ -715,27 +759,45 @@ const zuordnen = (kontakt: string) => {
             v-model:offen="zuordnenOffen"
             titel="Wer schreibt hier?"
             beschreibung="Die Zuordnung hängt an der Kennung — beim nächsten Mal weiß das Produkt schon, wer das ist."
-            absende-text="Schließen"
+            absende-text="Fertig"
+            :absende-symbol="Check"
             @absenden="zuordnenOffen = false"
         >
+            <!--
+                Zugeordnet wird je Zeile. Der Absendeknopf des Dialogs schließt
+                nur — deshalb „Fertig“, nicht „Zuordnen“. Die Zeilenknöpfe sind
+                type="button": sonst schickten sie zugleich das Formular ab und
+                schlössen den Dialog, bevor die Zuordnung durch ist.
+            -->
             <div v-if="conversation?.vorschlag" class="rounded-md border px-3 py-2">
                 <p class="text-xs text-muted-foreground">Passt genau zu dieser Kennung</p>
-                <div class="mt-1 flex items-center justify-between gap-2">
-                    <span class="font-medium">{{ conversation.vorschlag.name }}</span>
-                    <Button size="sm" @click="zuordnen(conversation.vorschlag.uuid)">Zuordnen</Button>
+                <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
+                    <span class="min-w-0 break-words font-medium">{{ conversation.vorschlag.name }}</span>
+                    <Button type="button" size="sm" @click="zuordnen(conversation.vorschlag.uuid)">
+                        <UserCheck />
+                        Zuordnen
+                    </Button>
                 </div>
             </div>
 
             <div class="grid gap-2">
                 <Label for="kontaktsuche">Kontakt suchen</Label>
-                <Input id="kontaktsuche" v-model="kontaktbegriff" placeholder="Nachname, E-Mail oder Nummer" />
-                <p class="text-xs text-muted-foreground">Die Suche findet exakt — Kontaktdaten sind verschlüsselt.</p>
+                <Input
+                    id="kontaktsuche"
+                    v-model="kontaktbegriff"
+                    placeholder="Nachname, E-Mail oder Nummer"
+                    aria-describedby="kontaktsuche-hinweis"
+                />
+                <p id="kontaktsuche-hinweis" class="text-xs text-muted-foreground">Die Suche findet exakt — Kontaktdaten sind verschlüsselt.</p>
             </div>
 
             <ul v-if="kontaktsuche.length" class="divide-y rounded-md border">
-                <li v-for="treffer in kontaktsuche" :key="treffer.uuid" class="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                    <span>{{ treffer.name }}</span>
-                    <Button size="sm" variant="outline" @click="zuordnen(treffer.uuid)">Zuordnen</Button>
+                <li v-for="treffer in kontaktsuche" :key="treffer.uuid" class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <span class="min-w-0 break-words">{{ treffer.name }}</span>
+                    <Button type="button" size="sm" variant="outline" @click="zuordnen(treffer.uuid)">
+                        <UserCheck />
+                        Zuordnen
+                    </Button>
                 </li>
             </ul>
         </FormularDialog>

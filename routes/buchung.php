@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\Route;
 | Oeffentliche Buchungsseite (WP-12)
 |--------------------------------------------------------------------------
 |
-| Die einzigen Routen des Produkts ohne Anmeldung -- und die einzigen, die
-| einen Mandanten aus der URL aufloesen. ResolvePublicTenant liest dafuer den
-| Slug und **nur** den Slug.
+| Neben den Seiten des Betreibers (routes/oeffentlich.php, WP-38) die einzigen
+| Routen ohne Anmeldung -- und die einzigen, die einen Mandanten aus der URL
+| aufloesen. ResolvePublicTenant liest dafuer den Slug und **nur** den Slug.
 |
 | Drosselung, weil ein oeffentliches Formular Kontakte und Termine anlegt:
 | ohne sie ist die Seite ein Werkzeug, um den Kalender einer Praxis zu

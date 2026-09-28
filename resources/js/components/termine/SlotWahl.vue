@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { router } from '@inertiajs/vue3';
+import { Clock } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import type { Named, Vorschlag } from './typen';
 
@@ -119,11 +120,11 @@ watch([eigeneZeit, () => props.datum], eigeneZeitUebernehmen);
                 keinen Schalter.
             </p>
 
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid items-start gap-3 sm:grid-cols-2">
                 <div class="grid gap-1.5">
                     <Label for="eigene-zeit">Beginn ({{ zeitzone }})</Label>
-                    <Input id="eigene-zeit" v-model="eigeneZeit" type="time" step="300" />
-                    <p class="text-xs text-muted-foreground">Inklusive Rüstzeit davor.</p>
+                    <Input id="eigene-zeit" v-model="eigeneZeit" type="time" step="300" aria-describedby="eigene-zeit-hinweis" />
+                    <p id="eigene-zeit-hinweis" class="text-xs text-muted-foreground">Inklusive Rüstzeit davor.</p>
                 </div>
 
                 <div class="grid gap-1.5">
@@ -166,6 +167,7 @@ watch([eigeneZeit, () => props.datum], eigeneZeitUebernehmen);
                             "
                             @click="waehlen(vorschlag)"
                         >
+                            <Clock />
                             {{ vorschlag.local_time }}
                         </Button>
                     </div>

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { Info } from 'lucide-vue-next';
+import { AlertTriangle, CalendarDays, Info } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Zeile extends Record<string, unknown> {
@@ -96,6 +97,7 @@ const blaettern = (werte: Record<string, string | number>) =>
                         :variant="tage === zeitraum.tage ? 'default' : 'outline'"
                         @click="blaettern({ zeitraum: tage })"
                     >
+                        <CalendarDays />
                         {{ tage }} Tage
                     </Button>
                     <span class="text-xs text-muted-foreground">{{ tagText(zeitraum.von) }} bis {{ tagText(zeitraum.bis) }}</span>
@@ -122,7 +124,7 @@ const blaettern = (werte: Record<string, string | number>) =>
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div class="rounded-md border p-4">
                     <p class="text-xs text-muted-foreground">Anfragen</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ zahl(summe.leads) }}</p>
+                    <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ zahl(summe.leads) }}</p>
                     <p class="text-[0.7rem] text-muted-foreground">{{ zahl(summe.gebucht) }} Beratungen · {{ zahl(summe.erschienen) }} erschienen</p>
                 </div>
 
@@ -134,19 +136,19 @@ const blaettern = (werte: Record<string, string | number>) =>
                 -->
                 <div class="rounded-md border p-4">
                     <p class="text-xs text-muted-foreground">Ausgaben</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ betrag(zugeordnet.ausgaben) }}</p>
+                    <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ betrag(zugeordnet.ausgaben) }}</p>
                     <p class="text-[0.7rem] text-muted-foreground">
                         je zugeordneter Anfrage {{ betrag(zugeordnet.costPerLead) }} ({{ zahl(zugeordnet.leads) }} von {{ zahl(summe.leads) }})
                     </p>
                 </div>
                 <div class="rounded-md border p-4">
                     <p class="text-xs text-muted-foreground">Zugeordneter Umsatz</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ betrag(zugeordnet.umsatz) }}</p>
+                    <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ betrag(zugeordnet.umsatz) }}</p>
                     <p class="text-[0.7rem] text-muted-foreground">Schätzwert aus dem Katalog</p>
                 </div>
                 <div class="rounded-md border p-4">
                     <p class="text-xs text-muted-foreground">ROAS</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ faktor(zugeordnet.roas) }}</p>
+                    <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ faktor(zugeordnet.roas) }}</p>
                     <p class="text-[0.7rem] text-muted-foreground">Show-Rate {{ quote(summe.showRate) }} · CAC {{ betrag(zugeordnet.cac) }}</p>
                 </div>
             </div>
@@ -156,10 +158,13 @@ const blaettern = (werte: Record<string, string | number>) =>
                 gerechnete Kostenverteilung wäre erfunden — und erfundene
                 Zahlen sind schlimmer als fehlende.
             -->
-            <p v-if="!traegtKosten" class="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
-                In dieser Ansicht bleiben Ausgaben, Kosten je Anfrage, CAC und ROAS leer: Meta rechnet je Kampagne ab, nicht nach dieser
-                Aufschlüsselung. Eine verteilte Zahl wäre geraten.
-            </p>
+            <Alert v-if="!traegtKosten" variant="warning">
+                <AlertTriangle />
+                <AlertDescription>
+                    In dieser Ansicht bleiben Ausgaben, Kosten je Anfrage, CAC und ROAS leer: Meta rechnet je Kampagne ab, nicht nach dieser
+                    Aufschlüsselung. Eine verteilte Zahl wäre geraten.
+                </AlertDescription>
+            </Alert>
 
             <DataTable :zeilen="zeilen" :spalten="spalten" schluessel="schluessel" :suchfelder="['bezeichnung']">
                 <template #leer>Für diesen Zeitraum gibt es noch nichts auszuwerten.</template>
@@ -175,26 +180,26 @@ const blaettern = (werte: Record<string, string | number>) =>
                 Dokumentation: ein Kunde, der eine Lücke selbst entdeckt,
                 verliert das Vertrauen in alle Zahlen.
             -->
-            <div class="space-y-2 rounded-md border p-4 text-xs text-muted-foreground">
-                <p class="flex items-center gap-2 font-medium text-foreground">
-                    <Info class="size-4 shrink-0" />
-                    Was diese Zahlen nicht zeigen
-                </p>
-                <p><strong>Anrufer und Laufkundschaft</strong> erscheinen nur, wenn das Team beim Anlegen des Termins die Quelle einträgt.</p>
-                <p>
-                    <strong>Wer die Messung ablehnt</strong>, bucht trotzdem — nur ohne Kampagnenbezug. Solche Anfragen stehen unter „Quelle
-                    unbekannt", nicht unter „Direktzugriff".
-                </p>
-                <p><strong>Geräteübergreifende Wege</strong> brechen die Kette: Anzeige auf dem Handy gesehen, am Laptop gebucht.</p>
-                <p><strong>Der Umsatz ist ein Schätzwert</strong> aus dem Katalog (Durchschnitt je Behandlung), kein abgerechneter Betrag.</p>
-                <p>
-                    <strong>Das Rückblickfenster liegt bei {{ rueckblick }} Tagen.</strong> Wer länger überlegt, erscheint hier ohne Quelle — bei
-                    ästhetischen Behandlungen ist der Entscheidungsweg lang.
-                </p>
-                <p v-if="summe.speedToLead !== null">
-                    Erste Reaktion im Median nach <Badge variant="secondary">{{ minuten(summe.speedToLead) }}</Badge>
-                </p>
-            </div>
+            <Alert>
+                <Info />
+                <AlertTitle>Was diese Zahlen nicht zeigen</AlertTitle>
+                <AlertDescription class="space-y-2">
+                    <p><strong>Anrufer und Laufkundschaft</strong> erscheinen nur, wenn das Team beim Anlegen des Termins die Quelle einträgt.</p>
+                    <p>
+                        <strong>Wer die Messung ablehnt</strong>, bucht trotzdem — nur ohne Kampagnenbezug. Solche Anfragen stehen unter „Quelle
+                        unbekannt", nicht unter „Direktzugriff".
+                    </p>
+                    <p><strong>Geräteübergreifende Wege</strong> brechen die Kette: Anzeige auf dem Handy gesehen, am Laptop gebucht.</p>
+                    <p><strong>Der Umsatz ist ein Schätzwert</strong> aus dem Katalog (Durchschnitt je Behandlung), kein abgerechneter Betrag.</p>
+                    <p>
+                        <strong>Das Rückblickfenster liegt bei {{ rueckblick }} Tagen.</strong> Wer länger überlegt, erscheint hier ohne Quelle — bei
+                        ästhetischen Behandlungen ist der Entscheidungsweg lang.
+                    </p>
+                    <p v-if="summe.speedToLead !== null">
+                        Erste Reaktion im Median nach <Badge variant="secondary">{{ minuten(summe.speedToLead) }}</Badge>
+                    </p>
+                </AlertDescription>
+            </Alert>
         </div>
     </AppLayout>
 </template>

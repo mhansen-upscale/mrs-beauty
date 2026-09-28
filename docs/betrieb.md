@@ -188,7 +188,7 @@ Mail. **Den ersten Super-Admin einer Installation** und den Notfall, dass der
 letzte sein Passwort verloren hat, erledigt die Konsole:
 
 ```bash
-php artisan mrs:betreiber name@mrs-beauty.de --rolle=super_admin --name="Vorname Nachname"
+php artisan mrs:betreiber name@mrs-beauty.ai --rolle=super_admin --name="Vorname Nachname"
 ```
 
 **Ohne Mailversand** (Staging, oder ein verlorenes Passwort ohne Zugang zum
@@ -196,7 +196,7 @@ Postfach) kommt der Link nie an. Dann setzt die Konsole selbst ein Passwort
 und zeigt es **einmal**:
 
 ```bash
-php artisan mrs:betreiber name@mrs-beauty.de --name="Vorname Nachname" --passwort-ausgeben
+php artisan mrs:betreiber name@mrs-beauty.ai --name="Vorname Nachname" --passwort-ausgeben
 ```
 
 - Das Passwort wird erzeugt, nicht übergeben. So steht es nicht in der
@@ -341,6 +341,7 @@ MAIL_INBOUND_TOKEN=…         MAIL_INBOUND_DOMAIN=…
 MAIL_MAILER=smtp             MAIL_HOST=…              MAIL_PORT=…
 MAIL_USERNAME=…              MAIL_PASSWORD=…
 MAIL_FROM_ADDRESS=…          MAIL_FROM_NAME=…         (Rückfall des Plattformversands, B23)
+VERTRIEB_ADRESSE=…                                    (Demo-Anfragen der Startseite, WP-38)
 CLAMAV_HOST=…
 ATTACHMENTS_DISK=s3            AWS_BUCKET=…
 AWS_ACCESS_KEY_ID=…            AWS_SECRET_ACCESS_KEY=…

@@ -82,6 +82,7 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 | WP-35 | Zweiter Faktor | steht: freiwillig für Praxen und Betreiber, per Authenticator-App oder E-Mail-Code, Hinweis statt Pflicht (C16); Zurücksetzen über Team, Betreiberverwaltung oder Konsole; nach WP-34a |
 | WP-36 | Mails der Praxis | steht: Texte und Aussehen der fünf Terminmails unter *Einstellungen → E-Mails* mit Vorschau, Probemail und Zurücksetzen (P12, C17, D15); Versand **nur** über das Postfach der Praxis (B22, A15), ohne Postfach `no_mailer` mit Hinweis im Produkt; nach WP-07, WP-13, WP-20b |
 | WP-37 | Plattformmails & Versand des Betreibers | steht: Mailserver im Backoffice, gilt erst nach der Probemail, `.env` als Rückfall und bei Störung (B23); Texte und Aussehen der Produktmails unter *Backoffice → E-Mails*; nur Super-Admin; nach WP-36 und WP-34a |
+| WP-38 | Öffentliche Startseite, Impressum, Datenschutzerklärung | steht: Startseite unter `/` mit Preisen aus der geltenden Paketfassung und Demo-Anfrage (gespeichert, verschlüsselt, ohne Freitext; Plattformmail an `VERTRIEB_ADRESSE` ohne Angaben), Impressum und Datenschutzerklärung (`/datenschutzerklaerung`), kein Tracking; Demo-Anfragen im Backoffice, Frist über `mrs:aufbewahrung`; nach WP-06b, WP-34a, WP-37 |
 
 ## Außerhalb des Repositories
 
@@ -99,6 +100,7 @@ Stand 28.09.2026 — alles, was sich im Repository nicht erledigen lässt:
 | **Entscheidung** | `Schedule` und `Contact` an die Conversions API — ja oder nein (C8) | WP-32b, „Offen" |
 | **Entscheidung** | Rollenkatalog der Betreiber bestätigen; Agent und Buchungsseite bei Abo-Sperre (B17); Praxen in der Testphase wechseln immer auf die neue Paketfassung (B20) | WP-34a, WP-34c, WP-06b |
 | **Mailversand** | **Vor dem Ausrollen von WP-36 jede Praxis ohne eigenes Postfach informieren** — ab dann gehen ihre Terminmails, Posteingang-Antworten und Wartelisten-Angebote nicht mehr über die Plattform (B22); die Zahl steht im Betreiber-Dashboard. Im Backoffice unter *Versand* den Plattformserver hinterlegen und mit der Probemail prüfen (B23) | WP-36, WP-37, `docs/betrieb.md` |
+| **Startseite** | `VERTRIEB_ADRESSE` je Umgebung setzen (ohne Wert: info@mrs-beauty.ai); Impressum und Datenschutzerklärung juristisch prüfen lassen, dabei Hosting, Mailversand und Fehlerüberwachung namentlich ergänzen; im Backoffice unter *Versand* die Impressum- und Datenschutz-Adresse der Produktmails auf `/impressum` und `/datenschutzerklaerung` setzen; Frist (12 Monate) und Customer Success als Leser bestätigen | WP-38, `docs/betrieb.md` |
 
 ## Fachlogik
 

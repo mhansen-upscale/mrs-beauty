@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -87,10 +88,12 @@ const kontext = (werte: Record<string, unknown>): string =>
         <div class="space-y-6 p-4">
             <Heading title="Betreiberprotokoll" description="Was quer zu den Praxen geschah. Einträge lassen sich nicht ändern und nicht löschen." />
 
-            <p class="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-                <Lock class="size-4 shrink-0" />
-                Keine Inhalte, keine eingetippten Adressen — nur wer, wann, was und warum. Jeder Aufruf dieser Seite steht selbst im Protokoll.
-            </p>
+            <Alert>
+                <Lock />
+                <AlertDescription>
+                    Keine Inhalte, keine eingetippten Adressen — nur wer, wann, was und warum. Jeder Aufruf dieser Seite steht selbst im Protokoll.
+                </AlertDescription>
+            </Alert>
 
             <DataTable :spalten="spalten" :zeilen="eintraege" sortier-nach="zeitpunkt" sortier-richtung="ab" :pro-seite="25">
                 <template #werkzeuge>
@@ -123,7 +126,9 @@ const kontext = (werte: Record<string, unknown>): string =>
                         <ShieldAlert v-if="zeile.impersoniert" class="size-3.5 text-warning" aria-label="Während einer Impersonation" />
                     </span>
                     <span v-if="zeile.begruendung" class="block text-xs italic text-muted-foreground">„{{ zeile.begruendung }}“</span>
-                    <span v-if="Object.keys(zeile.kontext).length" class="block text-xs text-muted-foreground">{{ kontext(zeile.kontext) }}</span>
+                    <span v-if="Object.keys(zeile.kontext).length" class="block break-words text-xs text-muted-foreground">{{
+                        kontext(zeile.kontext)
+                    }}</span>
                 </template>
 
                 <template #zelle-praxis="{ zeile }">

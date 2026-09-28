@@ -46,12 +46,19 @@ final class Paket
 
     public function aktuell(): PlanVersion
     {
-        $fassung = PlanVersion::query()
+        return $this->geltende() ?? throw new RuntimeException('Es gibt keine gueltige Paketfassung -- die Migration 2026_09_27_140000 legt Fassung 1 an.');
+    }
+
+    /**
+     * Die geltende Fassung -- oder null, wo ein Fehlen kein Fehler ist: die
+     * Startseite zeigt dann keine Preise, statt abzustuerzen (WP-38).
+     */
+    public function geltende(): ?PlanVersion
+    {
+        return PlanVersion::query()
             ->whereNotNull('activated_at')
             ->orderByDesc('number')
             ->first();
-
-        return $fassung ?? throw new RuntimeException('Es gibt keine gueltige Paketfassung -- die Migration 2026_09_27_140000 legt Fassung 1 an.');
     }
 
     /** Die Fassung eines Abos -- ohne Abo oder ohne Zuordnung die aktuelle. */

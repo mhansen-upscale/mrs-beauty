@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { Mailfeld, Mailfelder, Mailplatzhalter } from '@/types';
-import { Lock, Plus } from 'lucide-vue-next';
+import { Info, Lock, Plus } from 'lucide-vue-next';
 import { nextTick, useId, type ComponentPublicInstance } from 'vue';
 
 /**
@@ -62,9 +63,14 @@ const feldId = (feld: Mailfeld): string => `${kennung}-${feld}`;
 /** Zeichen wie auf dem Server gezählt (mb_strlen): Codepunkte, nicht UTF-16-Einheiten. */
 const laenge = (wert: string): number => [...wert].length;
 
-/** Zähler und Fehler — beim Betreff auch der Hinweis darunter. */
+/** Zähler und Fehler — beim Betreff auch der Hinweis darunter, ohne Platzhalter der Satz dazu. */
 const beschreibendeIds = (feld: Mailfeld): string =>
-    [`${feldId(feld)}-zaehler`, feld === 'subject' && props.betreffHinweis ? `${feldId(feld)}-hinweis` : null, `${feldId(feld)}-fehler`]
+    [
+        `${feldId(feld)}-zaehler`,
+        feld === 'subject' && props.betreffHinweis ? `${feldId(feld)}-hinweis` : null,
+        props.platzhalter[feld]?.length ? null : `${feldId(feld)}-ohne-platzhalter`,
+        `${feldId(feld)}-fehler`,
+    ]
         .filter(Boolean)
         .join(' ');
 
@@ -120,9 +126,12 @@ const einsetzen = async (feld: Mailfeld, name: string): Promise<void> => {
 
 <template>
     <div class="space-y-6">
-        <p class="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            Absätze mit einer Leerzeile. <strong>**fett**</strong> und <strong>[Linktext](https://…)</strong> sind erlaubt, HTML nicht.
-        </p>
+        <Alert>
+            <Info />
+            <AlertDescription>
+                Absätze mit einer Leerzeile. <strong>**fett**</strong> und <strong>[Linktext](https://…)</strong> sind erlaubt, HTML nicht.
+            </AlertDescription>
+        </Alert>
 
         <template v-for="angabe in angaben" :key="angabe.feld">
             <div class="grid gap-2">
@@ -185,7 +194,7 @@ const einsetzen = async (feld: Mailfeld, name: string): Promise<void> => {
                         {{ schreibweise(eintrag.name) }}
                     </Button>
                 </div>
-                <p v-else class="text-xs text-muted-foreground">Hier ist kein Platzhalter erlaubt.</p>
+                <p v-else :id="`${feldId(angabe.feld)}-ohne-platzhalter`" class="text-xs text-muted-foreground">Hier ist kein Platzhalter erlaubt.</p>
 
                 <InputError :id="`${feldId(angabe.feld)}-fehler`" :message="fehler[angabe.feld]" />
             </div>

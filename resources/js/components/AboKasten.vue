@@ -1,12 +1,27 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm } from '@inertiajs/vue3';
-import { AlertTriangle, ExternalLink, FlaskConical } from 'lucide-vue-next';
+import {
+    AlertTriangle,
+    CalendarPlus,
+    CalendarX,
+    Check,
+    ExternalLink,
+    FlaskConical,
+    Gift,
+    Pause,
+    Play,
+    Undo2,
+    XCircle,
+    type LucideIcon,
+} from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -77,20 +92,27 @@ const beendet = computed(() => props.abo.status === 'canceled');
  */
 const moeglich = computed(() => props.darfEingreifen && (props.abo.mitStripeAbo || !props.abo.stripeAngebunden));
 
-const aktionen = computed(() => {
+interface Eingriffsart {
+    aktion: string;
+    label: string;
+    symbol: LucideIcon;
+    variante: 'outline' | 'destructive';
+}
+
+const aktionen = computed<Eingriffsart[]>(() => {
     if (!moeglich.value || beendet.value) {
         return [];
     }
 
     return [
         props.zugang === 'paused'
-            ? { aktion: 'resume', label: 'Fortsetzen', variante: 'outline' as const }
-            : { aktion: 'pause', label: 'Pausieren', variante: 'outline' as const },
+            ? { aktion: 'resume', label: 'Fortsetzen', symbol: Play, variante: 'outline' }
+            : { aktion: 'pause', label: 'Pausieren', symbol: Pause, variante: 'outline' },
         props.abo.kuendigungZumPeriodenende
-            ? { aktion: 'revoke_cancel', label: 'Kündigung zurücknehmen', variante: 'outline' as const }
-            : { aktion: 'cancel_period_end', label: 'Zum Periodenende kündigen', variante: 'outline' as const },
-        { aktion: 'free_month', label: 'Gratismonat', variante: 'outline' as const },
-        { aktion: 'cancel_now', label: 'Sofort kündigen', variante: 'destructive' as const },
+            ? { aktion: 'revoke_cancel', label: 'Kündigung zurücknehmen', symbol: Undo2, variante: 'outline' }
+            : { aktion: 'cancel_period_end', label: 'Zum Periodenende kündigen', symbol: CalendarX, variante: 'outline' },
+        { aktion: 'free_month', label: 'Gratismonat', symbol: Gift, variante: 'outline' },
+        { aktion: 'cancel_now', label: 'Sofort kündigen', symbol: XCircle, variante: 'destructive' },
     ];
 });
 
@@ -108,10 +130,10 @@ const beschreibungen: Record<string, string> = {
 };
 
 const eingriffOffen = ref(false);
-const gewaehlt = ref<{ aktion: string; label: string } | null>(null);
+const gewaehlt = ref<Eingriffsart | null>(null);
 const eingriff = useForm({ aktion: '', bis: '', grund: '', current_password: '' });
 
-const eingriffOeffnen = (eintrag: { aktion: string; label: string }) => {
+const eingriffOeffnen = (eintrag: Eingriffsart) => {
     gewaehlt.value = eintrag;
     eingriff.reset();
     eingriff.clearErrors();
@@ -149,29 +171,27 @@ const statusVariante = (status: string) => (status === 'done' ? 'success' : stat
 </script>
 
 <template>
-    <section class="space-y-4 rounded-md border bg-card p-4">
+    <Abschnitt titel="Abo">
+        <template v-if="abo.stripeLink" #aktionen>
+            <Button variant="outline" size="sm" as="a" :href="abo.stripeLink" target="_blank" rel="noopener">
+                <ExternalLink />
+                Bei Stripe öffnen
+            </Button>
+        </template>
+
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h2 class="text-sm font-medium">Abo</h2>
             <Badge :variant="zugangVariante">{{ zugangLabel }}</Badge>
             <span class="text-xs text-muted-foreground">Stripe: {{ abo.statusLabel }}</span>
-            <a
-                v-if="abo.stripeLink"
-                :href="abo.stripeLink"
-                target="_blank"
-                rel="noopener"
-                class="inline-flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-4"
-            >
-                Bei Stripe öffnen
-                <ExternalLink class="size-3" aria-hidden="true" />
-            </a>
         </div>
 
-        <p v-if="!abo.stripeAngebunden" class="flex items-start gap-2 rounded-md border border-info/40 bg-info/5 px-3 py-2 text-xs text-info">
-            <FlaskConical class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            Testbetrieb: Stripe ist nicht angebunden. Eingriffe wirken sofort und nur hier — bei Stripe geschieht nichts.
-        </p>
+        <Alert v-if="!abo.stripeAngebunden" variant="info">
+            <FlaskConical aria-hidden="true" />
+            <AlertDescription>
+                Testbetrieb: Stripe ist nicht angebunden. Eingriffe wirken sofort und nur hier — bei Stripe geschieht nichts.
+            </AlertDescription>
+        </Alert>
 
-        <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <dl class="grid items-start gap-x-6 gap-y-2 text-sm @lg:grid-cols-2 @3xl:grid-cols-3">
             <!-- Die Fassung des Abschlusses (WP-06b) — nicht zwingend die aktuelle. -->
             <div>
                 <dt class="text-xs text-muted-foreground">Paket</dt>
@@ -210,9 +230,13 @@ const statusVariante = (status: string) => (status === 'done' ? 'success' : stat
                 :variant="eintrag.variante"
                 @click="eingriffOeffnen(eintrag)"
             >
+                <component :is="eintrag.symbol" />
                 {{ eintrag.label }}
             </Button>
-            <Button v-if="testphaseMoeglich" type="button" size="sm" variant="outline" @click="testphaseOffen = true">Testphase verlängern</Button>
+            <Button v-if="testphaseMoeglich" type="button" size="sm" variant="outline" @click="testphaseOffen = true">
+                <CalendarPlus />
+                Testphase verlängern
+            </Button>
         </div>
         <p v-else-if="darfEingreifen && abo.stripeAngebunden && !abo.mitStripeAbo" class="text-xs text-muted-foreground">
             Diese Praxis hat noch kein Abo bei Stripe — es gibt nichts zu pausieren oder zu kündigen.
@@ -232,7 +256,7 @@ const statusVariante = (status: string) => (status === 'done' ? 'success' : stat
                         <span class="text-xs text-muted-foreground">{{ zeitpunkt(eintrag.angelegt) }}</span>
                     </div>
                     <p class="text-xs italic text-muted-foreground">„{{ eintrag.grund }}“</p>
-                    <p v-if="eintrag.fehler" class="text-xs text-destructive">{{ eintrag.fehler }}</p>
+                    <p v-if="eintrag.fehler" class="break-words text-xs text-destructive">{{ eintrag.fehler }}</p>
                 </li>
             </ul>
         </div>
@@ -243,6 +267,7 @@ const statusVariante = (status: string) => (status === 'done' ? 'success' : stat
             :beschreibung="`${beschreibungen[gewaehlt?.aktion ?? ''] ?? ''} Der Grund steht im Protokoll der Praxis.`"
             :laeuft="eingriff.processing"
             :absende-text="gewaehlt?.label ?? 'Beauftragen'"
+            :absende-symbol="gewaehlt?.symbol ?? Check"
             @absenden="eingriffAbsenden"
         >
             <div v-if="eingriff.aktion === 'pause'" class="grid gap-2">
@@ -270,6 +295,7 @@ const statusVariante = (status: string) => (status === 'done' ? 'success' : stat
             :beschreibung="`Wirkt sofort und gerechnet ab heute, höchstens ${maxTage} Tage. Der Grund steht im Protokoll der Praxis.`"
             :laeuft="testphase.processing"
             absende-text="Verlängern"
+            :absende-symbol="CalendarPlus"
             @absenden="testphaseAbsenden"
         >
             <div class="grid gap-2">
@@ -290,5 +316,5 @@ const statusVariante = (status: string) => (status === 'done' ? 'success' : stat
                 <InputError :message="testphase.errors.current_password" />
             </div>
         </FormularDialog>
-    </section>
+    </Abschnitt>
 </template>

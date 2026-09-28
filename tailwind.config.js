@@ -94,5 +94,9 @@ export default {
             },
         },
     },
-    plugins: [require('tailwindcss-animate')],
+    // Container Queries: "rechts, wenn Platz ist, sonst darunter" richtet
+    // sich nach der Breite des Inhalts, nicht des Fensters -- die
+    // Seitenleiste laesst sich einklappen, und die Einstellungen haben eine
+    // eigene Navigationsspalte.
+    plugins: [require('tailwindcss-animate'), require('@tailwindcss/container-queries')],
 };

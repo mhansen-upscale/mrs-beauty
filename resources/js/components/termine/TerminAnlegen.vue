@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { router, useForm } from '@inertiajs/vue3';
-import { CalendarPlus, Loader2, Pencil, Search, UserCheck } from 'lucide-vue-next';
+import { CalendarPlus, LoaderCircle, Pencil, Search, UserCheck, X } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 import SlotWahl from './SlotWahl.vue';
 import type { Kontakt, Named, Terminart, Vorschlag } from './typen';
@@ -134,10 +134,10 @@ const absenden = () =>
                 <div class="space-y-3 border-t pt-4">
                     <Label>Kontakt</Label>
 
-                    <div v-if="gewaehlterKontakt" class="flex items-center justify-between rounded-md border p-3 text-sm">
-                        <span>
+                    <div v-if="gewaehlterKontakt" class="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
+                        <span class="min-w-0 break-words">
                             {{ gewaehlterKontakt.name }}
-                            <span v-if="gewaehlterKontakt.email" class="text-muted-foreground"> · {{ gewaehlterKontakt.email }}</span>
+                            <span v-if="gewaehlterKontakt.email" class="break-all text-muted-foreground"> · {{ gewaehlterKontakt.email }}</span>
                         </span>
                         <Button type="button" variant="ghost" size="sm" @click="kontaktLoesen">
                             <Pencil />
@@ -147,22 +147,28 @@ const absenden = () =>
 
                     <template v-else>
                         <div class="flex gap-2">
-                            <Input v-model="suche" placeholder="E-Mail oder Nachname" @keydown.enter.prevent="suchen" />
+                            <Input
+                                v-model="suche"
+                                placeholder="E-Mail oder Nachname"
+                                aria-label="Kontakt suchen"
+                                aria-describedby="termin-kontaktsuche-hinweis"
+                                @keydown.enter.prevent="suchen"
+                            />
                             <Button type="button" variant="outline" @click="suchen">
                                 <Search />
                                 Suchen
                             </Button>
                         </div>
 
-                        <p class="text-xs text-muted-foreground">
+                        <p id="termin-kontaktsuche-hinweis" class="text-xs text-muted-foreground">
                             Die Suche findet nur exakte Treffer — Namen und Kontaktwege liegen verschlüsselt, ein „enthält" gibt es darüber nicht.
                         </p>
 
                         <ul v-if="contacts?.length" class="divide-y rounded-md border text-sm">
-                            <li v-for="kontakt in contacts" :key="kontakt.uuid" class="flex items-center justify-between p-2">
-                                <span>
+                            <li v-for="kontakt in contacts" :key="kontakt.uuid" class="flex flex-wrap items-center justify-between gap-2 p-2">
+                                <span class="min-w-0 break-words">
                                     {{ kontakt.name }}
-                                    <span v-if="kontakt.email" class="text-muted-foreground"> · {{ kontakt.email }}</span>
+                                    <span v-if="kontakt.email" class="break-all text-muted-foreground"> · {{ kontakt.email }}</span>
                                 </span>
                                 <Button type="button" variant="ghost" size="sm" @click="kontaktWaehlen(kontakt)">
                                     <UserCheck />
@@ -171,7 +177,7 @@ const absenden = () =>
                             </li>
                         </ul>
 
-                        <div class="grid gap-3 sm:grid-cols-2">
+                        <div class="grid items-start gap-3 sm:grid-cols-2">
                             <div class="grid gap-1.5">
                                 <Label for="vorname">Vorname</Label>
                                 <Input id="vorname" v-model="formular.first_name" />
@@ -215,8 +221,12 @@ const absenden = () =>
                 </div>
 
                 <DialogFooter>
+                    <Button type="button" variant="ghost" @click="offen = false">
+                        <X />
+                        Abbrechen
+                    </Button>
                     <Button type="submit" :disabled="formular.processing || !formular.blocked_from">
-                        <Loader2 v-if="formular.processing" class="animate-spin" />
+                        <LoaderCircle v-if="formular.processing" class="animate-spin" />
                         <CalendarPlus v-else />
                         Termin anlegen
                     </Button>

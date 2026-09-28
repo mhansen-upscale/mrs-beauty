@@ -85,6 +85,24 @@ export interface Spalte<T> {
     ab?: 'sm' | 'md' | 'lg';
 }
 
+/**
+ * Eine Aktion in einer Tabellenzeile, für `Zeilenaktionen`.
+ *
+ * Ab drei Aktionen passt die Zeile auf dem Handy nicht mehr in die Breite;
+ * unter `sm` stehen sie deshalb in einem Menü — dort mit sichtbarer
+ * Beschriftung, denn ein Tooltip braucht eine Maus.
+ */
+export interface Zeilenaktion {
+    symbol: LucideIcon;
+    beschriftung: string;
+    aktion: () => void;
+    /** Rot, etwa für Entfernen. */
+    gefahr?: boolean;
+    /** Ohne Angabe: sichtbar. `false` blendet die Aktion für diese Zeile aus. */
+    wenn?: boolean;
+    gesperrt?: boolean;
+}
+
 // Muss PageProps erweitern, sonst weist Inertia 2 den Typ in usePage<SharedData>()
 // zurueck: PageProps verlangt eine Indexsignatur.
 export interface SharedData extends PageProps {

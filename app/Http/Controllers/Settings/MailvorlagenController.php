@@ -87,7 +87,7 @@ final class MailvorlagenController extends Controller
             ], array_values(array_filter(
                 Mailart::cases(),
                 fn (Mailart $art): bool => ! ($art->versandweg() === Versandweg::Praxis && $art->istVorlage())
-                    && $art !== Mailart::Versandprobe,
+                    && ! $art->anDenBetreiber(),
             ))),
         ]);
     }

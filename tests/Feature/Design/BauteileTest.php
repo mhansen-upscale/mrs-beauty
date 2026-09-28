@@ -92,21 +92,79 @@ it('erkennt die falsche API, wenn es sie gibt', function (): void {
 
 /*
 |--------------------------------------------------------------------------
-| Heading ist mehrwurzelig
+| Heading hat eine Wurzel und steht in keiner Layoutzeile
 |--------------------------------------------------------------------------
 |
-| Das Bauteil liefert Ueberschrift **und** Trennlinie. In einer Flex-Zeile
-| wird die Trennlinie damit zum zweiten Flex-Element -- sie ist voll breit und
-| schiebt alles Weitere in die naechste Zeile. Genau so landeten die
-| "anlegen"-Knoepfe eine Zeile zu tief und linksbuendig, auf jeder Seite mit
-| Stammdaten.
+| Bis September 2026 lieferte das Bauteil Ueberschrift **und** Trennlinie
+| nebeneinander. In einer Flex-Zeile wurde die Trennlinie damit zum zweiten
+| Flex-Element -- sie war voll breit und schob alles Weitere in die naechste
+| Zeile. Genau so landeten die "anlegen"-Knoepfe eine Zeile zu tief und
+| linksbuendig, auf jeder Seite mit Stammdaten.
 |
 | Dieselbe Falle wie beim AktionsButton in WP-11: ein mehrwurzeliges Bauteil
 | verhaelt sich in einem Layout nicht wie ein einzelnes Element, und Vue sagt
-| dazu nichts. Seitenaktionen gehoeren deshalb in die Werkzeugzeile von
-| DataTable (`#werkzeuge`).
+| dazu nichts. Heute hat Heading eine Wurzel und einen eigenen Platz fuer
+| Seitenaktionen (`#aktionen`); Seiten mit Tabelle setzen sie in die
+| Werkzeugzeile von DataTable (`#werkzeuge`). Neben das Heading gehoert
+| trotzdem nichts: es ist die volle Breite der Seite.
 |
 */
+
+/**
+ * Die Zahl der Wurzelelemente einer Vorlage.
+ */
+function wurzeln(string $sfc): int
+{
+    // Das aeussere <template> bis zum letzten schliessenden -- innere
+    // <template>-Bloecke (Slots) gehoeren dazu.
+    if (preg_match('/<template>(.*)<\/template>\s*$/s', $sfc, $vorlage) !== 1) {
+        return 0;
+    }
+
+    $rumpf = (string) preg_replace('/<!--.*?-->/s', '', $vorlage[1]);
+    $leer = ['br', 'hr', 'img', 'input', 'meta', 'link', 'area', 'col', 'source', 'wbr'];
+
+    $tiefe = 0;
+    $anzahl = 0;
+
+    preg_match_all('/<(\/?)([A-Za-z][\w.-]*)\b[^>]*?(\/?)>/s', $rumpf, $marken, PREG_SET_ORDER);
+
+    foreach ($marken as $marke) {
+        [, $schliessend, $name, $selbst] = $marke;
+
+        if ($schliessend === '/') {
+            $tiefe--;
+
+            continue;
+        }
+
+        if ($tiefe === 0) {
+            $anzahl++;
+        }
+
+        if ($selbst !== '/' && ! in_array(strtolower($name), $leer, true)) {
+            $tiefe++;
+        }
+    }
+
+    return $anzahl;
+}
+
+it('gibt Heading eine einzige Wurzel', function (): void {
+    $sfc = (string) file_get_contents(resource_path('js/components/Heading.vue'));
+
+    expect(wurzeln($sfc))->toBe(1, 'Heading muss eine Wurzel haben -- sonst bricht es jede Layoutzeile um.');
+});
+
+it('zaehlt Wurzeln richtig', function (): void {
+    // Die Gegenprobe: zwei Wurzeln werden als zwei erkannt, ein Slot-Template
+    // und ein Kommentar zaehlen nicht.
+    $zwei = "<template>\n    <div><p>a</p></div>\n    <Separator class=\"my-6\" />\n</template>\n";
+    $eine = "<template>\n    <!-- x -->\n    <header><template v-if=\"a\"><b /></template><img src=\"x\"></header>\n</template>\n";
+
+    expect(wurzeln($zwei))->toBe(2)
+        ->and(wurzeln($eine))->toBe(1);
+});
 
 /**
  * Dateien, die <Heading> in einen Flex- oder Grid-Container setzen.
@@ -144,8 +202,8 @@ it('setzt Heading in keine Flex- oder Grid-Zeile', function (): void {
     $verstoesse = headingInLayoutzeile();
 
     expect($verstoesse)->toBeEmpty(
-        "Heading ist mehrwurzelig -- die Trennlinie bricht die Zeile um.\n"
-        ."Seitenaktionen gehoeren in <DataTable #werkzeuge>:\n".implode("\n", $verstoesse)
+        "Heading ist die volle Breite der Seite und steht in keiner Layoutzeile.\n"
+        ."Seitenaktionen gehoeren in <Heading #aktionen> oder <DataTable #werkzeuge>:\n".implode("\n", $verstoesse)
     );
 });
 
@@ -692,4 +750,276 @@ it('erkennt die Seite ohne Nachladen, wenn es sie gibt', function (): void {
 
     expect($traegtZustand("zeile.uebertragung === 'pending'"))->toBeTrue()
         ->and($traegtZustand("termin.status === 'pending'"))->toBeFalse();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Hinweise sind Alerts, keine Kaesten von Hand
+|--------------------------------------------------------------------------
+|
+| Vor dem September 2026 gab es rund vierzig Hinweiskaesten, jeder von Hand
+| gebaut: die Warnung mal mit `bg-warning/5`, mal mit `/10`, der Fehler mal
+| mit Symbol, mal ohne, der Innenabstand `p-3`, `p-4` oder `px-4 py-3`.
+| Dieselbe Aussage sah auf jeder Seite anders aus -- und "Farbe traegt nie
+| allein Bedeutung" hing davon ab, ob jemand an das Symbol gedacht hatte.
+|
+| Seitdem gibt es `ui/alert` mit den Toenen der Semantikfarben, und jeder
+| Alert beginnt mit einem Symbol.
+|
+*/
+
+/**
+ * Stellen, an denen ein Rahmen und eine Flaeche desselben Semantiktons in
+ * einem statischen class-Wert stehen -- ausserhalb von `components/ui/`.
+ *
+ * @param  list<string>  $ausnahmen  Dateinamen, die ausgenommen bleiben.
+ * @return list<string>
+ */
+function handgebauteHinweise(array $ausnahmen = []): array
+{
+    $verstoesse = [];
+
+    foreach (vueDateien() as $pfad) {
+        if (str_contains($pfad, '/components/ui/') || in_array(basename($pfad), $ausnahmen, true)) {
+            continue;
+        }
+
+        $inhalt = (string) file_get_contents($pfad);
+        $kurz = str_replace(base_path().'/', '', $pfad);
+
+        if (preg_match_all('/\bclass="([^"]*)"/', $inhalt, $treffer) === 0) {
+            continue;
+        }
+
+        foreach ($treffer[1] as $klassen) {
+            if (istHinweiskasten($klassen)) {
+                $verstoesse[] = sprintf('%s: %s', $kurz, $klassen);
+            }
+        }
+    }
+
+    return array_values(array_unique($verstoesse));
+}
+
+function istHinweiskasten(string $klassen): bool
+{
+    if (preg_match('/(?<![\w:-])border-(warning|destructive|success|info)\/\d+\b/', $klassen, $rand) !== 1) {
+        return false;
+    }
+
+    return preg_match('/(?<![\w:-])bg-'.$rand[1].'\/\d+\b/', $klassen) === 1;
+}
+
+it('baut keinen Hinweiskasten von Hand', function (): void {
+    $verstoesse = handgebauteHinweise();
+
+    expect($verstoesse)->toBeEmpty(
+        "Ein Hinweis ist ein <Alert variant=\"…\"> aus @/components/ui/alert, mit Symbol:\n".implode("\n", $verstoesse)
+    );
+});
+
+it('erkennt den Hinweiskasten von Hand, wenn es ihn gibt', function (): void {
+    // Die Gegenprobe: Rahmen und Flaeche desselben Tons -- aber nicht ein
+    // Rahmen allein, nicht zwei verschiedene Toene und nicht hover:.
+    expect(istHinweiskasten('rounded-md border border-warning/40 bg-warning/5 p-3 text-sm'))->toBeTrue()
+        ->and(istHinweiskasten('border border-destructive/40 text-destructive'))->toBeFalse()
+        ->and(istHinweiskasten('border-success/40 bg-warning/5'))->toBeFalse()
+        ->and(istHinweiskasten('hover:border-info/40 hover:bg-info/5'))->toBeFalse();
+});
+
+/**
+ * Alerts, in denen kein Symbol steht.
+ *
+ * @return list<string>
+ */
+function alertsOhneSymbol(): array
+{
+    $verstoesse = [];
+
+    foreach (vueDateien() as $pfad) {
+        if (str_contains($pfad, '/components/ui/')) {
+            continue;
+        }
+
+        $inhalt = (string) file_get_contents($pfad);
+        $kurz = str_replace(base_path().'/', '', $pfad);
+
+        // `<Alert\b` trifft weder AlertTitle noch AlertDescription.
+        if (preg_match_all('/<Alert\b([^>]*)>(.*?)<\/Alert>/s', $inhalt, $treffer, PREG_SET_ORDER) === 0) {
+            continue;
+        }
+
+        foreach ($treffer as [$ganz, , $rumpf]) {
+            if (! hatSymbol($rumpf)) {
+                $verstoesse[] = sprintf('%s: %s', $kurz, trim(explode("\n", $ganz)[0]));
+            }
+        }
+    }
+
+    return array_values(array_unique($verstoesse));
+}
+
+/**
+ * Ob in einem Rumpf ein Symbol steht: ein Bauteil, das kein Text-, Knopf-
+ * oder Formularbauteil ist -- in der Praxis ein Symbol aus lucide, oder
+ * `<component :is>` mit einem.
+ */
+function hatSymbol(string $rumpf): bool
+{
+    $keinSymbol = 'Alert|AlertTitle|AlertDescription|Button|AktionsButton|Link|TextLink|Badge|Input|Label|Textarea|Checkbox'
+        .'|Select\w*|Transition\w*|DialogClose|Tooltip\w*';
+
+    return preg_match('/<(?!(?:'.$keinSymbol.')\b)(?:[A-Z][A-Za-z0-9]*|component)\b/', $rumpf) === 1;
+}
+
+it('setzt jeden Alert mit Symbol', function (): void {
+    $verstoesse = alertsOhneSymbol();
+
+    expect($verstoesse)->toBeEmpty(
+        "Farbe traegt nie allein Bedeutung -- jeder Alert beginnt mit einem Symbol:\n".implode("\n", $verstoesse)
+    );
+});
+
+it('findet ueberhaupt Alerts', function (): void {
+    // Ohne diese Zusicherung koennte die Pruefung oben leer durchlaufen.
+    $mitAlert = array_filter(
+        vueDateien(),
+        fn (string $pfad): bool => ! str_contains($pfad, '/components/ui/')
+            && preg_match('/<Alert\b/', (string) file_get_contents($pfad)) === 1
+    );
+
+    expect(count($mitAlert))->toBeGreaterThanOrEqual(10);
+});
+
+it('erkennt den Alert ohne Symbol, wenn es ihn gibt', function (): void {
+    // Die Gegenprobe: ein Knopf im Alert ist kein Symbol, ein lucide-Bauteil
+    // und <component :is> sind es.
+    expect(hatSymbol('<AlertDescription>Text</AlertDescription><Button size="icon" aria-label="x">x</Button>'))->toBeFalse()
+        ->and(hatSymbol('<AlertTriangle /><AlertDescription>Text</AlertDescription>'))->toBeTrue()
+        ->and(hatSymbol('<component :is="symbol" /><AlertDescription>Text</AlertDescription>'))->toBeTrue();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Jeder Knopf traegt ein Symbol
+|--------------------------------------------------------------------------
+|
+| Steht seit WP-04 in docs/konventionen.md und galt trotzdem nur auf der
+| Haelfte der Seiten: "Speichern" hatte mal ein Diskettensymbol, mal keines,
+| "Hochladen" auf der einen Seite einen Pfeil und auf der naechsten nichts.
+| Beim Laden ersetzt der Kreisel das Symbol, er steht nicht daneben.
+|
+| Ausgenommen ist die Buchungsseite: sie traegt die Marke der Praxis, und
+| ihre Knoepfe sind grossteils Kalendertage und Uhrzeiten.
+|
+*/
+
+/**
+ * Knoepfe mit Text, in denen kein Symbol steht.
+ *
+ * @return list<string>
+ */
+function knoepfeOhneSymbol(): array
+{
+    $verstoesse = [];
+
+    foreach (vueDateien() as $pfad) {
+        // Seiten und Layout der Buchungsseite.
+        if (str_contains($pfad, '/components/ui/') || str_contains($pfad, '/buchung/')) {
+            continue;
+        }
+
+        $inhalt = (string) file_get_contents($pfad);
+        $kurz = str_replace(base_path().'/', '', $pfad);
+
+        if (preg_match_all('/<Button\b([^>]*)>(.*?)<\/Button>/s', $inhalt, $treffer, PREG_SET_ORDER) === 0) {
+            continue;
+        }
+
+        foreach ($treffer as [$ganz, , $rumpf]) {
+            // Knoepfe ohne Text prueft 'macht Symbolknoepfe quadratisch'.
+            if (trim(strip_tags($rumpf)) === '') {
+                continue;
+            }
+
+            if (! hatSymbol($rumpf)) {
+                $verstoesse[] = sprintf('%s: %s', $kurz, trim(explode("\n", $ganz)[0]));
+            }
+        }
+    }
+
+    return array_values(array_unique($verstoesse));
+}
+
+it('gibt jedem Knopf ein Symbol', function (): void {
+    $verstoesse = knoepfeOhneSymbol();
+
+    expect($verstoesse)->toBeEmpty(
+        "Jeder Knopf traegt ein Symbol (docs/konventionen.md):\n".implode("\n", $verstoesse)
+    );
+});
+
+it('erkennt den Knopf ohne Symbol, wenn es ihn gibt', function (): void {
+    // Die Gegenprobe: Text allein und ein Link ohne Symbol fallen auf.
+    $rumpf = function (string $auszeichnung): string {
+        preg_match('/<Button\b([^>]*)>(.*?)<\/Button>/s', $auszeichnung, $treffer);
+
+        return $treffer[2] ?? '';
+    };
+
+    expect(hatSymbol($rumpf('<Button>Speichern</Button>')))->toBeFalse()
+        ->and(hatSymbol($rumpf('<Button as-child><Link href="/">Weiter</Link></Button>')))->toBeFalse()
+        ->and(hatSymbol($rumpf('<Button><Save />Speichern</Button>')))->toBeTrue()
+        ->and(hatSymbol($rumpf('<Button><LoaderCircle v-if="a" /><Send v-else />Senden</Button>')))->toBeTrue();
+});
+
+/*
+|--------------------------------------------------------------------------
+| Die Rueckmeldung steht einmal
+|--------------------------------------------------------------------------
+|
+| `Rueckmeldung` im AppLayout zeigt `flash` auf jeder Seite. Zwei Seiten
+| taten es trotzdem noch selbst -- die Meldung stand dort doppelt, einmal
+| klebend oben und einmal mitten im Inhalt. Ausgenommen ist die
+| Zwei-Faktor-Anmeldung: das AuthLayout hat keine Rueckmeldung.
+|
+*/
+
+/**
+ * Dateien, die `flash` selbst anzeigen.
+ *
+ * @param  list<string>  $ausnahmen  Pfade relativ zu resources/js.
+ * @return list<string>
+ */
+function eigeneRueckmeldungen(array $ausnahmen = ['components/Rueckmeldung.vue', 'pages/auth/ZweiFaktor.vue']): array
+{
+    $verstoesse = [];
+
+    foreach (vueDateien() as $pfad) {
+        $relativ = str_replace(resource_path('js').'/', '', $pfad);
+
+        if (in_array($relativ, $ausnahmen, true)) {
+            continue;
+        }
+
+        if (preg_match('/\bprops\.flash\b|\bflash\.(erfolg|fehler|hinweise)\b/', (string) file_get_contents($pfad)) === 1) {
+            $verstoesse[] = $relativ;
+        }
+    }
+
+    return $verstoesse;
+}
+
+it('zeigt die Rueckmeldung nur an einer Stelle', function (): void {
+    $verstoesse = eigeneRueckmeldungen();
+
+    expect($verstoesse)->toBeEmpty(
+        "Diese Seiten zeigen flash selbst -- die Rueckmeldung steht dort doppelt:\n".implode("\n", $verstoesse)
+    );
+});
+
+it('findet die Rueckmeldung selbst, wenn nichts ausgenommen ist', function (): void {
+    // Die Gegenprobe: ohne Zulassungsliste meldet die Pruefung genau die
+    // beiden bekannten Stellen.
+    expect(eigeneRueckmeldungen([]))->toContain('components/Rueckmeldung.vue', 'pages/auth/ZweiFaktor.vue');
 });

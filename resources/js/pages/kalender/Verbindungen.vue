@@ -2,12 +2,12 @@
 import AktionsButton from '@/components/AktionsButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem, type SharedData, type Spalte } from '@/types';
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { type BreadcrumbItem, type Spalte } from '@/types';
+import { Head, router } from '@inertiajs/vue3';
 import { CheckCircle2, CircleSlash, Link2, Link2Off, RefreshCw, TriangleAlert } from 'lucide-vue-next';
 import { computed } from 'vue';
 
@@ -60,10 +60,13 @@ const props = defineProps<{
     privacy_modes: { value: string; label: string }[];
 }>();
 
-const page = usePage<SharedData>();
-
 const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Kalender', href: '/kalender' }];
 
+/**
+ * Auf dem Handy tragen Behandler und Status die Zeile. Anbieter, Kalender und
+ * die Sichtbarkeit — als dasselbe Auswahlfeld — stehen dort in der ersten
+ * Zelle; ohne den Anbieter sähen zwei Zeilen desselben Behandlers gleich aus.
+ */
 const spalten: Spalte<Zeile>[] = [
     { schluessel: 'name', titel: 'Behandler' },
     { schluessel: 'anbieter', titel: 'Anbieter', ab: 'md' },
@@ -106,6 +109,9 @@ const zeitpunkt = (iso: string | null): string =>
         ? 'Noch nie'
         : new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+/** Ein ganzer Seitenwechsel, kein Inertia-Besuch: dahinter liegt die Anmeldung beim Anbieter. */
+const verbinden = (zeile: Zeile) => window.location.assign(verbindenLink(zeile));
+
 const abgleichen = (zeile: Zeile) => {
     if (zeile.verbindung) {
         router.post(route('kalender.abgleichen', { verbindung: zeile.verbindung.uuid }), {}, { preserveScroll: true });
@@ -135,39 +141,44 @@ const trennen = (zeile: Zeile) => {
                 description="Ein verbundener Kalender blockiert Zeiten im Terminplan und bekommt neue Termine als neutralen Eintrag — ohne Namen und ohne Behandlung."
             />
 
-            <div v-if="page.props.flash.erfolg" class="rounded-md border border-success/40 bg-success/10 px-4 py-3 text-sm">
-                {{ page.props.flash.erfolg }}
-            </div>
-
-            <div v-if="page.props.flash.fehler" class="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
-                {{ page.props.flash.fehler }}
-            </div>
-
             <!--
                 R4: ein stiller Ausfall ist der Normalfall, und er bedeutet
                 Termine über belegten Zeiten. Deshalb steht er hier oben und
                 nicht als Zeichen in einer Tabellenzeile.
             -->
-            <div v-if="gestoert.length > 0" class="flex items-start gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-                <TriangleAlert class="mt-0.5 size-4 shrink-0 text-warning" />
-                <div>
-                    <p class="font-medium">
-                        {{
-                            gestoert.length === 1
-                                ? 'Eine Kalenderverbindung ist unterbrochen.'
-                                : `${gestoert.length} Kalenderverbindungen sind unterbrochen.`
-                        }}
-                    </p>
-                    <p class="text-muted-foreground">
-                        Solange sie steht, werden Zeiten aus dem externen Kalender nicht mehr blockiert — es können Termine über belegten Zeiten
-                        entstehen. Bitte neu verbinden.
-                    </p>
-                </div>
-            </div>
+            <Alert v-if="gestoert.length > 0" variant="warning">
+                <TriangleAlert />
+                <AlertTitle>
+                    {{
+                        gestoert.length === 1
+                            ? 'Eine Kalenderverbindung ist unterbrochen.'
+                            : `${gestoert.length} Kalenderverbindungen sind unterbrochen.`
+                    }}
+                </AlertTitle>
+                <AlertDescription>
+                    Solange sie steht, werden Zeiten aus dem externen Kalender nicht mehr blockiert — es können Termine über belegten Zeiten
+                    entstehen. Bitte neu verbinden.
+                </AlertDescription>
+            </Alert>
 
             <DataTable :spalten="spalten" :zeilen="zeilen" :suchfelder="['name', 'konto', 'anbieter']" suchtext="Behandler oder Kalender">
                 <template #zelle-name="{ zeile }">
-                    <span class="font-medium">{{ zeile.name }}</span>
+                    <span class="break-words font-medium">{{ zeile.name }}</span>
+                    <!-- Unter md fehlt die Spalte Anbieter, unter lg Kalender und Sichtbarkeit. -->
+                    <span class="block text-xs text-muted-foreground md:hidden">{{ zeile.anbieter }}</span>
+                    <span v-if="zeile.verbindung" class="block break-all text-xs text-muted-foreground lg:hidden">{{ zeile.konto }}</span>
+                    <div v-if="zeile.verbindung" class="mt-2 lg:hidden">
+                        <Select :model-value="zeile.sichtbarkeit" @update:model-value="(wert) => sichtbarkeitSetzen(zeile, String(wert))">
+                            <SelectTrigger class="h-8 w-full max-w-56" :aria-label="`Sichtbarkeit für ${zeile.name} (${zeile.anbieter}) ändern`">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="modus in privacy_modes" :key="modus.value" :value="modus.value">
+                                    {{ modus.label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </template>
 
                 <template #zelle-status="{ zeile }">
@@ -186,7 +197,7 @@ const trennen = (zeile: Zeile) => {
                 </template>
 
                 <template #zelle-konto="{ zeile }">
-                    <span v-if="zeile.verbindung">{{ zeile.konto }}</span>
+                    <span v-if="zeile.verbindung" class="break-all">{{ zeile.konto }}</span>
                     <span v-else class="text-muted-foreground">—</span>
                 </template>
 
@@ -202,7 +213,7 @@ const trennen = (zeile: Zeile) => {
                         :model-value="zeile.sichtbarkeit"
                         @update:model-value="(wert) => sichtbarkeitSetzen(zeile, String(wert))"
                     >
-                        <SelectTrigger class="h-8 w-56">
+                        <SelectTrigger class="h-8 w-56" :aria-label="`Sichtbarkeit für ${zeile.name} (${zeile.anbieter})`">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -219,10 +230,7 @@ const trennen = (zeile: Zeile) => {
                         <AktionsButton :icon="RefreshCw" beschriftung="Jetzt abgleichen" @click="abgleichen(zeile)" />
                         <AktionsButton :icon="Link2Off" beschriftung="Verbindung trennen" @click="trennen(zeile)" />
                     </template>
-                    <Button v-else variant="outline" size="sm" as="a" :href="verbindenLink(zeile)">
-                        <Link2 />
-                        Verbinden
-                    </Button>
+                    <AktionsButton v-else :icon="Link2" :beschriftung="`${zeile.anbieter} verbinden`" @click="verbinden(zeile)" />
                 </template>
 
                 <template #leer>Noch kein aktiver Behandler angelegt.</template>

@@ -3,6 +3,8 @@ import AboKasten, { type Abo } from '@/components/AboKasten.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import Kennzahl from '@/components/Kennzahl.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Eye } from 'lucide-vue-next';
+import { AlertTriangle, Eye, Gift, Lock, LockOpen } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 const props = defineProps<{
@@ -100,21 +102,14 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
         <Head :title="mandant.name" />
 
         <div class="space-y-6 p-4">
-            <Heading :title="mandant.name" :description="`Kennung ${mandant.slug}`" />
-
-            <div class="flex flex-wrap items-center gap-3">
-                <Badge v-if="mandant.gesperrt" variant="destructive">Gesperrt seit {{ datum(mandant.gesperrtSeit) }}</Badge>
-                <Badge :variant="mandant.zugang === 'open' ? 'success' : mandant.zugang === 'trial' ? 'info' : 'warning'">{{
-                    mandant.zugangLabel
-                }}</Badge>
-                <span v-if="mandant.periodeEndet" class="text-sm text-muted-foreground">Periode bis {{ datum(mandant.periodeEndet) }}</span>
-
-                <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+            <Heading :title="mandant.name" :description="`Kennung ${mandant.slug}`">
+                <template #aktionen>
                     <Button v-if="darf('support.zugriff')" type="button" variant="outline" @click="hineinsehenOffen = true">
                         <Eye />
                         In die Praxis sehen
                     </Button>
                     <Button v-if="darf('kontingent.gutschreiben')" type="button" variant="outline" @click="gutschriftOffen = true">
+                        <Gift />
                         Kontingent gutschreiben
                     </Button>
                     <Button
@@ -123,51 +118,52 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                         :variant="mandant.gesperrt ? 'outline' : 'destructive'"
                         @click="sperrenOffen = true"
                     >
+                        <LockOpen v-if="mandant.gesperrt" />
+                        <Lock v-else />
                         {{ mandant.gesperrt ? 'Entsperren' : 'Sperren' }}
                     </Button>
-                </div>
+                </template>
+            </Heading>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <Badge v-if="mandant.gesperrt" variant="destructive">Gesperrt seit {{ datum(mandant.gesperrtSeit) }}</Badge>
+                <Badge :variant="mandant.zugang === 'open' ? 'success' : mandant.zugang === 'trial' ? 'info' : 'warning'">{{
+                    mandant.zugangLabel
+                }}</Badge>
+                <span v-if="mandant.periodeEndet" class="text-sm text-muted-foreground">Periode bis {{ datum(mandant.periodeEndet) }}</span>
             </div>
 
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <div class="rounded-md border p-4">
-                    <p class="text-xs text-muted-foreground">Zugänge</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ mandant.benutzer }}</p>
-                </div>
-                <div class="rounded-md border p-4">
-                    <p class="text-xs text-muted-foreground">Kontakte</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ mandant.kontakte }}</p>
-                </div>
-                <div class="rounded-md border p-4">
-                    <p class="text-xs text-muted-foreground">Termine (30 Tage)</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ mandant.termine30 }}</p>
-                </div>
-                <div class="rounded-md border p-4">
-                    <p class="text-xs text-muted-foreground">Nachrichten (Monat)</p>
-                    <p class="text-2xl font-semibold tabular-nums">{{ mandant.verbrauch.nachrichten }}</p>
-                    <p class="text-[0.7rem] text-muted-foreground">davon {{ mandant.verbrauch.kostenpflichtig }} kostenpflichtig</p>
-                </div>
+                <Kennzahl titel="Zugänge" :wert="mandant.benutzer" />
+                <Kennzahl titel="Kontakte" :wert="mandant.kontakte" />
+                <Kennzahl titel="Termine (30 Tage)" :wert="mandant.termine30" />
+                <Kennzahl
+                    titel="Nachrichten (Monat)"
+                    :wert="mandant.verbrauch.nachrichten"
+                    :zusatz="`davon ${mandant.verbrauch.kostenpflichtig} kostenpflichtig`"
+                />
             </div>
 
-            <div
+            <Alert
                 v-if="
                     mandant.stoerungen.kanaele.length ||
                     mandant.stoerungen.kalender > 0 ||
                     mandant.stoerungen.werbung > 0 ||
                     mandant.stoerungen.ereignisse > 0
                 "
-                class="space-y-2 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning"
+                variant="warning"
             >
-                <p class="flex items-center gap-2 font-medium">
-                    <AlertTriangle class="size-4 shrink-0" />
-                    Störungen bei dieser Praxis
-                </p>
-                <p v-for="kanal in mandant.stoerungen.kanaele" :key="kanal.kanal">
-                    {{ kanal.kanal }}: {{ kanal.status }}<template v-if="kanal.grund"> ({{ kanal.grund }})</template>
-                </p>
-                <p v-if="mandant.stoerungen.kalender > 0">{{ mandant.stoerungen.kalender }} Kalenderverbindung(en) gestört.</p>
-                <p v-if="mandant.stoerungen.werbung > 0">Werbekonto gestört.</p>
-                <p v-if="mandant.stoerungen.ereignisse > 0">{{ mandant.stoerungen.ereignisse }} Ereignis(se) nicht verarbeitet.</p>
-            </div>
+                <AlertTriangle />
+                <AlertTitle>Störungen bei dieser Praxis</AlertTitle>
+                <AlertDescription class="space-y-2">
+                    <p v-for="kanal in mandant.stoerungen.kanaele" :key="kanal.kanal">
+                        {{ kanal.kanal }}: {{ kanal.status }}<template v-if="kanal.grund"> ({{ kanal.grund }})</template>
+                    </p>
+                    <p v-if="mandant.stoerungen.kalender > 0">{{ mandant.stoerungen.kalender }} Kalenderverbindung(en) gestört.</p>
+                    <p v-if="mandant.stoerungen.werbung > 0">Werbekonto gestört.</p>
+                    <p v-if="mandant.stoerungen.ereignisse > 0">{{ mandant.stoerungen.ereignisse }} Ereignis(se) nicht verarbeitet.</p>
+                </AlertDescription>
+            </Alert>
 
             <p class="text-xs text-muted-foreground">
                 Assistenzläufe diesen Monat: {{ mandant.verbrauch.agentenlaeufe }} · Wartelistenangebote: {{ mandant.verbrauch.angebote }}
@@ -192,6 +188,7 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
             beschreibung="Der Grund steht im Protokoll — auch die Praxis kann ihn dort lesen."
             :laeuft="sperre.processing"
             :absende-text="mandant.gesperrt ? 'Entsperren' : 'Sperren'"
+            :absende-symbol="mandant.gesperrt ? LockOpen : Lock"
             @absenden="sperren"
         >
             <div class="grid gap-2">
@@ -213,6 +210,7 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
             beschreibung="Maskiert: Namen, Kontaktwege und Inhalte bleiben verdeckt. Vollzugriff gibt nur eine Inhaberin der Praxis frei. Die Sitzung ist befristet, die Begründung steht im Protokoll der Praxis."
             :laeuft="hineinsehen.processing"
             absende-text="Sitzung starten"
+            :absende-symbol="Eye"
             @absenden="hineinsehenStarten"
         >
             <div class="grid gap-2">
@@ -228,9 +226,10 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
             beschreibung="Kulanz, kein Verkauf — der Vorgang steht mit Begründung im Protokoll."
             :laeuft="gutschrift.processing"
             absende-text="Gutschreiben"
+            :absende-symbol="Gift"
             @absenden="gutschreiben"
         >
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid items-start gap-4 sm:grid-cols-2">
                 <div class="grid gap-2">
                     <Label for="art">Wofür</Label>
                     <Select v-model="gutschrift.art">

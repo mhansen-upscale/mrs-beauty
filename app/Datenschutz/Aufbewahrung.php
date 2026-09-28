@@ -15,6 +15,7 @@ use App\Models\AuditLog;
 use App\Models\ChannelRawEvent;
 use App\Models\ContactMerge;
 use App\Models\Conversation;
+use App\Models\DemoRequest;
 use App\Models\Lead;
 use App\Models\Message;
 use App\Models\RetentionPolicy;
@@ -265,6 +266,23 @@ final class Aufbewahrung
                 $vorschau,
             ),
         );
+    }
+
+    /**
+     * Die Demo-Anfragen der Startseite (WP-38).
+     *
+     * Sie gehoeren keiner Praxis und laufen deshalb neben dem Protokoll ohne
+     * Mandanten. Die Frist steht in der Konfiguration, nicht in
+     * retention_policies: keine Praxis kann sie aendern. Vorschau und Lauf
+     * zaehlen dieselbe Abfrage.
+     */
+    public function demoanfragen(bool $vorschau, ?CarbonImmutable $jetzt = null): int
+    {
+        $stichtag = ($jetzt ?? CarbonImmutable::now())->subMonths((int) config('mrs.oeffentlich.demoanfragen.aufbewahrung_monate'));
+
+        $abfrage = DemoRequest::query()->where('created_at', '<=', $stichtag);
+
+        return $vorschau ? $abfrage->count() : (int) $abfrage->delete();
     }
 
     /**

@@ -30,6 +30,10 @@ enum OperatorAbility: string
     case ProtokollSehen = 'protokoll.sehen';
     case VersandVerwalten = 'versand.verwalten';
 
+    // Die Demo-Anfragen der Startseite (WP-38). **Am Ende**: der Rollentest
+    // vergleicht die Reihenfolge mit der Liste je Rolle.
+    case DemoanfragenVerwalten = 'demoanfragen.verwalten';
+
     public function label(): string
     {
         return match ($this) {
@@ -45,6 +49,7 @@ enum OperatorAbility: string
             self::BetreiberVerwalten => 'Betreiberkonten verwalten',
             self::ProtokollSehen => 'Betreiberprotokoll sehen',
             self::VersandVerwalten => 'Mailversand und Produktmails verwalten',
+            self::DemoanfragenVerwalten => 'Demo-Anfragen sehen und bearbeiten',
         };
     }
 }

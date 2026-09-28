@@ -1252,4 +1252,69 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Oeffentliche Seiten und Vertrieb (WP-38)
+    |--------------------------------------------------------------------------
+    |
+    | Fundstelle: specs/WP-38-oeffentliche-startseite.md
+    |
+    | Die Startseite, das Impressum und die Datenschutzerklaerung des
+    | Betreibers -- und die Demo-Anfragen, die von dort kommen.
+    |
+    */
+
+    'oeffentlich' => [
+
+        // Die Angaben nach § 5 DDG. **Im Repository, nicht in .env:** Sie
+        // sind in jeder Umgebung dieselben, und ein Rechtstext gehoert
+        // versioniert. Uebernommen von upscale-it.de/impressum (28.09.2026).
+        'anbieter' => [
+            'firma' => 'Upscale it GmbH',
+            'strasse' => 'Albert-Einstein-Ring 4',
+            'plz' => '22761',
+            'ort' => 'Hamburg',
+            'land' => 'Deutschland',
+            'vertreten_durch' => 'Maik Hansen',
+            'registergericht' => 'Amtsgericht Hamburg',
+            'registernummer' => 'HRB 161136',
+            'ust_id' => 'DE328196547',
+            'email' => 'info@mrs-beauty.ai',
+            'telefon' => '040 238 305 10',
+        ],
+
+        // **Jeder fremde Rechner, den eine oeffentliche Seite anspricht.**
+        // Die Datenschutzerklaerung nennt diese Liste, und
+        // tests/Feature/Oeffentlich/OhneTrackingTest.php laesst keinen
+        // anderen zu. Wer hier etwas eintraegt, schreibt es damit auch in die
+        // Datenschutzerklaerung.
+        'drittanbieter' => [
+            'fonts.bunny.net' => [
+                'anbieter' => 'BunnyWay d.o.o., Cesta komandanta Staneta 4a, 1215 Medvode, Slowenien',
+                'zweck' => 'Auslieferung der Schriftart Instrument Sans',
+            ],
+        ],
+
+        'demoanfragen' => [
+
+            // Wohin die Nachricht ueber eine neue Anfrage geht. Aus .env, damit
+            // eine Testumgebung nicht den Vertrieb anschreibt. `?:` statt
+            // Standardwert: ein leeres `VERTRIEB_ADRESSE=` liefert sonst ''.
+            'empfaenger' => env('VERTRIEB_ADRESSE') ?: 'info@mrs-beauty.ai',
+
+            // Wie lange eine Anfrage bleibt -- wie ein Lead ohne Termin (C7).
+            // Zu bestaetigen (WP-38).
+            'aufbewahrung_monate' => 12,
+
+            // Schneller fuellt kein Mensch fuenf Felder aus. Das Merkmal im
+            // Formular traegt die Zeit, zu der die Seite geladen wurde.
+            'mindestzeit_sekunden' => 3,
+
+            // Wer die Seite laenger offen hatte, laedt sie neu. Ein Merkmal
+            // ohne Ablauf liesse sich einmal abholen und beliebig oft
+            // verwenden.
+            'merkmal_stunden' => 24,
+        ],
+    ],
+
 ];

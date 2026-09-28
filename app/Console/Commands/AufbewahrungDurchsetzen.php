@@ -72,6 +72,16 @@ final class AufbewahrungDurchsetzen extends Command
                 $this->line(sprintf('  %-36s %5d', RetentionSubject::AuditLog->label(), $ohneMandant));
                 $gesamt += $ohneMandant;
             }
+
+            // Die Demo-Anfragen der Startseite (WP-38) -- ebenfalls ohne
+            // Praxis, mit eigener Frist.
+            $demoanfragen = $aufbewahrung->demoanfragen($vorschau, $jetzt);
+
+            if ($demoanfragen > 0) {
+                $this->line('Ohne Praxis');
+                $this->line(sprintf('  %-36s %5d', 'Demo-Anfragen', $demoanfragen));
+                $gesamt += $demoanfragen;
+            }
         }
 
         $this->info($vorschau

@@ -102,6 +102,11 @@ enum AuditEvent: string
     case PlatformMailTemplateChanged = 'mail.platform_template_changed';
     case PlatformMailTemplateReset = 'mail.platform_template_reset';
 
+    /* Die Demo-Anfragen der Startseite (WP-38). Global -- ohne Organisation.
+       Im Kontext nur der Status, **nie eine Angabe der Anfrage** (C5). */
+    case DemoRequestStatusChanged = 'demo_request.status_changed';
+    case DemoRequestDeleted = 'demo_request.deleted';
+
     case EncryptionKeyIssued = 'encryption_key.issued';
     case EncryptionKeyRevoked = 'encryption_key.revoked';
 
@@ -159,6 +164,8 @@ enum AuditEvent: string
             self::PlatformMailTestRequested => 'Probemail des Plattformversands angefordert',
             self::PlatformMailTemplateChanged => 'Vorlage einer Produktmail geändert',
             self::PlatformMailTemplateReset => 'Vorlage einer Produktmail zurückgesetzt',
+            self::DemoRequestStatusChanged => 'Status einer Demo-Anfrage geändert',
+            self::DemoRequestDeleted => 'Demo-Anfrage gelöscht',
             self::EncryptionKeyIssued => 'Schlüsselsatz angelegt',
             self::EncryptionKeyRevoked => 'Schlüssel widerrufen',
             self::AttachmentOpened => 'Anhang geöffnet',

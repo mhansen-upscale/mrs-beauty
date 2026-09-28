@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import AktionsButton from '@/components/AktionsButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { ShieldAlert, Trash2 } from 'lucide-vue-next';
+import { Save, ShieldAlert, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface Policy extends Record<string, unknown> {
@@ -40,11 +42,15 @@ const props = defineProps<{
 
 const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Datenschutz', href: '/datenschutz' }];
 
+/**
+ * Auf dem Handy tragen Gegenstand und Frist die Zeile. Das Vorgehen steht dort
+ * als dasselbe Auswahlfeld in der ersten Zelle, die fällige Zahl darunter.
+ */
 const fristSpalten: Spalte<Policy>[] = [
     { schluessel: 'subject_label', titel: 'Gegenstand' },
     { schluessel: 'retention_days', titel: 'Frist (Tage)' },
     { schluessel: 'action_label', titel: 'Vorgehen', ab: 'md' },
-    { schluessel: 'faellig', titel: 'Jetzt fällig', klasse: 'text-right tabular-nums' },
+    { schluessel: 'faellig', titel: 'Jetzt fällig', klasse: 'text-right tabular-nums', ab: 'sm' },
 ];
 
 const vorgangSpalten: Spalte<RequestItem>[] = [
@@ -89,30 +95,59 @@ const umfang = (ergebnis: Record<string, unknown> | null): string =>
                 Folge sehen, bevor sie eintritt. Ein Lauf, der zu viel löscht,
                 ist nicht rückholbar.
             -->
-            <div class="flex flex-wrap items-center gap-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-                <ShieldAlert class="size-4 shrink-0 text-warning" />
-                <p class="flex-1">
-                    <strong class="tabular-nums">{{ faellig_gesamt }}</strong>
-                    {{ faellig_gesamt === 1 ? 'Datensatz ist' : 'Datensätze sind' }} nach den eingestellten Fristen fällig. Ein täglicher Lauf zeigt
-                    diese Zahl; gelöscht wird erst, wenn Sie es auslösen.
-                </p>
-                <Button variant="outline" :disabled="faellig_gesamt === 0" @click="durchsetzen">
-                    <Trash2 />
-                    Jetzt durchsetzen
-                </Button>
-            </div>
+            <Alert variant="warning">
+                <ShieldAlert />
+                <AlertDescription class="flex flex-wrap items-center gap-3">
+                    <p class="min-w-0 flex-[1_1_16rem]">
+                        <strong class="tabular-nums">{{ faellig_gesamt }}</strong>
+                        {{ faellig_gesamt === 1 ? 'Datensatz ist' : 'Datensätze sind' }} nach den eingestellten Fristen fällig. Ein täglicher Lauf
+                        zeigt diese Zahl; gelöscht wird erst, wenn Sie es auslösen.
+                    </p>
+                    <Button variant="outline" :disabled="faellig_gesamt === 0" @click="durchsetzen">
+                        <Trash2 />
+                        Jetzt durchsetzen
+                    </Button>
+                </AlertDescription>
+            </Alert>
 
             <DataTable :spalten="fristSpalten" :zeilen="policies" :suchfelder="[]">
+                <template #zelle-subject_label="{ zeile }">
+                    <span class="break-words">{{ zeile.subject_label }}</span>
+                    <!-- Auf dem Handy fehlen die Spalten Vorgehen und „Jetzt fällig“. -->
+                    <span class="block text-xs text-muted-foreground sm:hidden">
+                        Jetzt fällig: <strong class="tabular-nums">{{ zeile.faellig }}</strong>
+                    </span>
+                    <div class="mt-2 md:hidden">
+                        <Select v-model="entwurf[zeile.uuid].action" @update:model-value="() => speichern(zeile)">
+                            <SelectTrigger class="h-8 w-full max-w-40" :aria-label="`Vorgehen bei ${zeile.subject_label} ändern`">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="eintrag in actions" :key="eintrag.value" :value="eintrag.value">
+                                    {{ eintrag.label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </template>
+
                 <template #zelle-retention_days="{ zeile }">
                     <div class="flex items-center gap-2">
-                        <Input v-model.number="entwurf[zeile.uuid].retention_days" type="number" min="1" max="3650" class="h-8 w-24" />
-                        <Button size="sm" variant="ghost" @click="speichern(zeile)">Sichern</Button>
+                        <Input
+                            v-model.number="entwurf[zeile.uuid].retention_days"
+                            type="number"
+                            min="1"
+                            max="3650"
+                            class="w-24"
+                            :aria-label="`Frist in Tagen für ${zeile.subject_label}`"
+                        />
+                        <AktionsButton :icon="Save" beschriftung="Speichern" class="shrink-0" @click="speichern(zeile)" />
                     </div>
                 </template>
 
                 <template #zelle-action_label="{ zeile }">
                     <Select v-model="entwurf[zeile.uuid].action" @update:model-value="() => speichern(zeile)">
-                        <SelectTrigger class="h-8 w-40"><SelectValue /></SelectTrigger>
+                        <SelectTrigger class="h-8 w-40" :aria-label="`Vorgehen bei ${zeile.subject_label}`"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem v-for="eintrag in actions" :key="eintrag.value" :value="eintrag.value">
                                 {{ eintrag.label }}

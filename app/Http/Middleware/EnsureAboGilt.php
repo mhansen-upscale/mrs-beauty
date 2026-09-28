@@ -42,9 +42,16 @@ final class EnsureAboGilt
      * Praxis landete sonst auf `abo.edit`, bekam dort einen 403 -- ihm fehlt
      * `billing.manage` -- und kam nicht einmal mehr hinaus.
      *
+     * Seit WP-38 die oeffentlichen Seiten: Das Impressum muss jederzeit
+     * erreichbar sein, auch fuer eine Praxis mit offener Rechnung.
+     *
      * @var list<string>
      */
     private const OFFEN = [
+        '/',
+        'impressum',
+        'datenschutzerklaerung',
+        'demo-anfrage',
         'settings/abo',
         'settings/abo/*',
         'abo-gesperrt',

@@ -115,3 +115,38 @@ html {
         @apply bg-background text-foreground;
     }
 }
+
+/*
+| Die öffentlichen Seiten (WP-38) springen weich zu ihren Ankern — nur dort,
+| und nicht für jemanden, der Bewegung abgeschaltet hat.
+*/
+@media (prefers-reduced-motion: no-preference) {
+    html:has([data-oeffentlich]) {
+        scroll-behavior: smooth;
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Feldfehler
+|--------------------------------------------------------------------------
+|
+| Ein Feld mit Fehler ist rot umrandet — nicht nur die Meldung darunter.
+| Wer ein langes Formular abschickt und oben landet, sucht sonst die Zeile.
+|
+| Die Regel hängt an `InputError`: solange er eine Meldung zeigt, trägt er
+| `data-feldfehler`. Rot wird das Steuerelement im selben Feld, also im
+| Element, dessen **direktes** Kind die Meldung ist. Jedes Feld folgt dem
+| Muster `Label → Steuerelement → Hinweis → InputError` in einem eigenen
+| Block; deshalb wirkt das ohne eine Zeile an den Formularen.
+|
+| Eine Meldung für ein ganzes Formular gehört folglich nicht als direktes
+| Kind in einen Block mit mehreren Feldern — sonst werden alle rot.
+|
+*/
+
+@layer components {
+    :where(:has(> [data-feldfehler])) :is(input:not([type='checkbox']):not([type='radio']):not([type='hidden']), textarea, button[role='combobox']) {
+        @apply border-destructive focus-visible:ring-destructive;
+    }
+}

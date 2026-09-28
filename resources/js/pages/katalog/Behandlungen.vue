@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, CircleSlash, Pencil, Plus, Power, PowerOff, ShieldAlert, ShieldCheck } from 'lucide-vue-next';
+import { CheckCircle2, CircleSlash, Pencil, Plus, Power, PowerOff, Save, ShieldAlert, ShieldCheck, type LucideIcon } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface TreatmentItem extends Record<string, unknown> {
@@ -53,6 +53,7 @@ const spalten: Spalte<TreatmentItem>[] = [
     { schluessel: 'avg_revenue_cents', titel: 'Ø Umsatz', klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'practitioner_names', titel: 'Wer macht das?', sortierbar: false, ab: 'lg' },
     { schluessel: 'appointment_types', titel: 'Terminarten', klasse: 'text-right tabular-nums', ab: 'lg' },
+    // Unter md steht der Knopf zur Prüfung zusätzlich in der ersten Zelle (md:hidden).
     { schluessel: 'hwg', titel: 'Buchungsseite', sortierbar: false, ab: 'md' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
@@ -62,6 +63,16 @@ const spalten: Spalte<TreatmentItem>[] = [
  * Grün oder nach einer begründeten Übersteuerung (C3) — gelb heißt, jemand
  * muss hinsehen. Die Praxis soll hier sehen, warum etwas dort fehlt.
  */
+const hwgStand = (
+    hwg: NonNullable<TreatmentItem['hwg']>,
+): { variant: 'success' | 'warning' | 'destructive' | 'secondary'; symbol: LucideIcon | null; text: string } => {
+    if (hwg.sichtbar) return { variant: 'success', symbol: ShieldCheck, text: hwg.uebersteuert ? 'Sichtbar (übersteuert)' : 'Sichtbar' };
+    if (hwg.ampel === 'yellow') return { variant: 'warning', symbol: ShieldAlert, text: 'Bitte prüfen' };
+    if (hwg.ampel === 'red') return { variant: 'destructive', symbol: ShieldAlert, text: 'Beanstandet' };
+
+    return { variant: 'secondary', symbol: null, text: 'Nicht geprüft' };
+};
+
 const pruefungOffen = ref(false);
 const geprueft = ref<TreatmentItem | null>(null);
 const uebersteuerung = useForm({ grund: '' });
@@ -165,8 +176,24 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
                 </template>
 
                 <template #zelle-name="{ zeile }">
-                    <span class="font-medium">{{ zeile.name }}</span>
-                    <span class="block text-xs text-muted-foreground">{{ zeile.slug }}</span>
+                    <span class="break-words font-medium">{{ zeile.name }}</span>
+                    <span class="block break-all text-xs text-muted-foreground">{{ zeile.slug }}</span>
+                    <!-- Unter md fehlt die Spalte Buchungsseite — und mit ihr der Weg zur Prüfung. -->
+                    <div class="mt-1 md:hidden">
+                        <span v-if="!zeile.hwg" class="text-xs text-muted-foreground">Buchungsseite: ohne Text</span>
+                        <button
+                            v-else
+                            type="button"
+                            class="text-left"
+                            :aria-label="`HWG-Prüfung von ${zeile.name}: ${hwgStand(zeile.hwg).text}`"
+                            @click="pruefungZeigen(zeile)"
+                        >
+                            <Badge :variant="hwgStand(zeile.hwg).variant">
+                                <component :is="hwgStand(zeile.hwg).symbol" v-if="hwgStand(zeile.hwg).symbol" />
+                                {{ hwgStand(zeile.hwg).text }}
+                            </Badge>
+                        </button>
+                    </div>
                 </template>
 
                 <template #zelle-category="{ zeile }">
@@ -189,20 +216,17 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
 
                 <template #zelle-hwg="{ zeile }">
                     <span v-if="!zeile.hwg" class="text-xs text-muted-foreground">ohne Text</span>
-                    <button v-else type="button" class="text-left" @click="pruefungZeigen(zeile)">
-                        <Badge v-if="zeile.hwg.sichtbar" variant="success">
-                            <ShieldCheck />
-                            {{ zeile.hwg.uebersteuert ? 'Sichtbar (übersteuert)' : 'Sichtbar' }}
+                    <button
+                        v-else
+                        type="button"
+                        class="text-left"
+                        :aria-label="`HWG-Prüfung von ${zeile.name}: ${hwgStand(zeile.hwg).text}`"
+                        @click="pruefungZeigen(zeile)"
+                    >
+                        <Badge :variant="hwgStand(zeile.hwg).variant">
+                            <component :is="hwgStand(zeile.hwg).symbol" v-if="hwgStand(zeile.hwg).symbol" />
+                            {{ hwgStand(zeile.hwg).text }}
                         </Badge>
-                        <Badge v-else-if="zeile.hwg.ampel === 'yellow'" variant="warning">
-                            <ShieldAlert />
-                            Bitte prüfen
-                        </Badge>
-                        <Badge v-else-if="zeile.hwg.ampel === 'red'" variant="destructive">
-                            <ShieldAlert />
-                            Beanstandet
-                        </Badge>
-                        <Badge v-else variant="secondary">Nicht geprüft</Badge>
                     </button>
                 </template>
 
@@ -241,10 +265,11 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
             beschreibung="Der Ø-Umsatz ist eine Schätzung, kein abgerechneter Umsatz — ohne ihn gibt es keinen ROAS."
             :laeuft="formular.processing"
             :absende-text="bearbeitet ? 'Speichern' : 'Anlegen'"
+            :absende-symbol="bearbeitet ? Save : Plus"
             breit
             @absenden="speichern"
         >
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid items-start gap-4 sm:grid-cols-2">
                 <div class="grid gap-2">
                     <Label for="name">Name</Label>
                     <Input id="name" v-model="formular.name" />
@@ -297,7 +322,7 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
                         <span>Alle Behandler — auch später hinzugekommene</span>
                     </label>
 
-                    <div v-if="!formular.all_practitioners" class="grid gap-2 rounded-md border p-3 sm:grid-cols-2">
+                    <div v-if="!formular.all_practitioners" class="grid items-start gap-2 rounded-md border p-3 sm:grid-cols-2">
                         <label v-for="person in practitioners" :key="person.uuid" class="flex items-center gap-3 text-sm">
                             <Checkbox
                                 :checked="formular.practitioners.includes(person.uuid)"
@@ -318,11 +343,12 @@ const euro = (cents: number | null): string => (cents === null ? '—' : (cents 
             beschreibung="Beschreibung und Preis erscheinen auf der Buchungsseite erst bei Grün oder nach einer begründeten Übersteuerung. Die Prüfung ist eine Hilfe, keine Rechtsberatung."
             :laeuft="uebersteuerung.processing"
             absende-text="Übersteuern und veröffentlichen"
+            :absende-symbol="ShieldCheck"
             :absenden-aus="!geprueft?.hwg || geprueft.hwg.sichtbar"
             @absenden="uebersteuern"
         >
             <ul v-if="geprueft?.hwg?.befunde.length" class="space-y-3 text-sm">
-                <li v-for="befund in geprueft.hwg.befunde" :key="befund.code" class="rounded-md border p-3">
+                <li v-for="befund in geprueft.hwg.befunde" :key="befund.code" class="break-words rounded-md border p-3">
                     <p class="font-medium">{{ befund.titel }}</p>
                     <p class="text-xs text-muted-foreground">{{ befund.fundstelle }}</p>
                     <p v-if="befund.stelle" class="mt-1">„{{ befund.stelle }}“</p>

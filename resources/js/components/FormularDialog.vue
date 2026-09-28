@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2 } from 'lucide-vue-next';
+import { LoaderCircle, Save, X, type LucideIcon } from 'lucide-vue-next';
 
 /**
  * Jedes Formular, das nicht die ganze Seite ist, läuft über diesen Dialog.
@@ -10,6 +10,13 @@ import { Loader2 } from 'lucide-vue-next';
  * Zeilen springen, die Felder liegen je nach Spaltenbreite woanders, und bei
  * zwei offenen Abschnitten weiß niemand mehr, welches Formular er gerade
  * ausfüllt.
+ *
+ * **Die Fußzeile klebt unten.** Ein langer Dialog scrollt in sich; auf dem
+ * Handy lag der Absendeknopf sonst unter dem letzten Feld, außer Sicht.
+ *
+ * **„Speichern" ist nur die Vorgabe.** Ein Dialog, der etwas anderes tut —
+ * schließen, zuweisen, einladen —, sagt das in `absendeText` und zeigt es
+ * mit `absendeSymbol`.
  */
 withDefaults(
     defineProps<{
@@ -17,11 +24,12 @@ withDefaults(
         beschreibung?: string;
         laeuft?: boolean;
         absendeText?: string;
+        absendeSymbol?: LucideIcon;
         /** Sperrt den Absendeknopf, solange die Eingabe unvollstaendig ist. */
         absendenAus?: boolean;
         breit?: boolean;
     }>(),
-    { beschreibung: '', laeuft: false, absendeText: 'Speichern', absendenAus: false, breit: false },
+    { beschreibung: '', laeuft: false, absendeText: 'Speichern', absendeSymbol: () => Save, absendenAus: false, breit: false },
 );
 
 const offen = defineModel<boolean>('offen', { required: true });
@@ -40,10 +48,19 @@ const emit = defineEmits<{ (e: 'absenden'): void }>();
             <form class="space-y-4" @submit.prevent="emit('absenden')">
                 <slot />
 
-                <DialogFooter>
-                    <Button type="button" variant="ghost" @click="offen = false">Abbrechen</Button>
+                <!--
+                    -bottom-6 und -mx-6 gleichen den Innenabstand des Dialogs
+                    aus: klebend schließt die Leiste bündig mit dem unteren
+                    Rand ab, statt über einem Streifen Formular zu schweben.
+                -->
+                <DialogFooter class="sticky -bottom-6 z-10 -mx-6 -mb-6 border-t bg-background px-6 py-4">
+                    <Button type="button" variant="ghost" @click="offen = false">
+                        <X />
+                        Abbrechen
+                    </Button>
                     <Button type="submit" :disabled="laeuft || absendenAus">
-                        <Loader2 v-if="laeuft" class="animate-spin" />
+                        <LoaderCircle v-if="laeuft" class="animate-spin" />
+                        <component :is="absendeSymbol" v-else />
                         {{ absendeText }}
                     </Button>
                 </DialogFooter>

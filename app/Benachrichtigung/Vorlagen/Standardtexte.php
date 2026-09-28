@@ -106,7 +106,8 @@ final class Standardtexte
             Mailart::Posteingangsantwort,
             Mailart::Wartelistenangebot,
             Mailart::Postfachprobe,
-            Mailart::Versandprobe => new Mailtext(betreff: $art->label()),
+            Mailart::Versandprobe,
+            Mailart::Demoanfrage => new Mailtext(betreff: $art->label()),
         };
     }
 }

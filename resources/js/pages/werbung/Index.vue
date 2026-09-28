@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import AktionsButton from '@/components/AktionsButton.vue';
+import Abschnitt from '@/components/Abschnitt.vue';
 import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import Zeilenaktionen from '@/components/Zeilenaktionen.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,9 +13,26 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useNachladen } from '@/composables/useNachladen';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem, type Spalte } from '@/types';
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, Loader2, Megaphone, Pause, Pencil, Play, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-vue-next';
+import { type BreadcrumbItem, type Spalte, type Zeilenaktion } from '@/types';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import {
+    AlertTriangle,
+    CalendarDays,
+    Info,
+    Link2,
+    LoaderCircle,
+    Megaphone,
+    Pause,
+    Pencil,
+    Play,
+    Plus,
+    RefreshCw,
+    Save,
+    ShieldAlert,
+    Trash2,
+    Unlink,
+    XCircle,
+} from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Kampagne extends Record<string, unknown> {
@@ -95,8 +114,6 @@ const props = defineProps<{
     auswahl: { konten: { kennung: string; name: string | null; waehrung: string | null; nutzbar: boolean }[] } | null;
 }>();
 
-const page = usePage();
-
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Kampagnen', href: '/werbung' }];
 
 const spalten: Spalte<Kampagne>[] = [
@@ -133,8 +150,6 @@ const tagText = (iso: string): string => new Date(iso).toLocaleDateString('de-DE
 
 /** Der Verlauf als schlichte Balken — die Höhe relativ zum größten Tag. */
 const hoechsteAusgabe = computed<number>(() => Math.max(1, ...props.verlauf.map((t) => t.ausgaben)));
-
-const meldung = computed<string | null>(() => (page.props.flash as { fehler?: string } | undefined)?.fehler ?? null);
 
 const abgleichen = () => router.post(route('werbung.abgleichen', { werbekonto: props.konto?.uuid }), {}, { preserveScroll: true });
 
@@ -267,6 +282,29 @@ const loescheEndgueltig = () =>
         onSuccess: () => (loeschenOffen.value = false),
     });
 
+/** Bis zu drei Aktionen je Zeile — auf dem Handy stehen sie in einem Menü. */
+const zeilenaktionen = (zeile: Kampagne): Zeilenaktion[] => [
+    {
+        symbol: zeile.zustand === 'ACTIVE' ? Pause : Play,
+        beschriftung: zeile.zustand === 'ACTIVE' ? 'Pausieren' : 'Starten',
+        aktion: () => umschalten(zeile),
+        wenn: !zeile.verschwunden && !zeile.wirdEntfernt && props.konto?.verbunden === true,
+    },
+    {
+        symbol: Pencil,
+        beschriftung: 'Budget und Zielgruppe bearbeiten',
+        aktion: () => oeffneBearbeiten(zeile),
+        wenn: zeile.eigene && !zeile.verschwunden && !zeile.wirdEntfernt,
+    },
+    {
+        symbol: Trash2,
+        beschriftung: 'Kampagne löschen',
+        aktion: () => oeffneLoeschen(zeile),
+        gefahr: true,
+        wenn: zeile.eigene && !zeile.wirdEntfernt,
+    },
+];
+
 const gestoerteUebertragung = computed<Kampagne[]>(() => props.kampagnen.filter((k) => k.uebertragung === 'failed'));
 
 /**
@@ -304,28 +342,29 @@ useNachladen(laeuft, ['kampagnen']);
         <div class="space-y-6 p-4">
             <Heading title="Kampagnen" description="Ihre Kampagnen bei Meta — gelesen, geändert nur durch Sie." />
 
-            <p v-if="meldung" class="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-                {{ meldung }}
-            </p>
-
             <!-- Auswahl: nur unmittelbar nach dem Rückweg von Meta. -->
-            <div v-if="auswahl" class="space-y-3 rounded-md border p-4">
-                <p class="text-sm font-medium">Welches Werbekonto gehört zu dieser Praxis?</p>
-                <p class="text-sm text-muted-foreground">
-                    Es wird genau eines verbunden. Die Zahlen eines fremden Kontos sehen plausibel aus — sie gehören nur jemand anderem.
-                </p>
-
-                <div v-for="konten in auswahl.konten" :key="konten.kennung" class="flex flex-wrap items-center gap-3 border-t pt-3">
-                    <div>
-                        <p class="text-sm font-medium">{{ konten.name ?? konten.kennung }}</p>
-                        <p class="text-xs text-muted-foreground">
-                            {{ konten.kennung }}<template v-if="konten.waehrung"> · {{ konten.waehrung }}</template>
-                        </p>
-                    </div>
-                    <Badge v-if="!konten.nutzbar" variant="destructive">bei Meta nicht aktiv</Badge>
-                    <Button class="w-full sm:ml-auto sm:w-auto" type="button" size="sm" @click="waehlen(konten.kennung)">Verbinden</Button>
-                </div>
-            </div>
+            <Abschnitt
+                v-if="auswahl"
+                titel="Welches Werbekonto gehört zu dieser Praxis?"
+                beschreibung="Es wird genau eines verbunden. Die Zahlen eines fremden Kontos sehen plausibel aus — sie gehören nur jemand anderem."
+                randlos
+            >
+                <ul class="divide-y">
+                    <li v-for="konten in auswahl.konten" :key="konten.kennung" class="flex flex-wrap items-center gap-3 px-4 py-3">
+                        <div class="min-w-0">
+                            <p class="break-words text-sm font-medium">{{ konten.name ?? konten.kennung }}</p>
+                            <p class="break-all text-xs text-muted-foreground">
+                                {{ konten.kennung }}<template v-if="konten.waehrung"> · {{ konten.waehrung }}</template>
+                            </p>
+                        </div>
+                        <Badge v-if="!konten.nutzbar" variant="destructive">bei Meta nicht aktiv</Badge>
+                        <Button class="w-full sm:ml-auto sm:w-auto" type="button" size="sm" @click="waehlen(konten.kennung)">
+                            <Link2 />
+                            Verbinden
+                        </Button>
+                    </li>
+                </ul>
+            </Abschnitt>
 
             <!-- Noch nichts verbunden: eine Einladung, kein Fehler. -->
             <div v-else-if="!konto" class="space-y-3 rounded-md border border-dashed p-8 text-center">
@@ -335,13 +374,16 @@ useNachladen(laeuft, ['kampagnen']);
                     Das Werbekonto bleibt Ihres. Wir greifen über eine Partnerschaft im Business Manager darauf zu und lesen ausschließlich — angelegt
                     oder geändert wird hier nichts.
                 </p>
-                <Button as="a" :href="route('werbung.verbinden')">Werbekonto verbinden</Button>
+                <Button as="a" :href="route('werbung.verbinden')">
+                    <Link2 />
+                    Werbekonto verbinden
+                </Button>
             </div>
 
             <template v-else>
                 <div class="flex flex-wrap items-center gap-3">
-                    <div>
-                        <p class="text-sm font-medium">{{ konto.name ?? konto.kennung }}</p>
+                    <div class="min-w-0">
+                        <p class="break-words text-sm font-medium">{{ konto.name ?? konto.kennung }}</p>
                         <p class="text-xs text-muted-foreground">
                             {{ konto.kennung }}<template v-if="konto.waehrung"> · {{ konto.waehrung }}</template> · zuletzt abgeglichen
                             {{ zeitpunkt(konto.zuletztAbgeglichen) }}
@@ -367,26 +409,34 @@ useNachladen(laeuft, ['kampagnen']);
                             <RefreshCw />
                             Jetzt abgleichen
                         </Button>
-                        <Button v-if="konto.verbunden" type="button" variant="ghost" size="sm" @click="trennen">Trennen</Button>
-                        <Button v-else as="a" size="sm" :href="route('werbung.verbinden')">Erneut verbinden</Button>
+                        <Button v-if="konto.verbunden" type="button" variant="ghost" size="sm" @click="trennen">
+                            <Unlink />
+                            Trennen
+                        </Button>
+                        <Button v-else as="a" size="sm" :href="route('werbung.verbinden')">
+                            <Link2 />
+                            Erneut verbinden
+                        </Button>
                     </div>
                 </div>
 
                 <!-- Regel 4: ein Ausfall erzeugt einen Hinweis im Produkt. -->
-                <div v-if="konto.zustand !== 'active'" class="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-                    <p class="flex items-center gap-2 font-medium">
-                        <AlertTriangle class="size-4 shrink-0" />
+                <Alert v-if="konto.zustand !== 'active'" variant="warning">
+                    <AlertTriangle />
+                    <AlertTitle>
                         Die Verbindung zu Meta ist gestört<template v-if="konto.gestoertSeit"> seit {{ zeitpunkt(konto.gestoertSeit) }}</template
                         >.
-                    </p>
-                    <p v-if="konto.grund === 'token_invalid'">Der Zugang ist abgelaufen. Bitte erneut verbinden.</p>
-                    <p v-else-if="konto.grund === 'permission_missing'">
-                        Eine Berechtigung fehlt. Ein neuer Zugang hilft hier nicht — die Freigabe muss im Business Manager erteilt werden.
-                    </p>
-                    <p v-else-if="konto.grund === 'suspended'">Meta hat das Werbekonto gesperrt. Bis dahin bleiben die Zahlen stehen.</p>
-                    <p v-else>{{ konto.grund }}</p>
-                    <p class="text-xs">Die Kampagnen unten zeigen den zuletzt gelesenen Stand.</p>
-                </div>
+                    </AlertTitle>
+                    <AlertDescription class="space-y-1">
+                        <p v-if="konto.grund === 'token_invalid'">Der Zugang ist abgelaufen. Bitte erneut verbinden.</p>
+                        <p v-else-if="konto.grund === 'permission_missing'">
+                            Eine Berechtigung fehlt. Ein neuer Zugang hilft hier nicht — die Freigabe muss im Business Manager erteilt werden.
+                        </p>
+                        <p v-else-if="konto.grund === 'suspended'">Meta hat das Werbekonto gesperrt. Bis dahin bleiben die Zahlen stehen.</p>
+                        <p v-else>{{ konto.grund }}</p>
+                        <p class="text-xs">Die Kampagnen unten zeigen den zuletzt gelesenen Stand.</p>
+                    </AlertDescription>
+                </Alert>
 
                 <!--
                     Die Facebook-Seite ist der Absender jeder Anzeige, und ohne
@@ -395,9 +445,14 @@ useNachladen(laeuft, ['kampagnen']);
                     und an einer Stelle, die niemand ansieht. Deshalb steht der
                     Satz hier, neben dem Feld, das ihn aufloest.
                 -->
-                <div v-if="konto.verbunden" class="rounded-md border p-4" :class="konto.seite ? '' : 'border-warning/40 bg-warning/5'">
+                <Abschnitt v-if="konto.verbunden" titel="Facebook-Seite" beschreibung="Der Absender Ihrer Anzeigen.">
+                    <Alert v-if="!konto.seite" variant="warning">
+                        <AlertTriangle />
+                        <AlertDescription>Ohne Facebook-Seite kann Meta keine Anzeige ausliefern — sie ist der Absender.</AlertDescription>
+                    </Alert>
+
                     <div class="grid gap-2">
-                        <Label for="facebook-seite">Facebook-Seite</Label>
+                        <Label for="facebook-seite">Seiten-ID</Label>
 
                         <div class="flex flex-wrap items-center gap-2">
                             <Input
@@ -406,24 +461,19 @@ useNachladen(laeuft, ['kampagnen']);
                                 inputmode="numeric"
                                 placeholder="z. B. 102938475610293"
                                 class="w-full sm:w-64"
+                                aria-describedby="facebook-seite-hinweis"
                             />
                             <Button type="button" variant="outline" class="w-full sm:w-auto" :disabled="seiteForm.processing" @click="seiteSpeichern">
+                                <LoaderCircle v-if="seiteForm.processing" class="animate-spin" />
+                                <Save v-else />
                                 Speichern
                             </Button>
                         </div>
 
+                        <p id="facebook-seite-hinweis" class="text-xs text-muted-foreground">Die Seiten-ID steht bei Facebook unter „Seiteninfos“.</p>
                         <InputError :message="seiteForm.errors.seite" />
-
-                        <p v-if="!konto.seite" class="flex items-start gap-2 text-sm text-warning">
-                            <AlertTriangle class="mt-0.5 size-4 shrink-0" />
-                            Ohne Facebook-Seite kann Meta keine Anzeige ausliefern — sie ist der Absender. Die Seiten-ID steht bei Facebook unter
-                            „Seiteninfos“.
-                        </p>
-                        <p v-else class="text-xs text-muted-foreground">
-                            Der Absender Ihrer Anzeigen. Die Seiten-ID steht bei Facebook unter „Seiteninfos“.
-                        </p>
                     </div>
-                </div>
+                </Abschnitt>
 
                 <p v-if="konto.tokenLaeuftAb" class="text-xs text-muted-foreground">Zugang gültig bis {{ datum(konto.tokenLaeuftAb) }}.</p>
 
@@ -437,6 +487,7 @@ useNachladen(laeuft, ['kampagnen']);
                         :variant="tage === zeitraum.tage ? 'default' : 'outline'"
                         @click="zeitraumWaehlen(tage)"
                     >
+                        <CalendarDays />
                         {{ tage }} Tage
                     </Button>
                     <span class="text-xs text-muted-foreground">{{ tagText(zeitraum.von) }} bis {{ tagText(zeitraum.bis) }}</span>
@@ -445,24 +496,24 @@ useNachladen(laeuft, ['kampagnen']);
                 <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     <div class="rounded-md border p-4">
                         <p class="text-xs text-muted-foreground">Ausgaben</p>
-                        <p class="text-2xl font-semibold tabular-nums">{{ betrag(summe.ausgaben) }}</p>
+                        <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ betrag(summe.ausgaben) }}</p>
                         <p class="text-[0.7rem] text-muted-foreground">an {{ summe.tage }} Tag(en) mit Auslieferung</p>
                     </div>
                     <div class="rounded-md border p-4">
                         <p class="text-xs text-muted-foreground">Impressionen</p>
-                        <p class="text-2xl font-semibold tabular-nums">{{ zahl(summe.impressionen) }}</p>
+                        <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ zahl(summe.impressionen) }}</p>
                         <p class="text-[0.7rem] text-muted-foreground">CPM {{ summe.cpm === null ? '—' : betrag(Math.round(summe.cpm)) }}</p>
                     </div>
                     <div class="rounded-md border p-4">
                         <p class="text-xs text-muted-foreground">Klicks</p>
-                        <p class="text-2xl font-semibold tabular-nums">{{ zahl(summe.klicks) }}</p>
+                        <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ zahl(summe.klicks) }}</p>
                         <p class="text-[0.7rem] text-muted-foreground">
                             CTR {{ quote(summe.ctr) }} · CPC {{ summe.cpc === null ? '—' : betrag(Math.round(summe.cpc)) }}
                         </p>
                     </div>
                     <div class="rounded-md border p-4">
                         <p class="text-xs text-muted-foreground">Ergebnisse bei Meta</p>
-                        <p class="text-2xl font-semibold tabular-nums">{{ zahl(summe.leads) }}</p>
+                        <p class="break-words text-xl font-semibold tabular-nums sm:text-2xl">{{ zahl(summe.leads) }}</p>
                         <p class="text-[0.7rem] text-muted-foreground">
                             je Ergebnis {{ summe.kostenJeErgebnis === null ? '—' : betrag(Math.round(summe.kostenJeErgebnis)) }}
                         </p>
@@ -470,8 +521,7 @@ useNachladen(laeuft, ['kampagnen']);
                 </div>
 
                 <!-- Verlauf: schlichte Balken, damit ein Ausreißer auffällt. -->
-                <div v-if="verlauf.length > 1" class="rounded-md border p-4">
-                    <p class="mb-3 text-xs text-muted-foreground">Ausgaben je Tag</p>
+                <Abschnitt v-if="verlauf.length > 1" titel="Ausgaben je Tag">
                     <div class="flex h-24 items-end gap-px overflow-x-auto sm:gap-1">
                         <div
                             v-for="tag in verlauf"
@@ -481,34 +531,35 @@ useNachladen(laeuft, ['kampagnen']);
                             :title="`${tagText(tag.tag)}: ${betrag(tag.ausgaben)}`"
                         />
                     </div>
-                </div>
+                </Abschnitt>
 
                 <!-- Eine Übertragung, die Meta abgelehnt hat, steht im Klartext. -->
-                <div
-                    v-if="gestoerteUebertragung.length"
-                    class="space-y-1 rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive"
-                >
-                    <p class="flex items-center gap-2 font-medium">
-                        <AlertTriangle class="size-4 shrink-0" />
-                        {{ gestoerteUebertragung.length }} Änderung(en) sind nicht bei Meta angekommen
-                    </p>
-                    <p v-for="zeile in gestoerteUebertragung" :key="zeile.uuid">{{ zeile.name }}: {{ zeile.uebertragungFehler }}</p>
-                </div>
+                <Alert v-if="gestoerteUebertragung.length" variant="destructive">
+                    <XCircle />
+                    <AlertTitle>{{ gestoerteUebertragung.length }} Änderung(en) sind nicht bei Meta angekommen</AlertTitle>
+                    <AlertDescription class="space-y-1">
+                        <p v-for="zeile in gestoerteUebertragung" :key="zeile.uuid" class="break-words">
+                            {{ zeile.name }}: {{ zeile.uebertragungFehler }}
+                        </p>
+                    </AlertDescription>
+                </Alert>
 
                 <!-- C9: der Hinweis, nicht die Sperre. Der Name gehört der Praxis. -->
-                <div v-if="treffer.length" class="space-y-1 rounded-md border p-4 text-sm">
-                    <p class="flex items-center gap-2 font-medium">
-                        <ShieldAlert class="size-4 shrink-0" />
+                <Alert v-if="treffer.length">
+                    <ShieldAlert />
+                    <AlertTitle>
                         {{ treffer.length }} Kampagnenname{{ treffer.length === 1 ? '' : 'n' }} mit einer Behandlungsbezeichnung
-                    </p>
-                    <p class="text-muted-foreground">
-                        Kampagnennamen sind bei Meta offen sichtbar und erscheinen später in Auswertungen neben Kontakten. Bei uns liegen sie
-                        verschlüsselt; bei Meta lassen sie sich nur durch Umbenennen ändern. Neue Kampagnen benennen wir neutral.
-                    </p>
-                    <p class="text-muted-foreground">
-                        Betroffen: <span v-for="(k, i) in treffer" :key="k.uuid">{{ i > 0 ? ', ' : '' }}{{ k.name }}</span>
-                    </p>
-                </div>
+                    </AlertTitle>
+                    <AlertDescription class="space-y-1">
+                        <p>
+                            Kampagnennamen sind bei Meta offen sichtbar und erscheinen später in Auswertungen neben Kontakten. Bei uns liegen sie
+                            verschlüsselt; bei Meta lassen sie sich nur durch Umbenennen ändern. Neue Kampagnen benennen wir neutral.
+                        </p>
+                        <p class="break-words">
+                            Betroffen: <span v-for="(k, i) in treffer" :key="k.uuid">{{ i > 0 ? ', ' : '' }}{{ k.name }}</span>
+                        </p>
+                    </AlertDescription>
+                </Alert>
 
                 <DataTable :zeilen="kampagnen" :spalten="spalten" schluessel="uuid" :suchfelder="['name', 'kennung']">
                     <template #leer>Noch keine Kampagnen gelesen.</template>
@@ -520,7 +571,7 @@ useNachladen(laeuft, ['kampagnen']);
                     <template #zelle-zustand="{ zeile }">
                         <!-- Geloescht wird in der Warteschlange: bis dahin sagt die Zeile, was mit ihr geschieht. -->
                         <Badge v-if="zeile.wirdEntfernt" variant="secondary">
-                            <Loader2 class="mr-1 size-3 animate-spin" />
+                            <LoaderCircle class="mr-1 size-3 animate-spin" />
                             Wird entfernt
                         </Badge>
                         <Badge v-else-if="zeile.verschwunden" variant="secondary">bei Meta entfernt</Badge>
@@ -554,7 +605,7 @@ useNachladen(laeuft, ['kampagnen']);
                             Wartet auf die Verbindung
                         </Badge>
                         <Badge v-else-if="uebertraegtGerade(zeile)" variant="secondary">
-                            <Loader2 class="mr-1 size-3 animate-spin" />
+                            <LoaderCircle class="mr-1 size-3 animate-spin" />
                             Wird übertragen
                         </Badge>
                         <Badge v-else-if="zeile.uebertragung === 'pending'" variant="secondary">{{ zeile.uebertragungText }}</Badge>
@@ -562,27 +613,7 @@ useNachladen(laeuft, ['kampagnen']);
                     </template>
 
                     <template #aktionen="{ zeile }">
-                        <AktionsButton
-                            v-if="!zeile.verschwunden && !zeile.wirdEntfernt && konto.verbunden"
-                            :icon="zeile.zustand === 'ACTIVE' ? Pause : Play"
-                            :beschriftung="zeile.zustand === 'ACTIVE' ? 'Pausieren' : 'Starten'"
-                            @click="umschalten(zeile)"
-                        />
-
-                        <AktionsButton
-                            v-if="zeile.eigene && !zeile.verschwunden && !zeile.wirdEntfernt"
-                            :icon="Pencil"
-                            beschriftung="Budget und Zielgruppe bearbeiten"
-                            @click="oeffneBearbeiten(zeile)"
-                        />
-
-                        <AktionsButton
-                            v-if="zeile.eigene && !zeile.wirdEntfernt"
-                            :icon="Trash2"
-                            beschriftung="Kampagne löschen"
-                            variant="ghost"
-                            @click="oeffneLoeschen(zeile)"
-                        />
+                        <Zeilenaktionen :aktionen="zeilenaktionen(zeile)" />
                     </template>
                 </DataTable>
 
@@ -605,6 +636,7 @@ useNachladen(laeuft, ['kampagnen']);
             beschreibung="Sie wird pausiert angelegt — nichts gibt Geld aus, bevor Sie sie starten."
             :laeuft="neu.processing"
             absende-text="Anlegen"
+            :absende-symbol="Plus"
             breit
             @absenden="anlegen"
         >
@@ -789,18 +821,19 @@ useNachladen(laeuft, ['kampagnen']);
                 (Kampagnenname), und eine zweite Fassung davon hier wäre eine
                 zweite Wahrheit.
             -->
-            <div class="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-                <p class="font-medium text-foreground">Den Namen vergeben wir</p>
-                <p class="mt-1">
-                    <span class="rounded bg-background px-1.5 py-0.5 font-mono">
-                        {{ vorgaben.ziele[neu.ziel] }}<template v-if="monat"> · {{ monat }}</template
-                        ><template v-if="ortDerKampagne"> · {{ ortDerKampagne }}</template>
-                    </span>
-                </p>
-                <p class="mt-1">
-                    Er ist bei Meta offen sichtbar und erscheint später in Auswertungen neben Kontakten — deshalb ohne Behandlungsbezeichnung.
-                </p>
-            </div>
+            <Alert>
+                <Info />
+                <AlertTitle>Den Namen vergeben wir</AlertTitle>
+                <AlertDescription class="space-y-1">
+                    <p>
+                        <span class="break-words rounded bg-background px-1.5 py-0.5 font-mono text-xs">
+                            {{ vorgaben.ziele[neu.ziel] }}<template v-if="monat"> · {{ monat }}</template
+                            ><template v-if="ortDerKampagne"> · {{ ortDerKampagne }}</template>
+                        </span>
+                    </p>
+                    <p>Er ist bei Meta offen sichtbar und erscheint später in Auswertungen neben Kontakten — deshalb ohne Behandlungsbezeichnung.</p>
+                </AlertDescription>
+            </Alert>
         </FormularDialog>
 
         <!--
@@ -880,9 +913,12 @@ useNachladen(laeuft, ['kampagnen']);
                 </div>
             </div>
 
-            <p class="rounded-md border p-2 text-xs text-muted-foreground">
-                Die Änderung geht in die Warteschlange — die Zeile zeigt sie als <strong>wird übertragen</strong>, bis Meta sie bestätigt hat.
-            </p>
+            <Alert>
+                <Info />
+                <AlertDescription>
+                    Die Änderung geht in die Warteschlange — die Zeile zeigt sie als <strong>wird übertragen</strong>, bis Meta sie bestätigt hat.
+                </AlertDescription>
+            </Alert>
         </FormularDialog>
         <FormularDialog
             v-model:offen="loeschenOffen"
@@ -890,6 +926,7 @@ useNachladen(laeuft, ['kampagnen']);
             :beschreibung="`„${zumLoeschen?.name ?? zumLoeschen?.kennung}“ wird bei Meta entfernt und verschwindet hier. Das lässt sich nicht rückgängig machen.`"
             :laeuft="loeschen.processing"
             absende-text="Endgültig löschen"
+            :absende-symbol="Trash2"
             @absenden="loescheEndgueltig"
         >
             <p class="text-sm text-muted-foreground">

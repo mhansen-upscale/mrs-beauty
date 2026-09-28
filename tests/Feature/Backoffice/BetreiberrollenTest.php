@@ -6,6 +6,7 @@ use App\Audit\Impersonation;
 use App\Enums\OperatorAbility;
 use App\Enums\OperatorRole;
 use App\Enums\Role;
+use App\Models\DemoRequest;
 use App\Models\Organization;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -44,6 +45,10 @@ function betreiberrouten(Organization $praxis, User $anderer): array
     $mandant = ['organisation' => (string) $praxis->uuid];
     $konto = ['betreiber' => (string) $anderer->uuid];
 
+    // Eine echte Anfrage: sonst endete die Routenbindung mit 404, bevor die
+    // Faehigkeit ueberhaupt geprueft wird.
+    $anfrage = ['demoanfrage' => (string) DemoRequest::factory()->create()->uuid];
+
     return [
         'backoffice.index' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::MandantenSehen],
         'backoffice.show' => ['methode' => 'get', 'parameter' => $mandant, 'faehigkeit' => OperatorAbility::MandantenSehen],
@@ -75,6 +80,11 @@ function betreiberrouten(Organization $praxis, User $anderer): array
         'backoffice.mails.destroy' => ['methode' => 'delete', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
         'backoffice.mails.vorschau' => ['methode' => 'post', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
         'backoffice.mails.probe' => ['methode' => 'post', 'parameter' => ['mailart' => 'anmeldecode'], 'faehigkeit' => OperatorAbility::VersandVerwalten],
+
+        // Die Demo-Anfragen der Startseite (WP-38 AK 20).
+        'backoffice.demoanfragen' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::DemoanfragenVerwalten],
+        'backoffice.demoanfragen.status' => ['methode' => 'patch', 'parameter' => $anfrage, 'faehigkeit' => OperatorAbility::DemoanfragenVerwalten],
+        'backoffice.demoanfragen.loeschen' => ['methode' => 'delete', 'parameter' => $anfrage, 'faehigkeit' => OperatorAbility::DemoanfragenVerwalten],
         'impersonation.store' => ['methode' => 'post', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],
         'impersonation.destroy' => ['methode' => 'delete', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],
     ];

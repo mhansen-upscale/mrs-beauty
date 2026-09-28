@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Heading from '@/components/Heading.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
@@ -28,16 +29,16 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Abo', href: '/abo-gesperrt' }];
         <div class="space-y-6 p-4">
             <Heading :title="`${praxis}: ${label}`" description="Der Zugang ist gesperrt, bis das Abo wieder läuft." />
 
-            <div class="flex max-w-2xl items-start gap-3 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm">
-                <Lock class="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-                <div class="space-y-2">
+            <Alert variant="warning" class="max-w-2xl">
+                <Lock aria-hidden="true" />
+                <AlertDescription class="space-y-2">
                     <p>{{ hinweis }}</p>
-                    <p class="text-muted-foreground">
+                    <p>
                         Das Abo verwaltet die Inhaberin der Praxis unter <span class="font-medium">Einstellungen → Abo</span>. Bitte wenden Sie sich
                         an sie. Erinnerungen an bereits gebuchte Termine gehen weiter hinaus.
                     </p>
-                </div>
-            </div>
+                </AlertDescription>
+            </Alert>
         </div>
     </AppLayout>
 </template>

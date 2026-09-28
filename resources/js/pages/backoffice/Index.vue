@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
@@ -89,11 +90,13 @@ const spalten: Spalte<Mandant>[] = [
                 keine Termine. Wer hineinsehen muss, geht über die
                 Impersonation — mit Begründung und Freigabe.
             -->
-            <p class="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                <ShieldAlert class="mt-0.5 size-4 shrink-0" />
-                Kontaktnamen, Nachrichten und Termine erscheinen hier nicht. Für einen Blick in eine Praxis brauchen Sie deren Freigabe — jeder solche
-                Zugriff steht im Protokoll, auf beiden Seiten.
-            </p>
+            <Alert>
+                <ShieldAlert />
+                <AlertDescription>
+                    Kontaktnamen, Nachrichten und Termine erscheinen hier nicht. Für einen Blick in eine Praxis brauchen Sie deren Freigabe — jeder
+                    solche Zugriff steht im Protokoll, auf beiden Seiten.
+                </AlertDescription>
+            </Alert>
 
             <DataTable :spalten="spalten" :zeilen="gefiltert" :suchfelder="['name', 'slug']" suchtext="Praxis">
                 <template #werkzeuge>

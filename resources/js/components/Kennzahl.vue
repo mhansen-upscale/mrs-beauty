@@ -28,15 +28,19 @@ defineProps<{
         :class="['block rounded-md border bg-card p-4', href ? 'transition-colors hover:bg-muted/40' : '']"
     >
         <p class="text-xs text-muted-foreground">{{ titel }}</p>
+        <!--
+            Auf dem Handy eine Stufe kleiner: in halber Kachelbreite passte ein
+            Betrag wie „12.345,67 €" sonst nicht in die Zeile.
+        -->
         <p
             :class="[
-                'mt-1 flex items-center gap-1.5 text-2xl font-semibold',
+                'mt-1 flex items-center gap-1.5 text-xl font-semibold sm:text-2xl',
                 ton === 'kritisch' ? 'text-destructive' : ton === 'warnung' ? 'text-warning' : '',
             ]"
         >
             <AlertTriangle v-if="ton" class="size-4 shrink-0" aria-hidden="true" />
             <span v-if="ton" class="sr-only">{{ ton === 'kritisch' ? 'Kritisch:' : 'Achtung:' }}</span>
-            {{ wert }}
+            <span class="min-w-0 break-words">{{ wert }}</span>
         </p>
         <p v-if="zusatz" class="mt-0.5 text-xs text-muted-foreground">{{ zusatz }}</p>
     </component>

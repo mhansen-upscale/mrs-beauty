@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import EinfuehrungSprechblase from '@/components/EinfuehrungSprechblase.vue';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
-import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { useEinfuehrung } from '@/composables/useEinfuehrung';
 import { type NavGroup, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
@@ -32,6 +32,8 @@ const aktiv = (href: string): boolean =>
  * dafür gibt es `PopoverAnchor`. Der Punkt bleibt ein Link.
  */
 const einfuehrung = useEinfuehrung();
+
+const { isMobile } = useSidebar();
 </script>
 
 <template>
@@ -56,12 +58,18 @@ const einfuehrung = useEinfuehrung();
                         </SidebarMenuButton>
                     </PopoverAnchor>
 
+                    <!--
+                        Auf dem Handy liegt der Punkt in der Schublade, rechts
+                        daneben ist kein Platz: dort öffnet die Sprechblase
+                        nach unten und bleibt schmaler als der Schirm.
+                    -->
                     <PopoverContent
                         v-if="einfuehrung.zeigtAuf(item.href)"
-                        side="right"
+                        :side="isMobile ? 'bottom' : 'right'"
                         align="start"
                         :side-offset="12"
-                        class="w-80"
+                        :collision-padding="16"
+                        class="w-[min(20rem,calc(100vw-2rem))]"
                         @open-auto-focus="(ereignis: Event) => ereignis.preventDefault()"
                     >
                         <EinfuehrungSprechblase />

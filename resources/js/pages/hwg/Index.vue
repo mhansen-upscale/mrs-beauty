@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import Heading from '@/components/Heading.vue';
-import HeadingSmall from '@/components/HeadingSmall.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, CheckCircle2, Scale, XCircle } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, LoaderCircle, Scale, Search, XCircle } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 interface Befund {
@@ -60,16 +61,14 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                 Das steht hier oben, nicht in einer Fußnote — sonst entsteht
                 eine Haftung, die niemand tragen will.
             -->
-            <div class="space-y-1 rounded-md border p-4 text-sm">
-                <p class="flex items-center gap-2 font-medium">
-                    <Scale class="size-4 shrink-0" />
-                    Eine Prüfhilfe, keine Rechtsberatung
-                </p>
-                <p class="text-muted-foreground">
+            <Alert>
+                <Scale />
+                <AlertTitle>Eine Prüfhilfe, keine Rechtsberatung</AlertTitle>
+                <AlertDescription>
                     Wir zeigen, was uns auffällt, und nennen die Fundstelle. Die Entscheidung bleibt bei Ihnen — im Zweifel mit jemandem, der dafür
                     zugelassen ist. Verstöße gegen das Heilmittelwerbegesetz können mit bis zu {{ geld(bussgeld) }} geahndet werden.
-                </p>
-            </div>
+                </AlertDescription>
+            </Alert>
 
             <!--
                 **Kein Prüfsiegel** (Entscheidung C18). Die Ampel ist eine
@@ -81,11 +80,7 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
             </p>
 
             <!-- Text prüfen -->
-            <section class="rounded-md border bg-card">
-                <header class="border-b px-4 py-3">
-                    <HeadingSmall title="Text prüfen" description="Fügen Sie einen Anzeigentext ein, bevor er hinausgeht." />
-                </header>
-
+            <Abschnitt titel="Text prüfen" beschreibung="Fügen Sie einen Anzeigentext ein, bevor er hinausgeht." randlos>
                 <form class="space-y-4 p-4" @submit.prevent="pruefen">
                     <div class="grid gap-2">
                         <Label for="text">Ihr Text</Label>
@@ -97,7 +92,11 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                         <span>Zu diesem Text gehört ein Bild</span>
                     </label>
 
-                    <Button type="submit" :disabled="formular.processing || !formular.text">Prüfen</Button>
+                    <Button type="submit" :disabled="formular.processing || !formular.text">
+                        <LoaderCircle v-if="formular.processing" class="animate-spin" />
+                        <Search v-else />
+                        Prüfen
+                    </Button>
                 </form>
 
                 <div v-if="probe" class="space-y-3 border-t p-4">
@@ -127,23 +126,20 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                         Geprüft gegen Regelwerk {{ probe.version }}, Rechtsstand {{ datum(probe.rechtsstand) }}.
                     </p>
                 </div>
-            </section>
+            </Abschnitt>
 
             <!-- Der Bestand -->
-            <section class="rounded-md border bg-card">
-                <header class="border-b px-4 py-3">
-                    <!--
-                        Nicht die Buchungsseite: die zeigt weder Preis noch
-                        Beschreibung. Diese Texte speisen den Assistenten und
-                        später die Anzeigenvorschläge — dort werden sie zu
-                        Aussagen.
-                    -->
-                    <HeadingSmall
-                        title="Ihre Behandlungsbeschreibungen"
-                        description="Aus diesen Texten entstehen Antworten des Assistenten und später Anzeigenvorschläge."
-                    />
-                </header>
-
+            <!--
+                Nicht die Buchungsseite: die zeigt weder Preis noch
+                Beschreibung. Diese Texte speisen den Assistenten und
+                später die Anzeigenvorschläge — dort werden sie zu
+                Aussagen.
+            -->
+            <Abschnitt
+                titel="Ihre Behandlungsbeschreibungen"
+                beschreibung="Aus diesen Texten entstehen Antworten des Assistenten und später Anzeigenvorschläge."
+                randlos
+            >
                 <div class="space-y-3 p-4">
                     <p v-if="!katalog.length" class="text-sm text-muted-foreground">Sie haben noch keine Behandlungsbeschreibungen hinterlegt.</p>
 
@@ -161,25 +157,21 @@ const beanstandet = computed(() => props.katalog.filter((e) => e.ampel !== 'gree
                         </p>
                     </div>
                 </div>
-            </section>
+            </Abschnitt>
 
             <!--
                 „Die Prüfung sagt nicht nur, was nicht geht, sondern was
                 stattdessen geht." (docs/produkt.md) Ohne diesen Abschnitt ist
                 jeder Befund eine Sackgasse.
             -->
-            <section class="rounded-md border bg-card">
-                <header class="border-b px-4 py-3">
-                    <HeadingSmall title="Womit Sie stattdessen werben können" description="Formate, die zulässig sind und wirken." />
-                </header>
-
+            <Abschnitt titel="Womit Sie stattdessen werben können" beschreibung="Formate, die zulässig sind und wirken." randlos>
                 <div class="grid gap-3 p-4 sm:grid-cols-2">
                     <div v-for="format in formate" :key="format.titel" class="rounded-md border p-3 text-sm">
                         <p class="font-medium">{{ format.titel }}</p>
                         <p class="mt-1 text-muted-foreground">{{ format.beschreibung }}</p>
                     </div>
                 </div>
-            </section>
+            </Abschnitt>
         </div>
     </AppLayout>
 </template>

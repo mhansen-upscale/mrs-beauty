@@ -4,15 +4,16 @@ import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import Zeilenaktionen from '@/components/Zeilenaktionen.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem, type Spalte } from '@/types';
+import { type BreadcrumbItem, type Spalte, type Zeilenaktion } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { CalendarOff, CheckCircle2, CircleSlash, Pencil, Plus, Power, PowerOff, Trash2 } from 'lucide-vue-next';
+import { CalendarOff, CheckCircle2, CircleSlash, Pencil, Plus, Power, PowerOff, Save, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface Closure {
@@ -51,7 +52,8 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Standorte', href: '/standor
 const spalten: Spalte<LocationItem>[] = [
     { schluessel: 'name', titel: 'Name' },
     { schluessel: 'timezone', titel: 'Zeitzone', ab: 'lg' },
-    { schluessel: 'city', titel: 'Ort' },
+    // Auf dem Handy steht der Ort unter dem Namen (sm:hidden in der ersten Zelle).
+    { schluessel: 'city', titel: 'Ort', ab: 'sm' },
     { schluessel: 'practitioners', titel: 'Behandler', klasse: 'text-right tabular-nums', ab: 'md' },
     { schluessel: 'is_active', titel: 'Status' },
 ];
@@ -146,6 +148,13 @@ const deaktivieren = (standort: LocationItem) => router.delete(route('locations.
 
 const aktivieren = (standort: LocationItem) => router.put(route('locations.activate', { location: standort.uuid }), {}, { preserveScroll: true });
 
+const aktionen = (standort: LocationItem): Zeilenaktion[] => [
+    { symbol: Pencil, beschriftung: 'Bearbeiten', aktion: () => bearbeitenOeffnen(standort) },
+    { symbol: CalendarOff, beschriftung: `Schließzeiten (${standort.closures.length})`, aktion: () => schliesszeitenOeffnen(standort) },
+    { symbol: PowerOff, beschriftung: 'Deaktivieren', aktion: () => deaktivieren(standort), wenn: standort.is_active },
+    { symbol: Power, beschriftung: 'Aktivieren', aktion: () => aktivieren(standort), wenn: !standort.is_active },
+];
+
 const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 </script>
 
@@ -165,8 +174,9 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 </template>
 
                 <template #zelle-name="{ zeile }">
-                    <span class="font-medium">{{ zeile.name }}</span>
-                    <span class="block text-xs text-muted-foreground">{{ zeile.slug }}</span>
+                    <span class="break-words font-medium">{{ zeile.name }}</span>
+                    <span class="block break-all text-xs text-muted-foreground">{{ zeile.slug }}</span>
+                    <span v-if="zeile.city" class="block text-xs text-muted-foreground sm:hidden">{{ zeile.postal_code }} {{ zeile.city }}</span>
                 </template>
 
                 <template #zelle-city="{ zeile }">
@@ -186,14 +196,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 </template>
 
                 <template #aktionen="{ zeile }">
-                    <AktionsButton :icon="Pencil" beschriftung="Bearbeiten" @click="bearbeitenOeffnen(zeile)" />
-                    <AktionsButton
-                        :icon="CalendarOff"
-                        :beschriftung="`Schließzeiten (${zeile.closures.length})`"
-                        @click="schliesszeitenOeffnen(zeile)"
-                    />
-                    <AktionsButton v-if="zeile.is_active" :icon="PowerOff" beschriftung="Deaktivieren" @click="deaktivieren(zeile)" />
-                    <AktionsButton v-else :icon="Power" beschriftung="Aktivieren" @click="aktivieren(zeile)" />
+                    <Zeilenaktionen :aktionen="aktionen(zeile)" />
                 </template>
 
                 <template #leer>Noch kein Standort angelegt.</template>
@@ -206,10 +209,11 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Die Zeitzone entscheidet über jede Terminzeit an diesem Standort."
             :laeuft="formular.processing"
             :absende-text="bearbeitet ? 'Speichern' : 'Anlegen'"
+            :absende-symbol="bearbeitet ? Save : Plus"
             breit
             @absenden="speichern"
         >
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid items-start gap-4 sm:grid-cols-2">
                 <div class="grid gap-2">
                     <Label for="name">Name</Label>
                     <Input id="name" v-model="formular.name" />
@@ -266,22 +270,26 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Feiertage, Betriebsferien und Umbauten. In diesen Zeiträumen wird nichts angeboten."
             :laeuft="schliesszeit.processing"
             absende-text="Hinzufügen"
+            :absende-symbol="Plus"
             breit
             @update:offen="(wert: boolean) => !wert && (schliesszeitenVon = null)"
             @absenden="schliesszeitAnlegen"
         >
             <ul v-if="schliesszeiten().length" class="divide-y rounded-md border">
                 <li v-for="eintrag in schliesszeiten()" :key="eintrag.uuid" class="flex items-center gap-3 p-2 text-sm">
-                    <Badge variant="secondary">{{ eintrag.reason_label }}</Badge>
-                    <span class="text-muted-foreground">{{ datum(eintrag.starts_at) }} – {{ datum(eintrag.ends_at) }}</span>
-                    <span v-if="eintrag.note" class="min-w-0 truncate text-muted-foreground">{{ eintrag.note }}</span>
-                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" variant="ghost" class="ml-auto" @click="schliesszeitLoeschen(eintrag)" />
+                    <!-- Die Angaben brechen um, der Löschknopf bleibt rechts. -->
+                    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                        <Badge variant="secondary">{{ eintrag.reason_label }}</Badge>
+                        <span class="tabular-nums text-muted-foreground">{{ datum(eintrag.starts_at) }} – {{ datum(eintrag.ends_at) }}</span>
+                        <span v-if="eintrag.note" class="min-w-0 break-words text-muted-foreground">{{ eintrag.note }}</span>
+                    </div>
+                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" variant="ghost" class="shrink-0" @click="schliesszeitLoeschen(eintrag)" />
                 </li>
             </ul>
 
             <p v-else class="text-sm text-muted-foreground">Keine Schließzeit hinterlegt.</p>
 
-            <div class="grid gap-4 border-t pt-4 sm:grid-cols-3">
+            <div class="grid items-start gap-4 border-t pt-4 sm:grid-cols-3">
                 <div class="grid gap-2">
                     <Label for="grund">Grund</Label>
                     <Select v-model="schliesszeit.reason">

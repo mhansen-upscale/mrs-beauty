@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import AktionsButton from '@/components/AktionsButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, ArrowUp, Plus, Trash2 } from 'lucide-vue-next';
+import { AlertTriangle, ArrowRightLeft, ArrowUp, CalendarCheck, Plus, Trash2, UserCheck } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 
 interface Eintrag extends Record<string, unknown> {
@@ -59,7 +61,8 @@ const breadcrumbs: BreadcrumbItem[] = [{ title: 'Warteliste', href: '/warteliste
 
 const spalten: Spalte<Eintrag>[] = [
     { schluessel: 'name', titel: 'Wer' },
-    { schluessel: 'behandlung', titel: 'Wofür' },
+    // Auf dem Handy steht „Wofür“ unter dem Namen (sm:hidden in der ersten Zelle).
+    { schluessel: 'behandlung', titel: 'Wofür', ab: 'sm' },
     { schluessel: 'vorlauf', titel: 'Vorlauf', klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'wochentage', titel: 'Wann', sortierbar: false, ab: 'lg' },
     { schluessel: 'prioritaet', titel: 'Rang', klasse: 'text-right tabular-nums', ab: 'md' },
@@ -162,35 +165,42 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
                 entscheidet ein Mensch — und dafür muss er es sehen. Steht
                 deshalb über allem anderen.
             -->
-            <div v-if="klaerungen.length" class="space-y-3 rounded-md border border-warning/40 bg-warning/5 p-4">
-                <p class="flex items-center gap-2 text-sm font-medium text-warning">
-                    <AlertTriangle class="size-4 shrink-0" />
+            <Alert v-if="klaerungen.length" variant="warning">
+                <AlertTriangle />
+                <AlertTitle class="leading-snug">
                     Zu klären: {{ klaerungen.length === 1 ? 'eine Zusage' : `${klaerungen.length} Zusagen` }} für einen Termin, der noch belegt ist
-                </p>
+                </AlertTitle>
+                <AlertDescription class="space-y-3 pt-2">
+                    <div
+                        v-for="klaerung in klaerungen"
+                        :key="klaerung.uuid"
+                        class="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card p-3 text-foreground"
+                    >
+                        <div class="min-w-0 space-y-0.5">
+                            <p class="font-medium">{{ zeitpunkt(klaerung.beginn) }}</p>
+                            <p class="break-words text-xs text-muted-foreground">
+                                {{ klaerung.name }} hat zugesagt<template v-if="klaerung.zugesagt"> ({{ zeitpunkt(klaerung.zugesagt) }})</template>.
+                                <template v-if="klaerung.bisher">
+                                    Gebucht ist bisher {{ klaerung.bisher }} — ohne Reaktion auf die Erinnerung. Am besten kurz anrufen.
+                                </template>
+                            </p>
+                        </div>
 
-                <div
-                    v-for="klaerung in klaerungen"
-                    :key="klaerung.uuid"
-                    class="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-card p-3 text-sm"
-                >
-                    <div class="min-w-0 space-y-0.5">
-                        <p class="font-medium">{{ zeitpunkt(klaerung.beginn) }}</p>
-                        <p class="text-xs text-muted-foreground">
-                            {{ klaerung.name }} hat zugesagt<template v-if="klaerung.zugesagt"> ({{ zeitpunkt(klaerung.zugesagt) }})</template>.
-                            <template v-if="klaerung.bisher">
-                                Gebucht ist bisher {{ klaerung.bisher }} — ohne Reaktion auf die Erinnerung. Am besten kurz anrufen.
-                            </template>
-                        </p>
+                        <div class="flex min-w-0 flex-wrap gap-2">
+                            <Button size="sm" class="max-w-full" @click="uebergeben(klaerung.uuid)">
+                                <ArrowRightLeft />
+                                <span class="truncate">Termin an {{ klaerung.name }} geben</span>
+                            </Button>
+                            <Button size="sm" variant="outline" @click="behalten(klaerung.uuid)">
+                                <CalendarCheck />
+                                Bisherigen Termin behalten
+                            </Button>
+                        </div>
                     </div>
 
-                    <div class="flex flex-wrap gap-2">
-                        <Button size="sm" @click="uebergeben(klaerung.uuid)">Termin an {{ klaerung.name }} geben</Button>
-                        <Button size="sm" variant="outline" @click="behalten(klaerung.uuid)">Bisherigen Termin behalten</Button>
-                    </div>
-                </div>
-
-                <InputError :message="klaerungsfehler" />
-            </div>
+                    <InputError :message="klaerungsfehler" />
+                </AlertDescription>
+            </Alert>
 
             <!-- Kennzahlen: das Verkaufsargument gehört ins Produkt. -->
             <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -228,14 +238,15 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
                 </template>
 
                 <template #zelle-name="{ zeile }">
-                    <span class="flex items-center gap-2">
-                        <span class="font-medium">{{ zeile.name }}</span>
+                    <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span class="min-w-0 break-words font-medium">{{ zeile.name }}</span>
                         <!-- K11 sichtbar: ohne Einwilligung geht nichts hinaus. -->
                         <Badge v-if="!zeile.erreichbar" variant="warning" groesse="klein">
                             <AlertTriangle />
                             Keine Einwilligung
                         </Badge>
                     </span>
+                    <span class="block text-xs text-muted-foreground sm:hidden">{{ zeile.behandlung }}</span>
                 </template>
 
                 <template #zelle-vorlauf="{ zeile }">{{ zeile.vorlauf }} h</template>
@@ -262,11 +273,10 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
                 <template #leer>Niemand wartet. Das ist entweder gut oder ein Hinweis darauf, dass niemand gefragt wird.</template>
             </DataTable>
 
-            <div v-if="offers.length" class="space-y-2">
-                <p class="text-sm font-medium">Letzte Angebote</p>
-                <ul class="divide-y rounded-md border text-sm">
-                    <li v-for="angebot in offers" :key="angebot.uuid" class="flex flex-wrap items-center gap-2 px-3 py-2">
-                        <span class="font-medium">{{ angebot.name }}</span>
+            <Abschnitt v-if="offers.length" titel="Letzte Angebote" randlos>
+                <ul class="divide-y text-sm">
+                    <li v-for="angebot in offers" :key="angebot.uuid" class="flex flex-wrap items-center gap-2 px-4 py-2">
+                        <span class="min-w-0 break-words font-medium">{{ angebot.name }}</span>
                         <span class="text-muted-foreground">{{ zeitpunkt(angebot.beginn) }}</span>
                         <Badge variant="secondary">{{ angebot.ausloeser }}</Badge>
                         <Badge class="sm:ml-auto" :variant="angebot.status === 'accepted' ? 'success' : 'secondary'">
@@ -274,10 +284,13 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
                         </Badge>
                     </li>
                 </ul>
-                <p class="text-xs text-muted-foreground">
-                    Höchstens {{ grenze }} Angebote je Person und Monat — sonst verbrennt der Kanal, und WhatsApp senkt das Versandlimit.
-                </p>
-            </div>
+
+                <template #fuss>
+                    <p class="text-xs text-muted-foreground">
+                        Höchstens {{ grenze }} Angebote je Person und Monat — sonst verbrennt der Kanal, und WhatsApp senkt das Versandlimit.
+                    </p>
+                </template>
+            </Abschnitt>
         </div>
 
         <FormularDialog
@@ -286,25 +299,33 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
             beschreibung="Je genauer die Angaben, desto seltener bekommt jemand ein Angebot, das ihm nicht passt."
             :laeuft="formular.processing"
             absende-text="Eintragen"
+            :absende-symbol="Plus"
             breit
             @absenden="speichern"
         >
             <div class="grid gap-2">
                 <Label for="kontakt">Wer wartet?</Label>
                 <Input id="kontakt" v-model="kontaktbegriff" placeholder="Nachname, E-Mail oder Nummer" />
-                <p v-if="formular.contactName" class="text-sm">
+                <p v-if="formular.contactName" class="break-words text-sm">
                     Gewählt: <strong>{{ formular.contactName }}</strong>
                 </p>
                 <ul v-else-if="kontaktsuche.length" class="divide-y rounded-md border">
-                    <li v-for="treffer in kontaktsuche" :key="treffer.uuid" class="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                        <span>{{ treffer.name }}</span>
-                        <Button size="sm" variant="outline" type="button" @click="kontaktWaehlen(treffer)">Wählen</Button>
+                    <li
+                        v-for="treffer in kontaktsuche"
+                        :key="treffer.uuid"
+                        class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
+                    >
+                        <span class="min-w-0 break-words">{{ treffer.name }}</span>
+                        <Button size="sm" variant="outline" type="button" @click="kontaktWaehlen(treffer)">
+                            <UserCheck />
+                            Wählen
+                        </Button>
                     </li>
                 </ul>
                 <InputError :message="formular.errors.contact" />
             </div>
 
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid items-start gap-4 sm:grid-cols-2">
                 <div class="grid gap-2">
                     <Label for="art">Terminart</Label>
                     <Select v-model="formular.appointment_type">
@@ -318,8 +339,8 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
 
                 <div class="grid gap-2">
                     <Label for="vorlauf">Vorlauf in Stunden</Label>
-                    <Input id="vorlauf" v-model="formular.min_notice_hours" type="number" min="0" max="336" />
-                    <p class="text-xs text-muted-foreground">
+                    <Input id="vorlauf" v-model="formular.min_notice_hours" type="number" min="0" max="336" aria-describedby="vorlauf-hinweis" />
+                    <p id="vorlauf-hinweis" class="text-xs text-muted-foreground">
                         Wie kurzfristig darf es sein? Wer zwei Tage braucht, bekommt keine Angebote für morgen früh.
                     </p>
                     <InputError :message="formular.errors.min_notice_hours" />
@@ -339,12 +360,18 @@ const zeitpunkt = (iso: string | null): string => (iso ? new Date(iso).toLocaleS
             <div class="grid gap-2">
                 <Label>Zeitfenster</Label>
                 <div v-for="(fenster, stelle) in formular.time_windows" :key="stelle" class="flex flex-wrap items-center gap-2">
-                    <Input v-model="fenster.von" type="time" class="w-28 shrink-0" />
+                    <Input v-model="fenster.von" type="time" class="w-28 shrink-0" :aria-label="`Zeitfenster ${stelle + 1} von`" />
                     <span class="text-muted-foreground">bis</span>
-                    <Input v-model="fenster.bis" type="time" class="w-28 shrink-0" />
-                    <Button type="button" variant="ghost" @click="formular.time_windows.splice(stelle, 1)">Entfernen</Button>
+                    <Input v-model="fenster.bis" type="time" class="w-28 shrink-0" :aria-label="`Zeitfenster ${stelle + 1} bis`" />
+                    <Button type="button" variant="ghost" @click="formular.time_windows.splice(stelle, 1)">
+                        <Trash2 />
+                        Entfernen
+                    </Button>
                 </div>
-                <Button type="button" variant="outline" class="w-fit" @click="fensterHinzu">Zeitfenster hinzufügen</Button>
+                <Button type="button" variant="outline" class="w-fit" @click="fensterHinzu">
+                    <Plus />
+                    Zeitfenster hinzufügen
+                </Button>
                 <p class="text-xs text-muted-foreground">Ohne Angabe passt jede Uhrzeit.</p>
             </div>
 

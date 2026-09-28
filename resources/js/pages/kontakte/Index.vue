@@ -1,18 +1,21 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import AktionsButton from '@/components/AktionsButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import Zeilenaktionen from '@/components/Zeilenaktionen.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem, type Spalte } from '@/types';
+import { type BreadcrumbItem, type Spalte, type Zeilenaktion } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AtSign, Merge, MessageSquarePlus, Pencil, Phone, Plus, RotateCcw, Search, Trash2, Undo2 } from 'lucide-vue-next';
+import { AlertTriangle, AtSign, Merge, MessageSquarePlus, Pencil, Phone, Plus, RotateCcw, Save, Search, Trash2, Undo2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Identity {
@@ -161,6 +164,12 @@ const rueckgaengig = (vorgang: MergeItem) => {
 };
 
 const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy', { contact: kontakt.uuid }), { preserveScroll: true });
+
+const aktionen = (kontakt: ContactItem): Zeilenaktion[] => [
+    { symbol: Pencil, beschriftung: 'Bearbeiten', aktion: () => bearbeitenOeffnen(kontakt) },
+    { symbol: MessageSquarePlus, beschriftung: `Kanäle (${kontakt.identities.length})`, aktion: () => kanaeleOeffnen(kontakt) },
+    { symbol: Trash2, beschriftung: 'Löschen', aktion: () => loeschen(kontakt), gefahr: true },
+];
 </script>
 
 <template>
@@ -178,26 +187,29 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
                 und nicht getan. Zwei Personen in einem Datensatz sind nicht
                 reparierbar wie zwei Datensätze einer Person.
             -->
-            <div v-if="suggestions.length > 0" class="space-y-3 rounded-md border border-warning/40 bg-warning/10 px-4 py-3">
-                <p class="text-sm font-medium">
+            <Alert v-if="suggestions.length > 0" variant="warning">
+                <AlertTriangle />
+                <AlertTitle>
                     {{ suggestions.length === 1 ? 'Ein möglicher Doppeleintrag' : `${suggestions.length} mögliche Doppeleinträge` }}
-                </p>
-                <p class="text-xs text-muted-foreground">
-                    Gleicher Name, aber keine gemeinsame E-Mail-Adresse und keine gemeinsame Telefonnummer. Zusammengeführt wird nur, was Sie
-                    bestätigen.
-                </p>
+                </AlertTitle>
+                <AlertDescription class="space-y-3">
+                    <p>
+                        Gleicher Name, aber keine gemeinsame E-Mail-Adresse und keine gemeinsame Telefonnummer. Zusammengeführt wird nur, was Sie
+                        bestätigen.
+                    </p>
 
-                <div v-for="(paar, index) in suggestions" :key="index" class="flex flex-wrap items-center gap-3 text-sm">
-                    <span class="font-medium">{{ paar.a.name }}</span>
-                    <span class="text-muted-foreground">{{ paar.a.email ?? paar.a.phone_display ?? 'ohne Kontaktweg' }}</span>
-                    <span class="text-muted-foreground">und</span>
-                    <span class="text-muted-foreground">{{ paar.b.email ?? paar.b.phone_display ?? 'ohne Kontaktweg' }}</span>
-                    <Button size="sm" variant="outline" @click="zusammenfuehren(paar.a, paar.b)">
-                        <Merge />
-                        Zusammenführen
-                    </Button>
-                </div>
-            </div>
+                    <div v-for="(paar, index) in suggestions" :key="index" class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span class="min-w-0 break-words font-medium">{{ paar.a.name }}</span>
+                        <span class="min-w-0 break-all">{{ paar.a.email ?? paar.a.phone_display ?? 'ohne Kontaktweg' }}</span>
+                        <span>und</span>
+                        <span class="min-w-0 break-all">{{ paar.b.email ?? paar.b.phone_display ?? 'ohne Kontaktweg' }}</span>
+                        <Button size="sm" variant="outline" @click="zusammenfuehren(paar.a, paar.b)">
+                            <Merge />
+                            Zusammenführen
+                        </Button>
+                    </div>
+                </AlertDescription>
+            </Alert>
 
             <div class="flex flex-wrap items-end gap-2">
                 <div class="grid w-full gap-1.5 sm:w-auto">
@@ -209,18 +221,22 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
                             v-model="suchbegriff"
                             class="w-full pl-8 sm:w-80"
                             placeholder="Nachname, E-Mail oder Telefonnummer"
+                            aria-describedby="suche-hinweis"
                             @keyup.enter="suchen"
                         />
                     </div>
                 </div>
-                <Button variant="outline" class="w-full sm:w-auto" @click="suchen">Suchen</Button>
+                <Button variant="outline" class="w-full sm:w-auto" @click="suchen">
+                    <Search />
+                    Suchen
+                </Button>
             </div>
 
             <!--
                 Das gehört sichtbar in die Oberfläche, sonst hält der Empfang
                 die Suche für kaputt.
             -->
-            <p class="text-xs text-muted-foreground">
+            <p id="suche-hinweis" class="text-xs text-muted-foreground">
                 Die Suche findet nur <strong>exakte</strong> Treffer — „Mül“ findet nichts, „Müller“ findet alle Müllers. Verschlüsselte Felder lassen
                 keine Teilsuche zu.
                 <span v-if="search">Gesucht wird gerade nach {{ feldname }}.</span>
@@ -236,13 +252,15 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
                 </template>
 
                 <template #zelle-name="{ zeile }">
-                    <span class="font-medium">{{ zeile.name }}</span>
+                    <span class="break-words font-medium">{{ zeile.name }}</span>
+                    <!-- Unter md fehlt die Spalte Telefon — ohne E-Mail ist sie der einzige Kontaktweg. -->
+                    <span v-if="zeile.phone_display" class="block text-xs text-muted-foreground md:hidden">{{ zeile.phone_display }}</span>
                 </template>
 
                 <template #zelle-email="{ zeile }">
-                    <span v-if="zeile.email" class="inline-flex items-center gap-1">
-                        <AtSign class="size-3 text-muted-foreground" />
-                        {{ zeile.email }}
+                    <span v-if="zeile.email" class="inline-flex min-w-0 items-center gap-1">
+                        <AtSign class="size-3 shrink-0 text-muted-foreground" />
+                        <span class="min-w-0 break-all">{{ zeile.email }}</span>
                     </span>
                     <span v-else class="text-muted-foreground">—</span>
                 </template>
@@ -267,9 +285,7 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
                 <template #zelle-created_at="{ zeile }">{{ datum(zeile.created_at) }}</template>
 
                 <template #aktionen="{ zeile }">
-                    <AktionsButton :icon="Pencil" beschriftung="Bearbeiten" @click="bearbeitenOeffnen(zeile)" />
-                    <AktionsButton :icon="MessageSquarePlus" :beschriftung="`Kanäle (${zeile.identities.length})`" @click="kanaeleOeffnen(zeile)" />
-                    <AktionsButton :icon="Trash2" beschriftung="Löschen" @click="loeschen(zeile)" />
+                    <Zeilenaktionen :aktionen="aktionen(zeile)" />
                 </template>
 
                 <template #leer>
@@ -279,15 +295,13 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
             </DataTable>
 
             <!-- Entscheidung D7: umkehrbar, solange der Snapshot gilt. -->
-            <div v-if="merges.length > 0" class="space-y-2 rounded-md border bg-card px-4 py-3">
-                <p class="text-sm font-medium">Zusammenführungen</p>
-                <p class="text-xs text-muted-foreground">
-                    Eine Zusammenführung lässt sich zurücknehmen, solange der Sicherungsstand gilt. Danach bleibt der Vorgang sichtbar, ist aber nicht
-                    mehr umkehrbar.
-                </p>
-
+            <Abschnitt
+                v-if="merges.length > 0"
+                titel="Zusammenführungen"
+                beschreibung="Eine Zusammenführung lässt sich zurücknehmen, solange der Sicherungsstand gilt. Danach bleibt der Vorgang sichtbar, ist aber nicht mehr umkehrbar."
+            >
                 <div v-for="vorgang in merges" :key="vorgang.uuid" class="flex flex-wrap items-center gap-3 text-sm">
-                    <span class="font-medium">{{ vorgang.winner }}</span>
+                    <span class="min-w-0 break-words font-medium">{{ vorgang.winner }}</span>
                     <span class="text-muted-foreground">{{ datum(vorgang.merged_at) }}</span>
                     <Button v-if="vorgang.revertable" size="sm" variant="outline" @click="rueckgaengig(vorgang)">
                         <Undo2 />
@@ -298,7 +312,7 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
                         Nicht mehr umkehrbar
                     </span>
                 </div>
-            </div>
+            </Abschnitt>
         </div>
 
         <FormularDialog
@@ -306,9 +320,11 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
             :titel="bearbeitet ? 'Kontakt bearbeiten' : 'Kontakt anlegen'"
             beschreibung="Nur was für einen Termin nötig ist. Behandlungsverläufe gehören nicht hierher."
             :laeuft="formular.processing"
+            :absende-text="bearbeitet ? 'Speichern' : 'Anlegen'"
+            :absende-symbol="bearbeitet ? Save : Plus"
             @absenden="speichern"
         >
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid items-start gap-4 sm:grid-cols-2">
                 <div class="grid gap-1.5">
                     <Label for="first_name">Vorname</Label>
                     <Input id="first_name" v-model="formular.first_name" />
@@ -337,21 +353,23 @@ const loeschen = (kontakt: ContactItem) => router.delete(route('contacts.destroy
             :titel="`Kanäle von ${kanaeleVon?.name ?? ''}`"
             beschreibung="Unter welchen Kennungen dieselbe Person bei den Anbietern geführt wird."
             :laeuft="kanal.processing"
+            absende-text="Hinzufügen"
+            :absende-symbol="Plus"
             @update:offen="(wert) => (kanaeleVon = wert ? kanaeleVon : null)"
             @absenden="kanalAnlegen"
         >
             <div class="space-y-2">
                 <div v-for="identitaet in kanaele()" :key="identitaet.uuid" class="flex items-center justify-between gap-2 rounded border px-3 py-2">
-                    <div class="text-sm">
+                    <div class="min-w-0 text-sm">
                         <span class="font-medium">{{ identitaet.channel_label }}</span>
-                        <span class="block text-xs text-muted-foreground">{{ identitaet.external_id }}</span>
+                        <span class="block break-all text-xs text-muted-foreground">{{ identitaet.external_id }}</span>
                     </div>
-                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" @click="kanalLoeschen(identitaet)" />
+                    <AktionsButton :icon="Trash2" beschriftung="Entfernen" class="shrink-0" @click="kanalLoeschen(identitaet)" />
                 </div>
                 <p v-if="kanaele().length === 0" class="text-sm text-muted-foreground">Noch kein Kanal hinterlegt.</p>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-3">
+            <div class="grid items-start gap-4 md:grid-cols-3">
                 <div class="grid gap-1.5">
                     <Label for="channel">Kanal</Label>
                     <Select v-model="kanal.channel">

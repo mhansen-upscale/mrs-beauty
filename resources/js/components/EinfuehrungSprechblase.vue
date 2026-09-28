@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { useEinfuehrung } from '@/composables/useEinfuehrung';
+import { ArrowLeft, ArrowRight, Check, SkipForward } from 'lucide-vue-next';
 
 /**
  * Der Inhalt einer Sprechblase: ein Satz und der Weg weiter.
@@ -36,11 +37,17 @@ const weiter = () => {
             <span class="text-xs tabular-nums text-muted-foreground"> {{ einfuehrung.stelle.value + 1 }} von {{ einfuehrung.anzahl.value }} </span>
 
             <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-                <Button v-if="einfuehrung.stelle.value > 0" type="button" size="sm" variant="ghost" @click="einfuehrung.zurueck()"> Zurück </Button>
+                <Button v-if="einfuehrung.stelle.value > 0" type="button" size="sm" variant="ghost" @click="einfuehrung.zurueck()">
+                    <ArrowLeft />
+                    Zurück
+                </Button>
                 <Button v-if="!einfuehrung.letzter.value" type="button" size="sm" variant="ghost" @click="einfuehrung.abschliessen()">
+                    <SkipForward />
                     Überspringen
                 </Button>
                 <Button type="button" size="sm" @click="weiter">
+                    <Check v-if="einfuehrung.letzter.value" />
+                    <ArrowRight v-else />
                     {{ einfuehrung.letzter.value ? 'Fertig' : 'Weiter' }}
                 </Button>
             </div>

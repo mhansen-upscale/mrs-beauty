@@ -57,12 +57,12 @@ const ansicht = ref<'html' | 'text'>('html');
             referrerpolicy="no-referrer"
             :srcdoc="vorschau.html"
             title="Vorschau der Mail"
-            class="h-[640px] w-full rounded-md border bg-card"
+            class="h-[60vh] min-h-80 w-full rounded-md border bg-card md:h-[640px]"
         />
 
         <pre
             v-show="ansicht === 'text'"
-            class="max-h-[640px] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-4 font-mono text-xs"
+            class="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-md border bg-muted/40 p-4 font-mono text-xs md:max-h-[640px]"
             >{{ vorschau.text }}</pre
         >
     </div>

@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import AktionsButton from '@/components/AktionsButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import Zeilenaktionen from '@/components/Zeilenaktionen.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
-import { type BreadcrumbItem, type SharedData, type Spalte } from '@/types';
+import { type BreadcrumbItem, type SharedData, type Spalte, type Zeilenaktion } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, CircleSlash, ShieldCheck, ShieldOff, Trash2, UserCog, UserPlus } from 'lucide-vue-next';
+import { CheckCircle2, CircleSlash, RotateCcw, ShieldCheck, ShieldOff, Trash2, UserCog, UserPlus } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -196,6 +196,34 @@ const faktorZuruecksetzen = () => {
         onFinish: () => faktor.reset('current_password'),
     });
 };
+
+/**
+ * Vier Aktionen je Zeile — auf dem Handy stehen sie in einem Menü.
+ * Sich selbst und den letzten Super-Admin kann niemand herabstufen,
+ * deaktivieren oder löschen; der Server prüft das ebenso.
+ */
+const zeilenaktionen = (konto: Konto): Zeilenaktion[] => {
+    const geschuetzt = konto.email === selbst.value || konto.letzterSuperAdmin;
+
+    return [
+        { symbol: UserCog, beschriftung: 'Rolle ändern', aktion: () => rolleOeffnen(konto), gesperrt: geschuetzt },
+        {
+            symbol: CircleSlash,
+            beschriftung: 'Konto deaktivieren',
+            aktion: () => zustandOeffnen(konto),
+            gesperrt: geschuetzt,
+            wenn: !konto.deaktiviert,
+        },
+        { symbol: CheckCircle2, beschriftung: 'Konto reaktivieren', aktion: () => zustandOeffnen(konto), wenn: konto.deaktiviert },
+        {
+            symbol: ShieldOff,
+            beschriftung: 'Zweiten Faktor zurücksetzen',
+            aktion: () => faktorOeffnen(konto),
+            wenn: konto.zweiFaktor !== null && konto.email !== selbst.value,
+        },
+        { symbol: Trash2, beschriftung: 'Konto löschen', aktion: () => loeschenOeffnen(konto), gesperrt: geschuetzt, gefahr: true },
+    ];
+};
 </script>
 
 <template>
@@ -216,6 +244,12 @@ const faktorZuruecksetzen = () => {
                 <template #zelle-name="{ zeile }">
                     <span class="font-medium">{{ zeile.name }}</span>
                     <span v-if="zeile.email === selbst" class="text-xs text-muted-foreground"> · Sie</span>
+                    <!-- Die Spalte E-Mail steht erst ab md; darunter hier. -->
+                    <span class="block break-all text-xs text-muted-foreground md:hidden">{{ zeile.email }}</span>
+                </template>
+
+                <template #zelle-email="{ zeile }">
+                    <span class="break-all">{{ zeile.email }}</span>
                 </template>
 
                 <template #zelle-rolleLabel="{ zeile }">
@@ -242,32 +276,7 @@ const faktorZuruecksetzen = () => {
                 </template>
 
                 <template #aktionen="{ zeile }">
-                    <AktionsButton
-                        :icon="UserCog"
-                        beschriftung="Rolle ändern"
-                        :disabled="zeile.email === selbst || zeile.letzterSuperAdmin"
-                        @click="rolleOeffnen(zeile)"
-                    />
-                    <AktionsButton
-                        v-if="!zeile.deaktiviert"
-                        :icon="CircleSlash"
-                        beschriftung="Konto deaktivieren"
-                        :disabled="zeile.email === selbst || zeile.letzterSuperAdmin"
-                        @click="zustandOeffnen(zeile)"
-                    />
-                    <AktionsButton v-else :icon="CheckCircle2" beschriftung="Konto reaktivieren" @click="zustandOeffnen(zeile)" />
-                    <AktionsButton
-                        v-if="zeile.zweiFaktor && zeile.email !== selbst"
-                        :icon="ShieldOff"
-                        beschriftung="Zweiten Faktor zurücksetzen"
-                        @click="faktorOeffnen(zeile)"
-                    />
-                    <AktionsButton
-                        :icon="Trash2"
-                        beschriftung="Konto löschen"
-                        :disabled="zeile.email === selbst || zeile.letzterSuperAdmin"
-                        @click="loeschenOeffnen(zeile)"
-                    />
+                    <Zeilenaktionen :aktionen="zeilenaktionen(zeile)" />
                 </template>
 
                 <template #leer>Noch kein Betreiberkonto.</template>
@@ -286,6 +295,7 @@ const faktorZuruecksetzen = () => {
             beschreibung="Die Person bekommt einen Link, um ihr Passwort selbst zu setzen. Niemand sonst kennt es."
             :laeuft="anlegen.processing"
             absende-text="Anlegen"
+            :absende-symbol="UserPlus"
             @absenden="kontoAnlegen"
         >
             <div class="grid gap-2">
@@ -303,12 +313,12 @@ const faktorZuruecksetzen = () => {
             <div class="grid gap-2">
                 <Label for="rolle">Rolle</Label>
                 <Select v-model="anlegen.rolle">
-                    <SelectTrigger id="rolle"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="rolle" aria-describedby="rolle-hinweis"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem v-for="eintrag in rollen" :key="eintrag.wert" :value="eintrag.wert">{{ eintrag.label }}</SelectItem>
                     </SelectContent>
                 </Select>
-                <p class="text-xs text-muted-foreground">{{ beschreibung(anlegen.rolle) }}</p>
+                <p id="rolle-hinweis" class="text-xs text-muted-foreground">{{ beschreibung(anlegen.rolle) }}</p>
                 <InputError :message="anlegen.errors.rolle" />
             </div>
 
@@ -325,17 +335,18 @@ const faktorZuruecksetzen = () => {
             beschreibung="Die neue Rolle gilt ab der nächsten Anfrage. Der Wechsel steht im Protokoll."
             :laeuft="rolle.processing"
             absende-text="Rolle ändern"
+            :absende-symbol="UserCog"
             @absenden="rolleSpeichern"
         >
             <div class="grid gap-2">
                 <Label for="neue-rolle">Rolle</Label>
                 <Select v-model="rolle.rolle">
-                    <SelectTrigger id="neue-rolle"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="neue-rolle" aria-describedby="neue-rolle-hinweis"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem v-for="eintrag in rollen" :key="eintrag.wert" :value="eintrag.wert">{{ eintrag.label }}</SelectItem>
                     </SelectContent>
                 </Select>
-                <p class="text-xs text-muted-foreground">{{ beschreibung(rolle.rolle) }}</p>
+                <p id="neue-rolle-hinweis" class="text-xs text-muted-foreground">{{ beschreibung(rolle.rolle) }}</p>
                 <InputError :message="rolle.errors.rolle" />
             </div>
 
@@ -356,6 +367,7 @@ const faktorZuruecksetzen = () => {
             "
             :laeuft="zustand.processing"
             :absende-text="gewaehlt?.deaktiviert ? 'Reaktivieren' : 'Deaktivieren'"
+            :absende-symbol="gewaehlt?.deaktiviert ? CheckCircle2 : CircleSlash"
             @absenden="zustandSpeichern"
         >
             <div class="grid gap-2">
@@ -371,6 +383,7 @@ const faktorZuruecksetzen = () => {
             beschreibung="Endgültig: Das Konto lässt sich nicht wiederherstellen. Die Person ist sofort abgemeldet, eine laufende Impersonation endet. Ihre Einträge im Protokoll bleiben, mit Namen. Für eine Pause genügt Deaktivieren."
             :laeuft="loeschen.processing"
             absende-text="Endgültig löschen"
+            :absende-symbol="Trash2"
             @absenden="kontoLoeschen"
         >
             <div class="grid gap-2">
@@ -386,6 +399,7 @@ const faktorZuruecksetzen = () => {
             beschreibung="Für ein verlorenes Telefon. Die Person meldet sich danach nur mit Passwort an und richtet den zweiten Faktor neu ein. Der Vorgang steht im Protokoll."
             :laeuft="faktor.processing"
             absende-text="Zurücksetzen"
+            :absende-symbol="RotateCcw"
             @absenden="faktorZuruecksetzen"
         >
             <div class="grid gap-2">

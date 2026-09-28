@@ -105,6 +105,46 @@ getestet.
 nicht bewährt: die Zeilen springen, die Felder liegen je nach Spaltenbreite
 woanders, und bei zwei offenen Abschnitten weiß niemand mehr, welches
 Formular er gerade ausfüllt.
+Der Absendeknopf sagt, was er tut: „Speichern" ist nur die Vorgabe, ein
+Dialog, der anlegt, einlädt oder schließt, nennt das in `absendeText` und
+zeigt es mit `absendeSymbol`. Die Fußzeile klebt unten — auf dem Handy lag
+der Knopf eines langen Dialogs sonst außer Sicht.
+
+**Eine Formularseite speichert über die `Speicherleiste`.** Sie erscheint
+erst, wenn etwas geändert wurde, sagt „Nicht gespeicherte Änderungen" und
+danach kurz „Gespeichert." — und fragt, wer mit Änderungen die Seite
+verlässt. Sie steht als letztes Kind **im** Formular: `sticky` klebt nur,
+solange der umgebende Block sichtbar ist. Ein Feld, das nicht zum Inhalt
+gehört — das eigene Passwort vor einer wirksamen Handlung (C14) —, geht über
+`transform()` hinaus, nicht über die Daten von `useForm`; sonst ist das
+Formular nach dem Leeren sofort wieder „geändert". Handlungen wie „Prüfen",
+„Senden" oder „Einladen" sind kein Speichern und behalten ihren Knopf.
+
+**Jeder Abschnitt einer Seite ist ein `Abschnitt`**: Kopf mit Titel (`h2`),
+Beschreibung und `#aktionen`, darunter der Inhalt. Vorher gab es fünf
+Muster nebeneinander. Der Rumpf ist ein Container: Felder richten ihre
+Spalten nach der Breite des Abschnitts (`@lg:grid-cols-2`), nicht nach der
+des Fensters.
+
+**Rechts, wenn Platz ist, sonst darunter.** Eigenständige Handlungen neben
+einem Formular — Probemail, Logo — stehen in einer Nebenspalte:
+`@container` → `grid items-start gap-6 @4xl:grid-cols-[minmax(0,1fr)_22rem]`.
+Container Queries (`@tailwindcss/container-queries`) statt Fensterbreiten,
+weil sich die Seitenleiste einklappen lässt und die Einstellungen eine
+eigene Navigationsspalte haben.
+
+**Ein Feld hat eine feste Reihenfolge:** `Label` → Steuerelement → Hinweis
+(`text-xs text-muted-foreground`, per `aria-describedby` verbunden) →
+`InputError`. Der Fehler steht als direktes Kind im Feld; daran hängt der
+rote Rahmen des Steuerelements (`resources/css/app.css`). Eine Meldung für
+das ganze Formular gehört deshalb nicht als direktes Kind in einen Block mit
+mehreren Feldern. Feldraster richten oben aus (`items-start`) — sonst rutscht
+das Nachbarfeld eines Felds mit Hinweis nach unten.
+
+**Ein Hinweis ist ein `Alert`** (`ui/alert`, Töne `default`, `destructive`,
+`warning`, `success`, `info`), kein Kasten von Hand, und er beginnt mit einem
+Symbol. Vorher gab es rund vierzig Kästen in drei Farbstärken. Durchgesetzt
+durch `tests/Feature/Design/BauteileTest.php`.
 
 **Jede Liste ist eine `DataTable`** — mit Suche, Sortierung und Blättern,
 nicht als `<ul>` mit Zeilen. Bewusst ohne TanStack Table: die Tabellen dieses
@@ -113,7 +153,20 @@ mandantengefiltert.
 
 **Jeder Button trägt ein Symbol.** Zeilenaktionen sind über `AktionsButton`
 nur Symbol — mit Tooltip und `aria-label`, denn ein Symbol allein ist keine
-Beschriftung.
+Beschriftung. Beim Laden ersetzt `LoaderCircle` (drehend) das Symbol, es
+steht nicht daneben. Ausgenommen ist die Buchungsseite, deren Knöpfe
+großteils Kalendertage und Uhrzeiten sind. Durchgesetzt durch
+`tests/Feature/Design/BauteileTest.php`.
+
+**Ab drei Aktionen je Zeile gilt `Zeilenaktionen`.** Ab `sm` stehen sie als
+Symbolknöpfe nebeneinander, darunter in einem Menü „Weitere Aktionen" mit
+sichtbarer Beschriftung — ein Tooltip braucht eine Maus.
+
+**Kein Steuerelement verschwindet auf dem Handy ohne Ersatz.** Eine Spalte
+darf unter einem Umbruchpunkt ausgeblendet werden (`Spalte.ab`); trägt sie ein
+Steuerelement — eine Rolle, eine Sichtbarkeit —, steht es darunter zusätzlich
+in der ersten Zelle (`md:hidden`). Vorher waren in Behandler Arbeitszeiten,
+Bild und Abwesenheiten auf dem Telefon schlicht nicht erreichbar.
 
 **Arbeitsbereiche gehören in die Hauptnavigation, nicht hinter ein Zahnrad.**
 Standorte, Behandler, Behandlungen, Terminarten, Team und Protokoll sind
@@ -158,13 +211,17 @@ Vue verwirft ein `@click` am Aufrufort dann stillschweigend. Wer eine
 Komponente um einen Provider wickelt, deklariert das Ereignis ausdrücklich —
 siehe `AktionsButton`.
 
-- **Seitenaktionen stehen in der Werkzeugzeile der Tabelle**
-  (`<DataTable #werkzeuge>`), nicht neben der Überschrift. `Heading` ist
-  **mehrwurzelig** — Überschrift *und* Trennlinie —, und in einer Flex-Zeile
-  wird die Trennlinie zum zweiten Flex-Element und schiebt alles Weitere in
-  die nächste Zeile. Vue sagt dazu nichts; man sieht es nur. Dieselbe Falle
-  wie beim `AktionsButton`, dessen Wurzel ein `TooltipProvider` ist.
-  Durchgesetzt von `tests/Feature/Design/BauteileTest.php`.
+- **Jede Seite beginnt mit `Heading`** (`h1`, Beschreibung, Trennlinie) —
+  auch in den Einstellungen, deren Layout keinen eigenen Kopf mehr setzt; wo
+  man ist, sagen dort die Brotkrumen. **Seitenaktionen** stehen auf Seiten
+  mit Tabelle in deren Werkzeugzeile (`<DataTable #werkzeuge>`), sonst in
+  `<Heading #aktionen>`. Filter und Wochennavigation sind keine
+  Seitenaktionen. Bis September 2026 war `Heading` **mehrwurzelig** —
+  Überschrift *und* Trennlinie —, und in einer Flex-Zeile wurde die
+  Trennlinie zum zweiten Flex-Element und schob alles Weitere in die nächste
+  Zeile. Heute hat es eine Wurzel, und neben ihm steht trotzdem nichts: es
+  ist die volle Breite der Seite. Durchgesetzt von
+  `tests/Feature/Design/BauteileTest.php`.
 
 ## Benennung
 
@@ -394,6 +451,11 @@ und ESLint für das Frontend, `vue-tsc` für die Typen.
   `flash.fehler` und `flash.hinweise` auf jeder Seite. Ein schwebender Toast
   ist es bewusst nicht — eine Meldung, die nach drei Sekunden verschwindet,
   liest niemand am Empfang, der gerade telefoniert.
+  Seit September 2026 klebt sie oben (die meisten Formulare senden mit
+  `preserveScroll`, und wer weiter unten speicherte, sah sie nie) und lässt
+  sich schließen; von selbst verschwindet sie weiterhin nicht. Sie steht nur
+  dort — eine Seite, die `flash` selbst anzeigt, zeigt es doppelt.
+  Durchgesetzt durch `tests/Feature/Design/BauteileTest.php`.
 - **`vendor/bin/pest` ohne Argumente muss laufen.** So ruft die CI ihn auf.
   Eine Suite in `phpunit.xml`, deren Verzeichnis fehlt, bricht den Lauf mit
   Exit 2 ab, bevor ein Test läuft — gefunden am 26.09.2026, bevor die CI je

@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, FlaskConical, Loader2, PackagePlus } from 'lucide-vue-next';
+import { AlertTriangle, FlaskConical, LoaderCircle, PackagePlus, XCircle } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -192,46 +194,40 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
                 description="Ein Paket in Fassungen. Speichern legt eine neue an — die vorige bleibt, wie sie war, und jedes Abo zeigt auf seine."
             />
 
-            <p v-if="!stripeAngebunden" class="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-                <FlaskConical class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                Testbetrieb: Stripe ist in dieser Umgebung nicht angebunden. Eine neue Fassung gilt sofort, ohne Preise bei Stripe — und wer den
-                Bestand umstellt, stellt ihn sofort um, nicht erst zum nächsten Zeitraum.
-            </p>
+            <Alert v-if="!stripeAngebunden">
+                <FlaskConical aria-hidden="true" />
+                <AlertDescription>
+                    Testbetrieb: Stripe ist in dieser Umgebung nicht angebunden. Eine neue Fassung gilt sofort, ohne Preise bei Stripe — und wer den
+                    Bestand umstellt, stellt ihn sofort um, nicht erst zum nächsten Zeitraum.
+                </AlertDescription>
+            </Alert>
 
-            <p
-                v-if="ohneStripePreise && !inArbeit"
-                class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-warning"
-            >
-                <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                Stripe ist angebunden, aber Fassung {{ aktuell.number }} hat dort keine Preise — die Kasse öffnet nicht. Legen Sie eine neue Fassung
-                an, auch unverändert: sie legt Produkt und Preise bei Stripe an.
-            </p>
+            <Alert v-if="ohneStripePreise && !inArbeit" variant="warning">
+                <AlertTriangle aria-hidden="true" />
+                <AlertDescription>
+                    Stripe ist angebunden, aber Fassung {{ aktuell.number }} hat dort keine Preise — die Kasse öffnet nicht. Legen Sie eine neue
+                    Fassung an, auch unverändert: sie legt Produkt und Preise bei Stripe an.
+                </AlertDescription>
+            </Alert>
 
-            <p
-                v-if="gescheitert"
-                class="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-            >
-                <AlertTriangle class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                <span>
+            <Alert v-if="gescheitert" variant="destructive">
+                <XCircle aria-hidden="true" />
+                <AlertDescription class="break-words">
                     Fassung {{ gescheitert.number }} ist bei Stripe gescheitert: {{ gescheitert.stripeFehler ?? 'ohne Angabe' }}. Es gilt weiter
                     Fassung {{ aktuell.number }}.
-                </span>
-            </p>
+                </AlertDescription>
+            </Alert>
 
-            <section class="space-y-4 rounded-lg border p-4">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h2 class="text-base font-medium">{{ aktuell.name }}</h2>
-                        <p class="text-sm text-muted-foreground">Fassung {{ aktuell.number }} · gilt für jeden neuen Abschluss</p>
-                    </div>
-                    <Button :disabled="inArbeit" @click="oeffnen">
-                        <Loader2 v-if="inArbeit" class="animate-spin" />
+            <Abschnitt :titel="aktuell.name" :beschreibung="`Fassung ${aktuell.number} · gilt für jeden neuen Abschluss`">
+                <template #aktionen>
+                    <Button type="button" :disabled="inArbeit" @click="oeffnen">
+                        <LoaderCircle v-if="inArbeit" class="animate-spin" />
                         <PackagePlus v-else />
                         {{ inArbeit ? 'Fassung wird angelegt' : 'Neue Fassung' }}
                     </Button>
-                </div>
+                </template>
 
-                <dl class="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                <dl class="grid gap-x-6 gap-y-3 text-sm @lg:grid-cols-2">
                     <div class="flex justify-between gap-4 border-b pb-2">
                         <dt class="text-muted-foreground">Grundpreis je Monat</dt>
                         <dd class="font-medium tabular-nums">{{ euro(aktuell.grundpreisCent) }}</dd>
@@ -267,7 +263,7 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
                     Alle Preise netto. Der Preis für Antworten im Service-Fenster gehört nicht zum Paket — er gibt Metas Kosten weiter und steht in
                     der Umgebung (B14).
                 </p>
-            </section>
+            </Abschnitt>
 
             <DataTable :spalten="spalten" :zeilen="fassungen" sortier-nach="number" sortier-richtung="ab">
                 <template #zelle-number="{ zeile }">
@@ -308,6 +304,7 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
             beschreibung="Die vorige Fassung bleibt unverändert. Mit Stripe gilt die neue erst, wenn alle Preise dort angelegt sind."
             :laeuft="formular.processing"
             absende-text="Fassung anlegen"
+            :absende-symbol="PackagePlus"
             breit
             @absenden="speichern"
         >
@@ -317,20 +314,28 @@ const gescheitert = computed(() => props.fassungen.find((fassung) => fassung.str
                 <InputError :message="formular.errors.name" />
             </div>
 
-            <fieldset class="grid gap-4 sm:grid-cols-2">
+            <fieldset class="grid items-start gap-4 sm:grid-cols-2">
                 <legend class="mb-2 text-sm font-medium">Preise in Euro, netto</legend>
-                <div v-for="eintrag in preisfelder" :key="eintrag.feld" class="grid gap-1">
+                <div v-for="eintrag in preisfelder" :key="eintrag.feld" class="grid gap-2">
                     <Label :for="`paket-${eintrag.feld}`">{{ eintrag.titel }}</Label>
-                    <Input :id="`paket-${eintrag.feld}`" v-model="formular[eintrag.feld]" inputmode="decimal" autocomplete="off" />
+                    <Input
+                        :id="`paket-${eintrag.feld}`"
+                        v-model="formular[eintrag.feld]"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        :aria-describedby="`paket-${eintrag.feld}-hinweis`"
+                    />
                     <!-- Wer „790“ in ein Cent-Feld tippt, verkauft das Abo für 7,90 €. -->
-                    <p class="text-xs tabular-nums text-muted-foreground">= {{ alsBetrag(formular[eintrag.feld]) }}</p>
+                    <p :id="`paket-${eintrag.feld}-hinweis`" class="text-xs tabular-nums text-muted-foreground">
+                        = {{ alsBetrag(formular[eintrag.feld]) }}
+                    </p>
                     <InputError :message="formular.errors[eintrag.feld]" />
                 </div>
             </fieldset>
 
-            <fieldset class="grid gap-4 sm:grid-cols-2">
+            <fieldset class="grid items-start gap-4 sm:grid-cols-2">
                 <legend class="mb-2 text-sm font-medium">Mengen</legend>
-                <div v-for="eintrag in mengenfelder" :key="eintrag.feld" class="grid gap-1">
+                <div v-for="eintrag in mengenfelder" :key="eintrag.feld" class="grid gap-2">
                     <Label :for="`paket-${eintrag.feld}`">{{ eintrag.titel }}</Label>
                     <Input :id="`paket-${eintrag.feld}`" v-model.number="formular[eintrag.feld]" type="number" min="1" step="1" />
                     <InputError :message="formular.errors[eintrag.feld]" />

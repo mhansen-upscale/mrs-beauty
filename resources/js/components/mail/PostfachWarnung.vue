@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import type { Postfachstand } from '@/types';
 import { Link } from '@inertiajs/vue3';
@@ -28,20 +29,22 @@ const grund = computed<string>(() => {
 </script>
 
 <template>
-    <div role="alert" class="space-y-2 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-        <p class="flex items-start gap-2 font-medium">
-            <AlertTriangle class="mt-0.5 size-4 shrink-0" />
+    <Alert variant="warning">
+        <AlertTriangle />
+        <AlertTitle class="leading-snug">
             Ohne eigenes Postfach gehen keine Mails an Patientinnen hinaus — keine Terminbestätigung, keine Erinnerung, keine Antwort aus dem
             Posteingang.
-        </p>
-        <p>{{ grund }}</p>
+        </AlertTitle>
+        <AlertDescription class="space-y-2">
+            <p>{{ grund }}</p>
 
-        <Button v-if="postfach.darfEinrichten" variant="outline" size="sm" as-child>
-            <Link :href="route('postfach.edit')">
-                <Settings />
-                Postfach einrichten
-            </Link>
-        </Button>
-        <p v-else>Die Inhaberin oder eine Administratorin kann es unter Einstellungen → Postfach einrichten.</p>
-    </div>
+            <Button v-if="postfach.darfEinrichten" variant="outline" size="sm" class="text-foreground" as-child>
+                <Link :href="route('postfach.edit')">
+                    <Settings />
+                    Postfach einrichten
+                </Link>
+            </Button>
+            <p v-else>Die Inhaberin oder eine Administratorin kann es unter Einstellungen → Postfach einrichten.</p>
+        </AlertDescription>
+    </Alert>
 </template>

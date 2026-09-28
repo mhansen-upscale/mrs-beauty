@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { usePage } from '@inertiajs/vue3';
-import { CheckCircle2, Info, XCircle } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { CheckCircle2, Info, X, XCircle } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 
 /**
  * Meldungen aus der Sitzung — an einer Stelle, für alle Seiten.
@@ -15,6 +17,15 @@ import { computed } from 'vue';
  * Drei Arten, weil sie drei verschiedene Dinge sagen: etwas hat geklappt,
  * etwas ist schiefgegangen, und — der Fall aus WP-07 — etwas hat geklappt,
  * aber nicht ganz so, wie es eingegeben wurde.
+ *
+ * **Sie klebt oben.** Die meisten Formulare senden mit `preserveScroll`; wer
+ * weiter unten speicherte, sah die Meldung am Seitenanfang nie. **Sie
+ * verschwindet nicht von selbst** — eine Meldung, die nach drei Sekunden
+ * weg ist, liest niemand am Empfang, der gerade telefoniert —, lässt sich
+ * aber schließen. Die nächste Antwort des Servers bringt sie wieder.
+ *
+ * Nur hier. Eine Seite, die `flash` selbst anzeigt, zeigt es doppelt;
+ * durchgesetzt von tests/Feature/Design/BauteileTest.php.
  */
 const page = usePage();
 
@@ -23,27 +34,49 @@ const flash = computed<{ erfolg?: string | null; fehler?: string | null; hinweis
 );
 
 const hinweise = computed<string[]>(() => flash.value.hinweise ?? []);
+
+/** Geschlossene Meldungen — bis zur nächsten Antwort, die `flash` neu setzt. */
+const geschlossen = ref<Set<string>>(new Set());
+
+// Ein Nachladen einzelner Seitenteile (`only`) übernimmt das alte
+// flash-Objekt unverändert; nur eine neue Antwort setzt ein neues.
+watch(
+    () => page.props.flash,
+    () => (geschlossen.value = new Set()),
+);
+
+const offen = (schluessel: string): boolean => !geschlossen.value.has(schluessel);
+
+const schliessen = (schluessel: string): void => {
+    geschlossen.value = new Set([...geschlossen.value, schluessel]);
+};
+
+const meldungen = computed<{ schluessel: string; art: 'success' | 'destructive' | 'warning'; text: string }[]>(() =>
+    [
+        ...(flash.value.erfolg ? [{ schluessel: 'erfolg', art: 'success' as const, text: flash.value.erfolg }] : []),
+        ...(flash.value.fehler ? [{ schluessel: 'fehler', art: 'destructive' as const, text: flash.value.fehler }] : []),
+        ...hinweise.value.map((text) => ({ schluessel: `hinweis:${text}`, art: 'warning' as const, text })),
+    ].filter((meldung) => offen(meldung.schluessel)),
+);
+
+const symbole = { success: CheckCircle2, destructive: XCircle, warning: Info };
 </script>
 
 <template>
-    <div v-if="flash.erfolg || flash.fehler || hinweise.length" class="space-y-2 px-4 pt-4">
-        <p v-if="flash.erfolg" class="flex items-start gap-2 rounded-md border border-success/40 bg-success/10 p-3 text-sm">
-            <CheckCircle2 class="mt-0.5 size-4 shrink-0 text-success" />
-            <span>{{ flash.erfolg }}</span>
-        </p>
-
-        <p v-if="flash.fehler" class="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-            <XCircle class="mt-0.5 size-4 shrink-0 text-destructive" />
-            <span>{{ flash.fehler }}</span>
-        </p>
-
-        <p
-            v-for="hinweis in hinweise"
-            :key="hinweis"
-            class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning"
-        >
-            <Info class="mt-0.5 size-4 shrink-0" />
-            <span>{{ hinweis }}</span>
-        </p>
+    <div v-if="meldungen.length" class="sticky top-16 z-20 space-y-2 bg-background/95 px-4 pb-2 pt-4 backdrop-blur-sm md:top-0">
+        <Alert v-for="meldung in meldungen" :key="meldung.schluessel" :variant="meldung.art" class="pr-12">
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                class="absolute right-1.5 top-1.5 h-8 w-8 text-current hover:bg-transparent hover:opacity-70"
+                aria-label="Meldung schließen"
+                @click="schliessen(meldung.schluessel)"
+            >
+                <X />
+            </Button>
+            <component :is="symbole[meldung.art]" />
+            <AlertDescription>{{ meldung.text }}</AlertDescription>
+        </Alert>
     </div>
 </template>

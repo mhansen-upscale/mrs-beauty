@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { LoaderCircle, LogIn } from 'lucide-vue-next';
+import { CheckCircle2, LoaderCircle, LogIn } from 'lucide-vue-next';
 
 defineProps<{
     status?: string;
@@ -32,9 +33,10 @@ const absenden = () => {
     <AuthBase title="Anmelden" description="E-Mail-Adresse und Passwort eingeben.">
         <Head title="Anmelden" />
 
-        <div v-if="status" class="mb-4 text-center text-sm font-medium text-success">
-            {{ status }}
-        </div>
+        <Alert v-if="status" variant="success">
+            <CheckCircle2 />
+            <AlertDescription>{{ status }}</AlertDescription>
+        </Alert>
 
         <form class="flex flex-col gap-6" @submit.prevent="absenden">
             <div class="grid gap-6">

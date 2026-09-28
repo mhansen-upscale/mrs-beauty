@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import AktionsButton from '@/components/AktionsButton.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
-import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
+import Speicherleiste from '@/components/Speicherleiste.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,9 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { TransitionRoot } from '@headlessui/vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, ShieldCheck, Trash2 } from 'lucide-vue-next';
+import { AlertTriangle, Plus, ShieldCheck, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface Begriff {
@@ -88,9 +89,6 @@ const referenz = useForm<{ art: string; titel: string; notiz: string; erklaert: 
 
 const speichern = () => guide.put(route('marke.speichern'), { preserveScroll: true });
 
-/** Zurück auf den zuletzt gespeicherten Stand, nicht auf leer. */
-const verwerfen = () => guide.reset();
-
 const begriffAnlegen = () =>
     begriff.post(route('marke.begriff.anlegen'), {
         preserveScroll: true,
@@ -127,11 +125,6 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
         <Head title="Marke" />
 
         <div class="space-y-6 p-4 pb-24">
-            <!--
-                Heading steht allein. Es ist mehrwurzelig: in einer Flex-Zeile
-                bricht seine Trennlinie um -- geprueft in
-                tests/Feature/Design/BauteileTest.php.
-            -->
             <Heading title="Marke" description="Wie Ihre Praxis klingt und womit sie wirbt." />
 
             <!-- Der Fortschritt als schmale Zeile, nicht als eigener Kasten. -->
@@ -149,199 +142,157 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             </div>
 
             <!-- 1 · Tonalität -->
-            <section class="rounded-md border bg-card">
-                <header class="border-b px-4 py-3">
-                    <HeadingSmall title="Tonalität" description="Die folgenreichste Angabe: eine Anzeige in der falschen Ansprache wirkt fremd." />
-                </header>
-
-                <div class="space-y-4 p-4">
-                    <div class="grid items-start gap-4 sm:grid-cols-2">
-                        <div class="grid gap-2">
-                            <Label for="tone">Ton</Label>
-                            <Select v-model="guide.tone">
-                                <SelectTrigger id="tone"><SelectValue placeholder="Bitte wählen" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="ton in toene" :key="ton.value" :value="ton.value">
-                                        {{ ton.label }} — {{ ton.beschreibung }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError :message="guide.errors.tone" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="address">Ansprache</Label>
-                            <Select v-model="guide.addressForm">
-                                <SelectTrigger id="address"><SelectValue placeholder="Bitte wählen" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem v-for="form in ansprachen" :key="form.value" :value="form.value">{{ form.label }}</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError :message="guide.errors.addressForm" />
-                        </div>
+            <Abschnitt titel="Tonalität" beschreibung="Die folgenreichste Angabe: eine Anzeige in der falschen Ansprache wirkt fremd.">
+                <div class="grid items-start gap-4 @lg:grid-cols-2">
+                    <div class="grid gap-2">
+                        <Label for="tone">Ton</Label>
+                        <Select v-model="guide.tone">
+                            <SelectTrigger id="tone"><SelectValue placeholder="Bitte wählen" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="ton in toene" :key="ton.value" :value="ton.value">
+                                    {{ ton.label }} — {{ ton.beschreibung }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError :message="guide.errors.tone" />
                     </div>
 
-                    <div class="grid items-start gap-4 sm:grid-cols-2">
-                        <div class="grid gap-2">
-                            <Label for="audience">Zielgruppe</Label>
-                            <Textarea
-                                id="audience"
-                                v-model="guide.audience"
-                                rows="4"
-                                placeholder="Wen sprechen Sie an? Alter, Lebenssituation, Anliegen."
-                            />
-                            <InputError :message="guide.errors.audience" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="positioning">Positionierung</Label>
-                            <Textarea
-                                id="positioning"
-                                v-model="guide.positioning"
-                                rows="4"
-                                placeholder="Was unterscheidet Sie von der Praxis zwei Straßen weiter?"
-                            />
-                            <InputError :message="guide.errors.positioning" />
-                        </div>
-                    </div>
-
-                    <div class="grid items-start gap-4 sm:grid-cols-2">
-                        <div class="grid gap-2">
-                            <Label for="claim">Claim</Label>
-                            <Input id="claim" v-model="guide.claim" placeholder="Ein Satz, der bleibt." />
-                            <InputError :message="guide.errors.claim" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="nogo">Worüber Sie nicht werben wollen</Label>
-                            <Input id="nogo" v-model="guide.noGoTopics" placeholder="Themen, die außen vor bleiben." />
-                            <InputError :message="guide.errors.noGoTopics" />
-                        </div>
+                    <div class="grid gap-2">
+                        <Label for="address">Ansprache</Label>
+                        <Select v-model="guide.addressForm">
+                            <SelectTrigger id="address"><SelectValue placeholder="Bitte wählen" /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="form in ansprachen" :key="form.value" :value="form.value">{{ form.label }}</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError :message="guide.errors.addressForm" />
                     </div>
                 </div>
-            </section>
+
+                <div class="grid items-start gap-4 @lg:grid-cols-2">
+                    <div class="grid gap-2">
+                        <Label for="audience">Zielgruppe</Label>
+                        <Textarea
+                            id="audience"
+                            v-model="guide.audience"
+                            rows="4"
+                            placeholder="Wen sprechen Sie an? Alter, Lebenssituation, Anliegen."
+                        />
+                        <InputError :message="guide.errors.audience" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="positioning">Positionierung</Label>
+                        <Textarea
+                            id="positioning"
+                            v-model="guide.positioning"
+                            rows="4"
+                            placeholder="Was unterscheidet Sie von der Praxis zwei Straßen weiter?"
+                        />
+                        <InputError :message="guide.errors.positioning" />
+                    </div>
+                </div>
+
+                <div class="grid items-start gap-4 @lg:grid-cols-2">
+                    <div class="grid gap-2">
+                        <Label for="claim">Claim</Label>
+                        <Input id="claim" v-model="guide.claim" placeholder="Ein Satz, der bleibt." />
+                        <InputError :message="guide.errors.claim" />
+                    </div>
+
+                    <div class="grid gap-2">
+                        <Label for="nogo">Worüber Sie nicht werben wollen</Label>
+                        <Input id="nogo" v-model="guide.noGoTopics" placeholder="Themen, die außen vor bleiben." />
+                        <InputError :message="guide.errors.noGoTopics" />
+                    </div>
+                </div>
+            </Abschnitt>
 
             <!-- 2 · Wortwahl -->
-            <section class="rounded-md border bg-card">
-                <header class="flex flex-wrap items-center gap-3 border-b px-4 py-3">
-                    <HeadingSmall title="Wortwahl" description="Was Sie schreiben wollen — und was nicht." />
-                    <Button class="w-full sm:ml-auto sm:w-auto" type="button" variant="outline" size="sm" @click="begriffOffen = true"
-                        >Begriff hinzufügen</Button
-                    >
-                </header>
+            <Abschnitt titel="Wortwahl" beschreibung="Was Sie schreiben wollen — und was nicht.">
+                <template #aktionen>
+                    <Button type="button" variant="outline" size="sm" @click="begriffOffen = true">
+                        <Plus />
+                        Begriff hinzufügen
+                    </Button>
+                </template>
 
-                <div class="p-4">
-                    <p v-if="!begriffe.length" class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                        Noch keine Begriffe. Ein vermiedener Begriff ohne Ersatz hilft wenig — nennen Sie am besten gleich die Alternative.
-                    </p>
+                <p v-if="!begriffe.length" class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    Noch keine Begriffe. Ein vermiedener Begriff ohne Ersatz hilft wenig — nennen Sie am besten gleich die Alternative.
+                </p>
 
-                    <ul v-else class="divide-y">
-                        <li v-for="eintrag in begriffe" :key="eintrag.uuid" class="flex flex-wrap items-center gap-3 py-2 text-sm">
-                            <Badge :variant="eintrag.art === 'banned' ? 'destructive' : 'success'">{{ eintrag.artText }}</Badge>
-                            <span class="font-medium">{{ eintrag.begriff }}</span>
-                            <span v-if="eintrag.ersatz" class="text-muted-foreground">→ {{ eintrag.ersatz }}</span>
-                            <span v-if="eintrag.begruendung" class="text-xs text-muted-foreground">{{ eintrag.begruendung }}</span>
-                            <AktionsButton
-                                :icon="Trash2"
-                                beschriftung="Begriff entfernen"
-                                class="sm:ml-auto"
-                                @click="entferneBegriff(eintrag.uuid)"
-                            />
-                        </li>
-                    </ul>
-                </div>
-            </section>
+                <ul v-else class="divide-y">
+                    <li v-for="eintrag in begriffe" :key="eintrag.uuid" class="flex flex-wrap items-center gap-3 py-2 text-sm">
+                        <Badge :variant="eintrag.art === 'banned' ? 'destructive' : 'success'">{{ eintrag.artText }}</Badge>
+                        <span class="min-w-0 break-words font-medium">{{ eintrag.begriff }}</span>
+                        <span v-if="eintrag.ersatz" class="min-w-0 break-words text-muted-foreground">→ {{ eintrag.ersatz }}</span>
+                        <span v-if="eintrag.begruendung" class="min-w-0 break-words text-xs text-muted-foreground">{{ eintrag.begruendung }}</span>
+                        <AktionsButton :icon="Trash2" beschriftung="Begriff entfernen" class="sm:ml-auto" @click="entferneBegriff(eintrag.uuid)" />
+                    </li>
+                </ul>
+            </Abschnitt>
 
             <!-- 3 · Referenzmaterial -->
-            <section class="rounded-md border bg-card">
-                <header class="flex flex-wrap items-center gap-3 border-b px-4 py-3">
-                    <HeadingSmall title="Referenzmaterial" description="Womit geworben werden darf: Räume, Team, Ablauf." />
-                    <Button class="w-full sm:ml-auto sm:w-auto" type="button" variant="outline" size="sm" @click="referenzOffen = true"
-                        >Material hinzufügen</Button
-                    >
-                </header>
+            <Abschnitt titel="Referenzmaterial" beschreibung="Womit geworben werden darf: Räume, Team, Ablauf.">
+                <template #aktionen>
+                    <Button type="button" variant="outline" size="sm" @click="referenzOffen = true">
+                        <Plus />
+                        Material hinzufügen
+                    </Button>
+                </template>
 
-                <div class="space-y-4 p-4">
-                    <div class="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-                        <p class="flex items-center gap-2 font-medium">
-                            <AlertTriangle class="size-4 shrink-0" />
-                            Keine Aufnahmen von Patientinnen und Patienten
-                        </p>
-                        <p>
-                            Vorher-Nachher-Bilder sind seit dem BGH-Urteil vom 31.07.2025 auch bei minimalinvasiven Eingriffen verboten — und
-                            Behandlungsbilder sind Gesundheitsdaten einer anderen Person. Wir können das hier nicht automatisch prüfen; Ihre
-                            Bestätigung wird im Wortlaut festgehalten.
-                        </p>
-                    </div>
+                <Alert variant="warning">
+                    <AlertTriangle />
+                    <AlertTitle>Keine Aufnahmen von Patientinnen und Patienten</AlertTitle>
+                    <AlertDescription>
+                        Vorher-Nachher-Bilder sind seit dem BGH-Urteil vom 31.07.2025 auch bei minimalinvasiven Eingriffen verboten — und
+                        Behandlungsbilder sind Gesundheitsdaten einer anderen Person. Wir können das hier nicht automatisch prüfen; Ihre Bestätigung
+                        wird im Wortlaut festgehalten.
+                    </AlertDescription>
+                </Alert>
 
-                    <p v-if="!referenzen.length" class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-                        Noch kein Material. Empfang, Behandlungsraum, Team — daraus entstehen Anzeigen, die zu Ihnen passen.
-                    </p>
+                <p v-if="!referenzen.length" class="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    Noch kein Material. Empfang, Behandlungsraum, Team — daraus entstehen Anzeigen, die zu Ihnen passen.
+                </p>
 
-                    <ul v-else class="divide-y">
-                        <li v-for="stueck in referenzen" :key="stueck.uuid" class="flex flex-wrap items-start gap-3 py-3 text-sm">
-                            <a
-                                v-if="stueck.vorschau"
-                                :href="route('anhang.zeigen', { attachment: stueck.vorschau })"
-                                target="_blank"
-                                rel="noopener"
-                                class="shrink-0"
-                            >
-                                <img
-                                    :src="route('anhang.zeigen', { attachment: stueck.vorschau })"
-                                    :alt="stueck.titel"
-                                    loading="lazy"
-                                    class="size-16 rounded border object-cover"
-                                />
-                            </a>
-                            <Badge variant="secondary">{{ stueck.artText }}</Badge>
-                            <div class="min-w-48 flex-1">
-                                <p class="font-medium">{{ stueck.titel }}</p>
-                                <p v-if="stueck.notiz" class="text-muted-foreground">{{ stueck.notiz }}</p>
-                                <p class="text-xs text-muted-foreground">Bestätigt am {{ datum(stueck.erklaert) }}</p>
-                            </div>
-                            <Badge v-if="stueck.freigegeben" variant="success" class="gap-1">
-                                <ShieldCheck class="size-3" />
-                                geprüft
-                            </Badge>
-                            <Badge v-else variant="secondary">Prüfung ausstehend</Badge>
-                            <AktionsButton :icon="Trash2" beschriftung="Material entfernen" @click="entferneReferenz(stueck.uuid)" />
-                        </li>
-                    </ul>
-                </div>
-            </section>
+                <ul v-else class="divide-y">
+                    <li v-for="stueck in referenzen" :key="stueck.uuid" class="flex flex-wrap items-start gap-3 py-3 text-sm">
+                        <a
+                            v-if="stueck.vorschau"
+                            :href="route('anhang.zeigen', { attachment: stueck.vorschau })"
+                            target="_blank"
+                            rel="noopener"
+                            class="shrink-0"
+                        >
+                            <img
+                                :src="route('anhang.zeigen', { attachment: stueck.vorschau })"
+                                :alt="stueck.titel"
+                                loading="lazy"
+                                class="size-16 rounded border object-cover"
+                            />
+                        </a>
+                        <Badge variant="secondary">{{ stueck.artText }}</Badge>
+                        <div class="min-w-48 flex-1">
+                            <p class="break-words font-medium">{{ stueck.titel }}</p>
+                            <p v-if="stueck.notiz" class="break-words text-muted-foreground">{{ stueck.notiz }}</p>
+                            <p class="text-xs text-muted-foreground">Bestätigt am {{ datum(stueck.erklaert) }}</p>
+                        </div>
+                        <Badge v-if="stueck.freigegeben" variant="success" class="gap-1">
+                            <ShieldCheck class="size-3" />
+                            geprüft
+                        </Badge>
+                        <Badge v-else variant="secondary">Prüfung ausstehend</Badge>
+                        <AktionsButton :icon="Trash2" beschriftung="Material entfernen" @click="entferneReferenz(stueck.uuid)" />
+                    </li>
+                </ul>
+            </Abschnitt>
+
             <!--
-                Die Leiste erscheint erst, wenn etwas geändert wurde. Ein
-                Speichern-Knopf mitten auf der Seite gehört immer nur zu einem
-                Teil davon — und sieht aus, als gehörte er zu allen.
-
-                Sie steht **innerhalb** des hohen Inhaltsbereichs: `sticky`
-                klebt nur, solange der umgebende Block sichtbar ist. Als
-                eigenes Element darunter wäre der umgebende Block so hoch wie
-                die Leiste selbst — und die klebte erst, wenn man ohnehin ganz
-                unten ist.
+                Letztes Kind des hohen Inhaltsblocks, damit sie klebt (warum:
+                Speicherleiste.vue). „Verwerfen" setzt auf den zuletzt
+                gespeicherten Stand zurück, nicht auf leer.
             -->
-            <div v-if="guide.isDirty || guide.recentlySuccessful" class="pointer-events-none sticky bottom-4 z-10 flex justify-center px-2">
-                <div
-                    class="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-md border bg-card px-4 py-2 shadow-lg"
-                >
-                    <TransitionRoot
-                        :show="guide.recentlySuccessful && !guide.isDirty"
-                        enter="transition ease-in-out"
-                        enter-from="opacity-0"
-                        leave="transition ease-in-out"
-                        leave-to="opacity-0"
-                    >
-                        <p class="text-sm text-muted-foreground">Gespeichert.</p>
-                    </TransitionRoot>
-
-                    <template v-if="guide.isDirty">
-                        <p class="text-sm text-muted-foreground">Nicht gespeicherte Änderungen</p>
-                        <Button type="button" variant="ghost" size="sm" :disabled="guide.processing" @click="verwerfen">Verwerfen</Button>
-                        <Button type="button" size="sm" :disabled="guide.processing" @click="speichern">Speichern</Button>
-                    </template>
-                </div>
-            </div>
+            <Speicherleiste :formular="guide" @speichern="speichern" />
         </div>
 
         <FormularDialog
@@ -350,6 +301,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Ein vermiedener Begriff mit Ersatz ist ein Hinweis, dem jemand folgen kann."
             :laeuft="begriff.processing"
             absende-text="Hinzufügen"
+            :absende-symbol="Plus"
             @absenden="begriffAnlegen"
         >
             <div class="grid items-start gap-4 sm:grid-cols-2">
@@ -388,6 +340,7 @@ const datum = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Räume, Team, Ablauf oder eine Anzeige, die Ihnen gefällt."
             :laeuft="referenz.processing"
             absende-text="Hinzufügen"
+            :absende-symbol="Plus"
             @absenden="referenzAnlegen"
         >
             <div class="grid items-start gap-4 sm:grid-cols-2">

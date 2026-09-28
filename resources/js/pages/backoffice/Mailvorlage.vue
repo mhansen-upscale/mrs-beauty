@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
-import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
 import Mailtexteditor from '@/components/mail/Mailtexteditor.vue';
 import Mailvorschau from '@/components/mail/Mailvorschau.vue';
+import Speicherleiste from '@/components/Speicherleiste.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,20 +15,7 @@ import { useMailentwurf } from '@/composables/useMailentwurf';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Mailfeld, type Mailfelder, type Mailplatzhalter, type Mailvorschau as Vorschau } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import {
-    AlertTriangle,
-    ArrowLeft,
-    ClipboardPaste,
-    FileText,
-    Globe,
-    Info,
-    LoaderCircle,
-    PenLine,
-    RefreshCw,
-    RotateCcw,
-    Save,
-    Send,
-} from 'lucide-vue-next';
+import { ArrowLeft, ClipboardPaste, FileText, Globe, Info, LoaderCircle, PenLine, RefreshCw, RotateCcw, Send } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -58,7 +47,7 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 /* Formular ------------------------------------------------------------------ */
 
-const { formular, eingabe, uebernehmen, ungespeichert, vorschauVeraltet, istStandard } = useMailentwurf(props);
+const { formular, eingabe, uebernehmen, vorschauVeraltet, istStandard, gespeichert, speicherleiste } = useMailentwurf(props);
 
 type Vorgang = 'speichern' | 'vorschau' | 'probe';
 
@@ -70,6 +59,8 @@ const optionen = (vorgang: Vorgang) => ({
     onFinish: () => (laeuft.value = null),
 });
 
+const leiste = speicherleiste(() => laeuft.value === 'speichern');
+
 const fehler = computed(() => formular.errors as Record<string, string | undefined>);
 
 /* Speichern — mit Passwort ---------------------------------------------------- */
@@ -77,18 +68,27 @@ const fehler = computed(() => formular.errors as Record<string, string | undefin
 const speichernOffen = ref(false);
 const passwort = ref('');
 
+// „Speichern" in der Speicherleiste fragt zuerst nach dem eigenen Passwort (C14).
 const speichernOeffnen = () => {
     passwort.value = '';
     formular.clearErrors();
     speichernOffen.value = true;
 };
 
+/*
+ * Das Passwort geht nur mit der Anfrage hinaus, es gehört nicht zu den Daten
+ * des Formulars — sonst gälte der Text nach dem Leeren des Feldes als
+ * geändert.
+ */
 const speichern = () =>
     formular
         .transform((daten) => ({ ...daten, current_password: passwort.value }))
         .put(route('backoffice.mails.update', { mailart: props.art.wert }), {
             ...optionen('speichern'),
-            onSuccess: () => (speichernOffen.value = false),
+            onSuccess: () => {
+                speichernOffen.value = false;
+                gespeichert();
+            },
             // Ein Fehler am Text gehört an sein Feld — dafür muss der Dialog weg.
             onError: (meldungen) => {
                 if (Object.keys(meldungen).some((schluessel) => schluessel !== 'current_password')) {
@@ -141,14 +141,16 @@ const zuruecksetzen = () =>
         <Head :title="art.label" />
 
         <div class="space-y-6 p-4">
-            <Button variant="ghost" size="sm" class="-ml-2" as-child>
-                <Link :href="route('backoffice.mails')">
-                    <ArrowLeft />
-                    Alle E-Mails
-                </Link>
-            </Button>
-
-            <Heading :title="art.label" :description="art.beschreibung" />
+            <Heading :title="art.label" :description="art.beschreibung">
+                <template #aktionen>
+                    <Button variant="ghost" as-child>
+                        <Link :href="route('backoffice.mails')">
+                            <ArrowLeft />
+                            Alle E-Mails
+                        </Link>
+                    </Button>
+                </template>
+            </Heading>
 
             <div class="flex flex-wrap items-center gap-2">
                 <Badge v-if="angepasst" variant="info">
@@ -159,96 +161,100 @@ const zuruecksetzen = () =>
                     <FileText />
                     Standard
                 </Badge>
-                <Badge v-if="ungespeichert" variant="warning">
-                    <AlertTriangle />
-                    Nicht gespeichert
-                </Badge>
             </div>
 
-            <p class="flex items-start gap-2 rounded-md border bg-muted/40 px-4 py-3 text-sm">
-                <Globe class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                Diese Vorlage gilt für alle Praxen, ab der nächsten Mail.
-            </p>
+            <Alert>
+                <Globe />
+                <AlertDescription>Diese Vorlage gilt für alle Praxen, ab der nächsten Mail.</AlertDescription>
+            </Alert>
 
             <div class="grid items-start gap-8 xl:grid-cols-2">
                 <!-- Editor ---------------------------------------------------- -->
                 <form class="min-w-0 space-y-6" @submit.prevent="speichernOeffnen">
-                    <Mailtexteditor
-                        v-model="eingabe"
-                        :platzhalter="platzhalter"
-                        :grenzen="grenzen"
-                        :fester-kern="art.festerKern"
-                        :fehler="formular.errors"
-                        betreff-hinweis="Der Betreff erscheint auf dem Sperrbildschirm. Bei den Code-Mails ist dort kein Platzhalter erlaubt — der Code steht nie im Betreff."
-                    />
+                    <Abschnitt titel="Text">
+                        <Mailtexteditor
+                            v-model="eingabe"
+                            :platzhalter="platzhalter"
+                            :grenzen="grenzen"
+                            :fester-kern="art.festerKern"
+                            :fehler="formular.errors"
+                            betreff-hinweis="Der Betreff erscheint auf dem Sperrbildschirm. Bei den Code-Mails ist dort kein Platzhalter erlaubt — der Code steht nie im Betreff."
+                        />
 
-                    <div class="space-y-3 border-t pt-4">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <Button type="submit" :disabled="formular.processing">
-                                <LoaderCircle v-if="laeuft === 'speichern'" class="animate-spin" />
-                                <Save v-else />
-                                Speichern
-                            </Button>
-                            <Button type="button" variant="outline" :disabled="formular.processing" @click="vorschauAktualisieren">
-                                <LoaderCircle v-if="laeuft === 'vorschau'" class="animate-spin" />
-                                <RefreshCw v-else />
-                                Vorschau aktualisieren
-                            </Button>
-                            <Button type="button" variant="outline" :disabled="formular.processing" @click="probeSenden">
-                                <LoaderCircle v-if="laeuft === 'probe'" class="animate-spin" />
-                                <Send v-else />
-                                Probemail an mich
-                            </Button>
+                        <div class="space-y-3 border-t pt-4">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <Button type="button" variant="outline" :disabled="formular.processing" @click="vorschauAktualisieren">
+                                    <LoaderCircle v-if="laeuft === 'vorschau'" class="animate-spin" />
+                                    <RefreshCw v-else />
+                                    Vorschau aktualisieren
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    :disabled="formular.processing"
+                                    :aria-describedby="probeAn ? 'probe-hinweis' : undefined"
+                                    @click="probeSenden"
+                                >
+                                    <LoaderCircle v-if="laeuft === 'probe'" class="animate-spin" />
+                                    <Send v-else />
+                                    Probemail an mich
+                                </Button>
+                            </div>
+
+                            <p v-if="probeAn" id="probe-hinweis" class="break-all text-xs text-muted-foreground">
+                                Die Probemail geht an {{ probeAn }} — mit Beispielwerten, über den Versand der Plattform.
+                            </p>
+                            <InputError :message="fehler.probe" />
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    :disabled="formular.processing || istStandard"
+                                    aria-describedby="standard-hinweis"
+                                    @click="uebernehmen(standard)"
+                                >
+                                    <ClipboardPaste />
+                                    Standardtext übernehmen
+                                </Button>
+                                <Button
+                                    v-if="angepasst"
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="text-destructive"
+                                    :disabled="formular.processing"
+                                    @click="zuruecksetzenOeffnen"
+                                >
+                                    <RotateCcw />
+                                    Auf Standard zurücksetzen
+                                </Button>
+                            </div>
+                            <p id="standard-hinweis" class="text-xs text-muted-foreground">
+                                „Standardtext übernehmen“ setzt nur die Felder — gespeichert ist erst nach „Speichern“.
+                            </p>
                         </div>
+                    </Abschnitt>
 
-                        <p v-if="probeAn" class="break-all text-xs text-muted-foreground">
-                            Die Probemail geht an {{ probeAn }} — mit Beispielwerten, über den Versand der Plattform.
-                        </p>
-                        <InputError :message="fehler.probe" />
-
-                        <div class="flex flex-wrap items-center gap-2">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                :disabled="formular.processing || istStandard"
-                                @click="uebernehmen(standard)"
-                            >
-                                <ClipboardPaste />
-                                Standardtext übernehmen
-                            </Button>
-                            <Button
-                                v-if="angepasst"
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                class="text-destructive"
-                                :disabled="formular.processing"
-                                @click="zuruecksetzenOeffnen"
-                            >
-                                <RotateCcw />
-                                Auf Standard zurücksetzen
-                            </Button>
-                        </div>
-                        <p class="text-xs text-muted-foreground">
-                            „Standardtext übernehmen“ setzt nur die Felder — gespeichert ist erst nach „Speichern“.
-                        </p>
-                    </div>
+                    <Speicherleiste :formular="leiste" :sperre="formular.processing" @speichern="speichernOeffnen" />
                 </form>
 
                 <!-- Vorschau -------------------------------------------------- -->
-                <div class="min-w-0 space-y-3 xl:sticky xl:top-4">
-                    <HeadingSmall
-                        title="Vorschau"
-                        description="Mit Beispielwerten und dem Aussehen aus „Versand“. Die Vorschau verschickt und speichert nichts."
-                    />
+                <div class="min-w-0 xl:sticky xl:top-4">
+                    <Abschnitt
+                        titel="Vorschau"
+                        beschreibung="Mit Beispielwerten und dem Aussehen aus „Versand“. Die Vorschau verschickt und speichert nichts."
+                    >
+                        <Alert v-if="vorschauVeraltet">
+                            <Info />
+                            <AlertDescription>
+                                Die Vorschau zeigt noch den vorigen Stand. „Vorschau aktualisieren“ zeigt Ihre Änderungen.
+                            </AlertDescription>
+                        </Alert>
 
-                    <p v-if="vorschauVeraltet" class="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
-                        <Info class="mt-0.5 size-4 shrink-0" />
-                        Die Vorschau zeigt noch den vorigen Stand. „Vorschau aktualisieren“ zeigt Ihre Änderungen.
-                    </p>
-
-                    <Mailvorschau :vorschau="vorschau" />
+                        <Mailvorschau :vorschau="vorschau" />
+                    </Abschnitt>
                 </div>
             </div>
         </div>
@@ -258,7 +264,6 @@ const zuruecksetzen = () =>
             titel="Vorlage speichern"
             :beschreibung="`„${art.label}“ gilt danach für alle Praxen, ab der nächsten Mail.`"
             :laeuft="formular.processing"
-            absende-text="Speichern"
             @absenden="speichern"
         >
             <div class="grid gap-2">
@@ -274,6 +279,7 @@ const zuruecksetzen = () =>
             :beschreibung="`Die angepasste Fassung von „${art.label}“ wird gelöscht. Ab der nächsten Mail gilt für alle Praxen wieder der Standardtext.`"
             :laeuft="zuruecksetzung.processing"
             absende-text="Zurücksetzen"
+            :absende-symbol="RotateCcw"
             @absenden="zuruecksetzen"
         >
             <div class="grid gap-2">

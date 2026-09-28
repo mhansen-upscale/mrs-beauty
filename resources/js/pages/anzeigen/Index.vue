@@ -2,6 +2,7 @@
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -13,7 +14,24 @@ import { useNachladen } from '@/composables/useNachladen';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, Image as Bild, ChevronDown, Clock, Loader2, Megaphone, Plus, RefreshCw, Sparkles } from 'lucide-vue-next';
+import {
+    AlertTriangle,
+    Image as Bild,
+    Check,
+    CheckCircle2,
+    ChevronDown,
+    Clock,
+    Info,
+    LoaderCircle,
+    Megaphone,
+    PencilLine,
+    Plus,
+    RefreshCw,
+    ShieldAlert,
+    Sparkles,
+    Undo2,
+    XCircle,
+} from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface Befund {
@@ -153,9 +171,9 @@ const uebertragungstext = (u: Uebertragung | null): string => {
 | hingehört: als Angabe, nicht als Struktur.
 */
 const sichten = [
-    { wert: 'offen', text: 'In Arbeit' },
-    { wert: 'approved', text: 'Freigegeben' },
-    { wert: 'rejected', text: 'Verworfen' },
+    { wert: 'offen', text: 'In Arbeit', symbol: PencilLine },
+    { wert: 'approved', text: 'Freigegeben', symbol: CheckCircle2 },
+    { wert: 'rejected', text: 'Verworfen', symbol: XCircle },
 ] as const;
 
 const sicht = ref<string>('offen');
@@ -320,32 +338,28 @@ useNachladen(laeuft, ['vorschlaege']);
         <Head title="Anzeigen" />
 
         <div class="space-y-6 p-4">
-            <Heading title="Anzeigen" description="Jede Woche neue Entwürfe — und eigene, wann immer Sie wollen." />
-
-            <!--
-                Die Seitenaktion steht in einer eigenen Zeile, nicht neben der
-                Überschrift: <Heading> bringt seine Trennlinie mit und schiebt
-                in einer Flex-Zeile alles Weitere nach unten. Festgehalten in
-                tests/Feature/Design/BauteileTest.php.
-            -->
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex flex-wrap gap-1">
-                    <Button
-                        v-for="eintrag in sichten"
-                        :key="eintrag.wert"
-                        type="button"
-                        size="sm"
-                        :variant="sicht === eintrag.wert ? 'secondary' : 'ghost'"
-                        @click="sicht = eintrag.wert"
-                    >
-                        {{ eintrag.text }}
-                        <span class="ml-1.5 text-xs text-muted-foreground">{{ zaehler(eintrag.wert) }}</span>
+            <Heading title="Anzeigen" description="Jede Woche neue Entwürfe — und eigene, wann immer Sie wollen.">
+                <template #aktionen>
+                    <Button type="button" @click="oeffneNeu">
+                        <Plus />
+                        Eigene Anzeige
                     </Button>
-                </div>
+                </template>
+            </Heading>
 
-                <Button type="button" class="w-full sm:w-auto" @click="oeffneNeu">
-                    <Plus />
-                    Eigene Anzeige
+            <!-- Die Sichten sind ein Filter, keine Seitenaktion: sie stehen unter dem Kopf. -->
+            <div class="flex flex-wrap gap-1">
+                <Button
+                    v-for="eintrag in sichten"
+                    :key="eintrag.wert"
+                    type="button"
+                    size="sm"
+                    :variant="sicht === eintrag.wert ? 'secondary' : 'ghost'"
+                    @click="sicht = eintrag.wert"
+                >
+                    <component :is="eintrag.symbol" />
+                    {{ eintrag.text }}
+                    <span class="ml-1.5 text-xs text-muted-foreground">{{ zaehler(eintrag.wert) }}</span>
                 </Button>
             </div>
 
@@ -354,33 +368,28 @@ useNachladen(laeuft, ['vorschlaege']);
                 diesen Hinweis sucht jemand den Fehler beim Bildanbieter,
                 während in Wahrheit niemand die Warteschlange abarbeitet.
             -->
-            <div v-if="warteschlangeSteht" class="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-                <AlertTriangle class="mt-0.5 size-4 shrink-0" />
-                <span>
-                    <strong>Die Warteschlange wird gerade nicht abgearbeitet.</strong> Ihre Grafikaufträge liegen dort und warten. Das ist kein Fehler
-                    des Bildmodells — bitte melden Sie sich bei uns.
-                </span>
-            </div>
+            <Alert v-if="warteschlangeSteht" variant="warning">
+                <AlertTriangle />
+                <AlertTitle>Die Warteschlange wird gerade nicht abgearbeitet.</AlertTitle>
+                <AlertDescription>
+                    Ihre Grafikaufträge liegen dort und warten. Das ist kein Fehler des Bildmodells — bitte melden Sie sich bei uns.
+                </AlertDescription>
+            </Alert>
 
             <!--
                 Erfunden wird nichts: unter dem Mindest-Reifegrad läuft kein
                 Vorschlag. Aus „keine Angaben" entstünde eine
                 Allerweltsanzeige.
             -->
-            <div
-                v-if="reifegrad.anteil < mindestReifegrad"
-                class="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning"
-            >
-                <p class="flex items-center gap-2 font-medium">
-                    <AlertTriangle class="size-4 shrink-0" />
-                    Ihr Brand Guide ist noch zu dünn für Vorschläge
-                </p>
-                <p>
+            <Alert v-if="reifegrad.anteil < mindestReifegrad" variant="warning">
+                <AlertTriangle />
+                <AlertTitle>Ihr Brand Guide ist noch zu dünn für Vorschläge</AlertTitle>
+                <AlertDescription>
                     {{ reifegrad.anteil }} % von mindestens {{ mindestReifegrad }} %. Es fehlt: {{ reifegrad.fehlt.join(', ') }}. Wir denken uns
                     nichts dazu aus — eine Anzeige aus Platzhaltern klingt nach jeder anderen Praxis. Eine eigene Anzeige können Sie trotzdem
                     jederzeit schreiben.
-                </p>
-            </div>
+                </AlertDescription>
+            </Alert>
 
             <div v-if="!sichtbar.length" class="space-y-3 rounded-md border border-dashed p-10 text-center">
                 <p class="text-sm text-muted-foreground">
@@ -410,7 +419,7 @@ useNachladen(laeuft, ['vorschlaege']);
                         <img v-if="vorschlag.bildUrl" :src="vorschlag.bildUrl" alt="" class="size-full object-cover" />
 
                         <span v-else class="flex size-full flex-col items-center justify-center gap-2 bg-muted/50 p-6 text-center">
-                            <Loader2 v-if="vorschlag.bildLaeuft" class="size-5 animate-spin text-muted-foreground" />
+                            <LoaderCircle v-if="vorschlag.bildLaeuft" class="size-5 animate-spin text-muted-foreground" />
                             <AlertTriangle v-else-if="vorschlag.bildFehler" class="size-5 text-destructive" />
                             <Bild v-else class="size-5 text-muted-foreground" />
 
@@ -428,7 +437,7 @@ useNachladen(laeuft, ['vorschlaege']);
                         -->
                         <span v-if="vorschlag.bildUrl && vorschlag.bildLaeuft" class="absolute right-2 top-2">
                             <Badge variant="outline" class="gap-1 bg-background/90 backdrop-blur-sm">
-                                <Loader2 class="size-3 animate-spin" />
+                                <LoaderCircle class="size-3 animate-spin" />
                                 Neue Grafik
                             </Badge>
                         </span>
@@ -496,7 +505,7 @@ useNachladen(laeuft, ['vorschlaege']);
                             :class="vorschlag.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-muted-foreground'"
                         >
                             <AlertTriangle v-if="vorschlag.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
-                            <Loader2 v-else-if="unterwegs(vorschlag.uebertragung)" class="size-3 shrink-0 animate-spin" />
+                            <LoaderCircle v-else-if="unterwegs(vorschlag.uebertragung)" class="size-3 shrink-0 animate-spin" />
                             <Clock v-else class="size-3 shrink-0" />
                             {{ uebertragungstext(vorschlag.uebertragung) }}
                         </span>
@@ -589,7 +598,7 @@ useNachladen(laeuft, ['vorschlaege']);
                             </p>
 
                             <p v-if="gewaehlt.bildLaeuft" class="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Loader2 class="size-3 animate-spin" />
+                                <LoaderCircle class="size-3 animate-spin" />
                                 Eine neue Grafik entsteht. Die bisherige bleibt sichtbar, bis sie da ist.
                             </p>
                         </template>
@@ -598,7 +607,7 @@ useNachladen(laeuft, ['vorschlaege']);
                             v-else
                             class="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground"
                         >
-                            <Loader2 v-if="gewaehlt.bildLaeuft" class="size-5 animate-spin" />
+                            <LoaderCircle v-if="gewaehlt.bildLaeuft" class="size-5 animate-spin" />
                             <Bild v-else class="size-5" />
                             {{
                                 gewaehlt.bildLaeuft
@@ -607,13 +616,10 @@ useNachladen(laeuft, ['vorschlaege']);
                             }}
                         </p>
 
-                        <p
-                            v-if="gewaehlt.bildFehler"
-                            class="flex items-start gap-2 rounded-md border border-destructive/40 p-2 text-xs text-destructive"
-                        >
-                            <AlertTriangle class="mt-0.5 size-3 shrink-0" />
-                            {{ gewaehlt.bildFehler }}
-                        </p>
+                        <Alert v-if="gewaehlt.bildFehler" variant="destructive">
+                            <XCircle />
+                            <AlertDescription class="break-words">{{ gewaehlt.bildFehler }}</AlertDescription>
+                        </Alert>
 
                         <!--
                             **Das Motiv steht beim Knopf**, nicht im Formular
@@ -631,9 +637,9 @@ useNachladen(laeuft, ['vorschlaege']);
                                 rows="2"
                                 :maxlength="laengen.motiv"
                                 placeholder="Arzthelferin am Tresen, die lächelt und mit einer Kundin spricht"
-                                class="text-xs"
+                                aria-describedby="motiv-hinweis"
                             />
-                            <p class="text-xs text-muted-foreground">
+                            <p id="motiv-hinweis" class="text-xs text-muted-foreground">
                                 Leer lassen: dann zeigen wir Ihre Räume. Menschen sind erlaubt — Behandlungsergebnisse und Vorher-Nachher nicht,
                                 unabhängig davon, was hier steht.
                             </p>
@@ -682,10 +688,13 @@ useNachladen(laeuft, ['vorschlaege']);
                             <p v-if="gewaehlt.handlungsaufruf" class="pt-1 text-xs font-medium">{{ gewaehlt.handlungsaufruf }}</p>
                         </div>
 
-                        <p v-if="gewaehlt.hatBild" class="rounded-md border p-2 text-xs text-muted-foreground">
-                            Die Schrift auf den Grafiken hat das Bildmodell gesetzt, in jedem Format eigens. Bitte lesen Sie alle drei, bevor Sie
-                            freigeben. Geprüft haben wir den Text, nicht die Bilder.
-                        </p>
+                        <Alert v-if="gewaehlt.hatBild">
+                            <Info />
+                            <AlertDescription>
+                                Die Schrift auf den Grafiken hat das Bildmodell gesetzt, in jedem Format eigens. Bitte lesen Sie alle drei, bevor Sie
+                                freigeben. Geprüft haben wir den Text, nicht die Bilder.
+                            </AlertDescription>
+                        </Alert>
 
                         <!--
                             Ein beanstandeter Entwurf wird gezeigt, nicht
@@ -725,75 +734,70 @@ useNachladen(laeuft, ['vorschlaege']);
                             wartet sie für immer, und „das System zieht schon
                             nach" hilft dann niemandem.
                         -->
-                        <div
-                            v-if="gewaehlt.uebertragung"
-                            class="space-y-2 rounded-md border p-2 text-xs"
-                            :class="gewaehlt.uebertragung.zustand === 'failed' ? 'border-destructive/40 bg-destructive/5' : ''"
-                        >
-                            <p
-                                class="flex items-center gap-1.5 font-medium"
-                                :class="gewaehlt.uebertragung.zustand === 'failed' ? 'text-destructive' : 'text-foreground'"
-                            >
-                                <AlertTriangle v-if="gewaehlt.uebertragung.zustand === 'failed'" class="size-3 shrink-0" />
-                                <Loader2 v-else-if="unterwegs(gewaehlt.uebertragung)" class="size-3 shrink-0 animate-spin" />
-                                <Clock v-else class="size-3 shrink-0" />
-                                {{ meldungZurUebertragung(gewaehlt.uebertragung) }}
-                            </p>
-                            <!--
-                                **Der Grund liegt am Werbekonto, nicht an
-                                dieser Anzeige.** Er steht trotzdem hier: wer
-                                die Anzeige offen hat, sucht hier und nicht
-                                zwei Seiten weiter.
-                            -->
-                            <p v-if="werbekonto.gestoert && gewaehlt.uebertragung.zustand !== 'failed'" class="text-muted-foreground">
-                                {{ werbekonto.grund ?? 'Die Verbindung zu Meta ist gestört.' }}
-                                <Link href="/werbung" class="underline underline-offset-4">Zur Verbindung</Link>
-                            </p>
-                            <p v-else-if="gewaehlt.uebertragung.fehler" class="text-muted-foreground">
-                                {{ gewaehlt.uebertragung.fehler }}
-                            </p>
+                        <Alert v-if="gewaehlt.uebertragung" :variant="gewaehlt.uebertragung.zustand === 'failed' ? 'destructive' : 'default'">
+                            <XCircle v-if="gewaehlt.uebertragung.zustand === 'failed'" />
+                            <LoaderCircle v-else-if="unterwegs(gewaehlt.uebertragung)" class="animate-spin" />
+                            <Clock v-else />
+                            <AlertTitle>{{ meldungZurUebertragung(gewaehlt.uebertragung) }}</AlertTitle>
+                            <AlertDescription class="space-y-2">
+                                <!--
+                                    **Der Grund liegt am Werbekonto, nicht an
+                                    dieser Anzeige.** Er steht trotzdem hier: wer
+                                    die Anzeige offen hat, sucht hier und nicht
+                                    zwei Seiten weiter.
+                                -->
+                                <p v-if="werbekonto.gestoert && gewaehlt.uebertragung.zustand !== 'failed'">
+                                    {{ werbekonto.grund ?? 'Die Verbindung zu Meta ist gestört.' }}
+                                    <Link href="/werbung" class="underline underline-offset-4">Zur Verbindung</Link>
+                                </p>
+                                <p v-else-if="gewaehlt.uebertragung.fehler" class="break-words">
+                                    {{ gewaehlt.uebertragung.fehler }}
+                                </p>
 
-                            <!--
-                                Der Satz nimmt den Griff zum Neuladen ab: die
-                                Seite holt den Zustand von selbst nach.
-                            -->
-                            <p v-else-if="unterwegs(gewaehlt.uebertragung)" class="text-muted-foreground">
-                                Das dauert meist ein paar Sekunden. Sie müssen nichts tun — der Zustand hier oben aktualisiert sich von selbst.
-                            </p>
+                                <!--
+                                    Der Satz nimmt den Griff zum Neuladen ab: die
+                                    Seite holt den Zustand von selbst nach.
+                                -->
+                                <p v-else-if="unterwegs(gewaehlt.uebertragung)">
+                                    Das dauert meist ein paar Sekunden. Sie müssen nichts tun — der Zustand hier oben aktualisiert sich von selbst.
+                                </p>
 
-                            <!--
-                                Angestossen wird nur, was gerade nicht laeuft.
-                                Sonst legte ein zweiter Klick einen zweiten
-                                Auftrag auf dieselbe Anzeige.
-                            -->
-                            <Button
-                                v-if="!unterwegs(gewaehlt.uebertragung)"
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                :disabled="erneut.processing"
-                                @click="erneutUebertragen(gewaehlt.uebertragung.anzeige)"
-                            >
-                                <Loader2 v-if="erneut.processing" class="animate-spin" />
-                                <RefreshCw v-else />
-                                {{ gewaehlt.uebertragung.zustand === 'failed' ? 'Erneut übertragen' : 'Jetzt übertragen' }}
-                            </Button>
-                        </div>
+                                <!--
+                                    Angestossen wird nur, was gerade nicht laeuft.
+                                    Sonst legte ein zweiter Klick einen zweiten
+                                    Auftrag auf dieselbe Anzeige.
+                                -->
+                                <Button
+                                    v-if="!unterwegs(gewaehlt.uebertragung)"
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    class="text-foreground"
+                                    :disabled="erneut.processing"
+                                    @click="erneutUebertragen(gewaehlt.uebertragung.anzeige)"
+                                >
+                                    <LoaderCircle v-if="erneut.processing" class="animate-spin" />
+                                    <RefreshCw v-else />
+                                    {{ gewaehlt.uebertragung.zustand === 'failed' ? 'Erneut übertragen' : 'Jetzt übertragen' }}
+                                </Button>
+                            </AlertDescription>
+                        </Alert>
 
-                        <div v-if="gewaehlt.laeuftIn.length" class="rounded-md border p-2 text-xs text-muted-foreground">
-                            <span class="flex items-center gap-1.5 font-medium text-foreground">
-                                <Megaphone class="size-3 shrink-0" />
-                                {{ gewaehlt.laeuftIn.length === 1 ? 'Läuft in dieser Kampagne' : 'Läuft in diesen Kampagnen' }}
-                            </span>
-                            <ul class="mt-1 space-y-0.5">
-                                <li v-for="name in gewaehlt.laeuftIn" :key="name" class="truncate">{{ name }}</li>
-                            </ul>
-                            <p class="mt-1">Den Zustand sehen Sie unter <strong>Kampagnen</strong>.</p>
-                        </div>
+                        <Alert v-if="gewaehlt.laeuftIn.length">
+                            <Megaphone />
+                            <AlertTitle>{{ gewaehlt.laeuftIn.length === 1 ? 'Läuft in dieser Kampagne' : 'Läuft in diesen Kampagnen' }}</AlertTitle>
+                            <AlertDescription class="space-y-1">
+                                <ul class="space-y-0.5">
+                                    <li v-for="name in gewaehlt.laeuftIn" :key="name" class="truncate">{{ name }}</li>
+                                </ul>
+                                <p>Den Zustand sehen Sie unter <strong>Kampagnen</strong>.</p>
+                            </AlertDescription>
+                        </Alert>
 
-                        <p v-if="gewaehlt.uebersteuert" class="rounded-md border p-2 text-xs text-muted-foreground">
-                            Übersteuert: {{ gewaehlt.uebersteuerungsgrund }}
-                        </p>
+                        <Alert v-if="gewaehlt.uebersteuert">
+                            <ShieldAlert />
+                            <AlertDescription class="break-words">Übersteuert: {{ gewaehlt.uebersteuerungsgrund }}</AlertDescription>
+                        </Alert>
 
                         <!--
                             **Kein Zustand ohne Ausgang.** Verworfen war eine
@@ -802,12 +806,19 @@ useNachladen(laeuft, ['vorschlaege']);
                         -->
                         <div class="flex flex-wrap gap-2 border-t pt-3">
                             <template v-if="gewaehlt.status === 'draft'">
-                                <Button v-if="gewaehlt.darfFreigeben" type="button" size="sm" @click="freigeben(gewaehlt)"> Freigeben </Button>
+                                <Button v-if="gewaehlt.darfFreigeben" type="button" size="sm" @click="freigeben(gewaehlt)">
+                                    <Check />
+                                    Freigeben
+                                </Button>
                                 <Button v-else type="button" size="sm" variant="outline" @click="oeffneUebersteuerung(gewaehlt)">
+                                    <ShieldAlert />
                                     Übersteuern und freigeben
                                 </Button>
 
-                                <Button class="sm:ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)"> Verwerfen </Button>
+                                <Button class="sm:ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)">
+                                    <XCircle />
+                                    Verwerfen
+                                </Button>
                             </template>
 
                             <template v-else-if="gewaehlt.status === 'approved'">
@@ -823,11 +834,20 @@ useNachladen(laeuft, ['vorschlaege']);
                                     In Kampagne schalten
                                 </Button>
 
-                                <Button type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)"> Freigabe zurücknehmen </Button>
-                                <Button class="sm:ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)"> Verwerfen </Button>
+                                <Button type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)">
+                                    <Undo2 />
+                                    Freigabe zurücknehmen
+                                </Button>
+                                <Button class="sm:ml-auto" type="button" variant="ghost" size="sm" @click="verwerfen(gewaehlt)">
+                                    <XCircle />
+                                    Verwerfen
+                                </Button>
                             </template>
 
-                            <Button v-else type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)"> Zurückholen </Button>
+                            <Button v-else type="button" variant="outline" size="sm" @click="zurueckholen(gewaehlt)">
+                                <Undo2 />
+                                Zurückholen
+                            </Button>
                         </div>
 
                         <!-- Ein gesperrter Knopf sagt, warum — der Tooltip allein erreicht niemanden am Telefon. -->
@@ -845,6 +865,7 @@ useNachladen(laeuft, ['vorschlaege']);
             beschreibung="Ihr Text, Ihre Aussage. Geprüft wird er wie jeder andere — die Grafik erzeugen Sie danach."
             :laeuft="neu.processing"
             absende-text="Anlegen"
+            :absende-symbol="Plus"
             @absenden="anlegen"
         >
             <div class="grid gap-2">
@@ -893,9 +914,12 @@ useNachladen(laeuft, ['vorschlaege']);
                 **Die Überschrift steht später auf der Grafik**, wörtlich.
                 Wer das weiß, formuliert sie anders.
             -->
-            <p class="rounded-md border p-2 text-xs text-muted-foreground">
-                Die Überschrift und der Handlungsaufruf gehen wörtlich in jedes Format der Grafik, wenn Sie eine erzeugen lassen.
-            </p>
+            <Alert>
+                <Info />
+                <AlertDescription>
+                    Die Überschrift und der Handlungsaufruf gehen wörtlich in jedes Format der Grafik, wenn Sie eine erzeugen lassen.
+                </AlertDescription>
+            </Alert>
         </FormularDialog>
 
         <FormularDialog
@@ -904,6 +928,7 @@ useNachladen(laeuft, ['vorschlaege']);
             beschreibung="Die Anzeige entsteht pausiert. Starten können Sie sie unter Kampagnen — nachdem Sie sie dort gesehen haben."
             :laeuft="schalten.processing"
             absende-text="Anlegen"
+            :absende-symbol="Plus"
             @absenden="anzeigeSchalten"
         >
             <div class="grid gap-2">
@@ -917,10 +942,13 @@ useNachladen(laeuft, ['vorschlaege']);
                 <InputError :message="schalten.errors.kampagne" />
             </div>
 
-            <p class="rounded-md border p-2 text-xs text-muted-foreground">
-                Übertragen wird im Hintergrund. Solange Meta die Anzeige nicht bestätigt hat, steht sie unter
-                <strong>Kampagnen</strong> als <em>wird übertragen</em>.
-            </p>
+            <Alert>
+                <Info />
+                <AlertDescription>
+                    Übertragen wird im Hintergrund. Solange Meta die Anzeige nicht bestätigt hat, steht sie unter
+                    <strong>Kampagnen</strong> als <em>wird übertragen</em>.
+                </AlertDescription>
+            </Alert>
         </FormularDialog>
 
         <FormularDialog
@@ -929,6 +957,7 @@ useNachladen(laeuft, ['vorschlaege']);
             beschreibung="Das Produkt ist eine Prüfhilfe, keine Rechtsberatung. Wer gegen sie entscheidet, sollte sagen, warum."
             :laeuft="uebersteuerung.processing"
             absende-text="Übersteuern"
+            :absende-symbol="ShieldAlert"
             @absenden="uebersteuern"
         >
             <div class="grid gap-2">

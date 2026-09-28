@@ -7,8 +7,10 @@ use App\Enums\GuardrailHit;
 use App\Enums\NotificationKind;
 use App\Enums\Role;
 use App\Kanaele\Email\Postfach;
+use App\Models\DemoRequest;
 use App\Models\User;
 use App\Notifications\Agentenalarm;
+use App\Notifications\Demoanfrage;
 use App\Termine\Terminplaner;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
@@ -278,4 +280,39 @@ it('stellt den Alarm ohne Mandanten zu', function (): void {
     arbeitsgang();
 
     expect((string) mailMitBetreff('Bitte im Posteingang nachsehen')->getHtmlBody())->toContain((string) $aufbau->gespraech->uuid);
+});
+
+it('stellt die Demo-Anfrage verschluesselt und ohne Mandanten zu (WP-38 AK 18)', function (): void {
+    $anfrage = DemoRequest::factory()->create(['practice_name' => 'Praxis am Hafen', 'email' => 'jana@praxis-am-hafen.test']);
+
+    Notification::route('mail', 'vertrieb@example.test')->notify(new Demoanfrage($anfrage));
+
+    // Die Nutzlast traegt nur Kennung und Zeit -- und auch die verschluesselt.
+    expect(wartendeNutzlast())->not->toContain((string) $anfrage->uuid)
+        ->and(wartendeNutzlast())->not->toContain('praxis-am-hafen');
+
+    arbeitsgang();
+
+    $mail = mailMitBetreff('Neue Demo-Anfrage');
+
+    expect($mail->getTo()[0]->getAddress())->toBe('vertrieb@example.test')
+        ->and((string) $mail->getHtmlBody())->toContain(route('backoffice.demoanfragen'))
+        ->and((string) $mail->getHtmlBody())->not->toContain('Praxis am Hafen');
+});
+
+it('behaelt die Demo-Anfrage, wenn der Versand endgueltig scheitert (WP-38 AK 18)', function (): void {
+    $anfrage = DemoRequest::factory()->create();
+
+    // Kein hinterlegter Plattformserver, und der Rueckfall antwortet nicht.
+    config([
+        'mail.mailers.kaputt' => ['transport' => 'smtp', 'host' => '127.0.0.1', 'port' => 1, 'timeout' => 1],
+        'mail.default' => 'kaputt',
+    ]);
+
+    Notification::route('mail', 'vertrieb@example.test')->notify(new Demoanfrage($anfrage));
+
+    arbeitsgang();
+
+    expect(DB::table('failed_jobs')->count())->toBe(1)
+        ->and(DemoRequest::query()->whereKey($anfrage->getKey())->exists())->toBeTrue();
 });

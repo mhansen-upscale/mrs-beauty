@@ -4,6 +4,7 @@ import DataTable from '@/components/DataTable.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, CheckCircle2, CircleSlash, Eye, EyeOff, Pencil, Plus, Power, PowerOff } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, CircleSlash, Eye, EyeOff, Pencil, Plus, Power, PowerOff, Save } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 interface TypeItem extends Record<string, unknown> {
@@ -53,7 +54,8 @@ const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Terminarten', href: '/termi
 const spalten: Spalte<TypeItem>[] = [
     { schluessel: 'name', titel: 'Terminart' },
     { schluessel: 'treatment_name', titel: 'Behandlung', ab: 'md' },
-    { schluessel: 'duration_minutes', titel: 'Dauer', klasse: 'text-right tabular-nums' },
+    // Auf dem Handy steht die Dauer unter dem Namen (sm:hidden in der ersten Zelle) — sonst läuft die Zeile rechts über.
+    { schluessel: 'duration_minutes', titel: 'Dauer', klasse: 'text-right tabular-nums', ab: 'sm' },
     { schluessel: 'lead_time_hours', titel: 'Vorlauf', klasse: 'text-right tabular-nums', ab: 'lg' },
     { schluessel: 'is_public', titel: 'Sichtbar', ab: 'lg' },
     { schluessel: 'is_active', titel: 'Status' },
@@ -139,9 +141,10 @@ const bereit = (eintrag: TypeItem): boolean => eintrag.practitioners.length > 0 
         <div class="space-y-6 p-4">
             <Heading title="Terminarten" description="Was gebucht wird. Rüstzeit belegt den Kalender, angezeigt wird nur die Dauer." />
 
-            <p v-if="!practitioners.length || !locations.length" class="rounded-md border border-warning/40 bg-warning/5 p-4 text-sm text-warning">
-                Ohne Behandler und Standort lässt sich keine Terminart freigeben.
-            </p>
+            <Alert v-if="!practitioners.length || !locations.length" variant="warning">
+                <AlertTriangle />
+                <AlertDescription>Ohne Behandler und Standort lässt sich keine Terminart freigeben.</AlertDescription>
+            </Alert>
 
             <DataTable :spalten="spalten" :zeilen="types" :suchfelder="['name', 'treatment_name']" suchtext="Terminart oder Behandlung">
                 <template #werkzeuge>
@@ -154,10 +157,15 @@ const bereit = (eintrag: TypeItem): boolean => eintrag.practitioners.length > 0 
                 <template #zelle-name="{ zeile }">
                     <span class="flex items-center gap-2">
                         <span class="size-2.5 shrink-0 rounded-full" :style="{ backgroundColor: zeile.color }" aria-hidden="true" />
-                        <span>
-                            <span class="font-medium">{{ zeile.name }}</span>
+                        <span class="min-w-0">
+                            <span class="break-words font-medium">{{ zeile.name }}</span>
+                            <span class="block text-xs tabular-nums text-muted-foreground sm:hidden">
+                                {{ zeile.duration_minutes }} min<template v-if="zeile.blocked_minutes !== zeile.duration_minutes">
+                                    · belegt {{ zeile.blocked_minutes }} min</template
+                                >
+                            </span>
                             <span v-if="!bereit(zeile)" class="flex items-center gap-1 text-xs text-warning">
-                                <AlertTriangle class="size-3" />
+                                <AlertTriangle class="size-3 shrink-0" />
                                 nicht freigegeben
                             </span>
                         </span>
@@ -221,10 +229,11 @@ const bereit = (eintrag: TypeItem): boolean => eintrag.practitioners.length > 0 
             :titel="bearbeitet ? 'Terminart bearbeiten' : 'Terminart anlegen'"
             :laeuft="formular.processing"
             :absende-text="bearbeitet ? 'Speichern' : 'Anlegen'"
+            :absende-symbol="bearbeitet ? Save : Plus"
             breit
             @absenden="speichern"
         >
-            <div class="grid gap-4 sm:grid-cols-2">
+            <div class="grid items-start gap-4 sm:grid-cols-2">
                 <div class="grid gap-2">
                     <Label for="name">Name</Label>
                     <Input id="name" v-model="formular.name" placeholder="Erstberatung Botox" />

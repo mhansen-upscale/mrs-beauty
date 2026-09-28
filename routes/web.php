@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Betrieb\DashboardController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
-Route::get('/', function () {
-    return Inertia::render('Welcome');
-})->name('home');
+require __DIR__.'/oeffentlich.php';
 
 Route::get('dashboard', DashboardController::class)
     ->middleware(['auth', 'verified'])

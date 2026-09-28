@@ -111,3 +111,15 @@ it('kennt keinen Platzhalter fuer den Inhalt einer Nachricht (WP-37 AK 5)', func
         expect($namen)->each->toBeIn(['praxis', 'grund', 'produkt']);
     }
 });
+
+it('fuehrt die Demo-Anfrage als feste Plattformmail, die keine Praxis sieht (WP-38 AK 19)', function (): void {
+    expect(Mailart::Demoanfrage->versandweg())->toBe(Versandweg::Plattform)
+        ->and(Mailart::Demoanfrage->istVorlage())->toBeFalse()
+        ->and(Mailart::Demoanfrage->anDenBetreiber())->toBeTrue()
+        ->and(Mailart::Versandprobe->anDenBetreiber())->toBeTrue()
+        ->and(Mailart::Agentenalarm->anDenBetreiber())->toBeFalse()
+        ->and(Mailart::Demoanfrage->platzhalter(Mailfeld::Betreff))->toBe([]);
+
+    // Die Zahlen oben bleiben: eine Mail an den Betreiber gestaltet niemand.
+    expect(Mailart::vorlagen(Versandweg::Plattform))->not->toContain(Mailart::Demoanfrage);
+});

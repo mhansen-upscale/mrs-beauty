@@ -5,6 +5,7 @@ import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import HeadingSmall from '@/components/HeadingSmall.vue';
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type SharedData, type Spalte } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, CircleSlash, MailCheck, MailWarning, Send, ShieldAlert, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-vue-next';
+import {
+    CheckCircle2,
+    CircleSlash,
+    MailCheck,
+    MailWarning,
+    RotateCcw,
+    Send,
+    ShieldAlert,
+    ShieldCheck,
+    ShieldOff,
+    Trash2,
+    UserPlus,
+} from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 const page = usePage<SharedData>();
@@ -68,9 +81,14 @@ const freigeben = () => {
     router.post(route('impersonation.approve', { session: props.supportSession.uuid }), {}, { preserveScroll: true });
 };
 
+/**
+ * Auf dem Handy tragen Name und Status die Zeile. E-Mail und Rolle stehen
+ * dort in der ersten Zelle — die Rolle als dasselbe Auswahlfeld, sonst ließe
+ * sie sich unter `md` nicht ändern.
+ */
 const mitgliedSpalten: Spalte<Member>[] = [
     { schluessel: 'name', titel: 'Name' },
-    { schluessel: 'email', titel: 'E-Mail' },
+    { schluessel: 'email', titel: 'E-Mail', ab: 'sm' },
     { schluessel: 'role', titel: 'Rolle', ab: 'md' },
     { schluessel: 'verified', titel: 'Bestätigt', ab: 'lg' },
     { schluessel: 'deactivated', titel: 'Status' },
@@ -164,25 +182,24 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
         <Head title="Team" />
 
         <div class="space-y-8 p-4">
-            <div v-if="supportSession && darfFreigeben" class="space-y-3 rounded-md border border-warning/40 bg-warning/5 p-4">
-                <div class="flex items-center gap-2 text-warning">
-                    <ShieldAlert class="size-4" />
-                    <p class="text-sm font-medium">Der Support sieht gerade Ihre Praxis — maskiert.</p>
-                </div>
-
-                <p class="text-sm text-muted-foreground">Begründung: „{{ supportSession.reason }}“</p>
-
-                <p class="text-sm text-muted-foreground">
-                    Personenbezogene Daten sind ersetzt. Erst mit Ihrer Freigabe sieht der Support sie im Klartext — befristet und protokolliert.
-                </p>
-
-                <Button variant="outline" size="sm" @click="freigeben">
-                    <ShieldAlert />
-                    Vollzugriff freigeben
-                </Button>
-            </div>
-
             <Heading title="Team" description="Wer im Produkt arbeitet und was er dort darf." />
+
+            <Alert v-if="supportSession && darfFreigeben" variant="warning">
+                <ShieldAlert />
+                <AlertTitle>Der Support sieht gerade Ihre Praxis — maskiert.</AlertTitle>
+                <AlertDescription class="space-y-3">
+                    <p class="break-words">Begründung: „{{ supportSession.reason }}“</p>
+
+                    <p>
+                        Personenbezogene Daten sind ersetzt. Erst mit Ihrer Freigabe sieht der Support sie im Klartext — befristet und protokolliert.
+                    </p>
+
+                    <Button variant="outline" size="sm" @click="freigeben">
+                        <ShieldAlert />
+                        Vollzugriff freigeben
+                    </Button>
+                </AlertDescription>
+            </Alert>
 
             <DataTable :spalten="mitgliedSpalten" :zeilen="members" :suchfelder="['name', 'email']" suchtext="Name oder E-Mail">
                 <template #werkzeuge>
@@ -193,13 +210,33 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 </template>
 
                 <template #zelle-name="{ zeile }">
-                    <span class="font-medium">{{ zeile.name }}</span>
+                    <span class="break-words font-medium">{{ zeile.name }}</span>
                     <span v-if="zeile.self" class="text-xs text-muted-foreground"> · Sie</span>
+                    <!-- Auf dem Handy fehlen die Spalten E-Mail und Rolle. -->
+                    <span class="block break-all text-xs text-muted-foreground sm:hidden">{{ zeile.email }}</span>
+                    <div class="mt-2 md:hidden">
+                        <Select :model-value="zeile.role ?? ''" @update:model-value="(wert: unknown) => rolleAendern(zeile, String(wert))">
+                            <SelectTrigger class="h-8 w-full max-w-40" :aria-label="`Rolle von ${zeile.name} ändern`">
+                                <SelectValue :placeholder="bezeichnung(zeile.role)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem v-for="rolle in roles" :key="rolle.value" :value="rolle.value">
+                                    {{ rolle.label }}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </template>
+
+                <template #zelle-email="{ zeile }">
+                    <span class="break-all">{{ zeile.email }}</span>
                 </template>
 
                 <template #zelle-role="{ zeile }">
                     <Select :model-value="zeile.role ?? ''" @update:model-value="(wert: unknown) => rolleAendern(zeile, String(wert))">
-                        <SelectTrigger class="h-8 w-40"><SelectValue :placeholder="bezeichnung(zeile.role)" /></SelectTrigger>
+                        <SelectTrigger class="h-8 w-40" :aria-label="`Rolle von ${zeile.name}`">
+                            <SelectValue :placeholder="bezeichnung(zeile.role)" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem v-for="rolle in roles" :key="rolle.value" :value="rolle.value">
                                 {{ rolle.label }}
@@ -262,6 +299,14 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                 <HeadingSmall title="Offene Einladungen" description="Eine Einladung gilt 14 Tage und lässt sich jederzeit zurücknehmen." />
 
                 <DataTable :spalten="einladungSpalten" :zeilen="invitations" :suchfelder="['email']" suchtext="E-Mail">
+                    <template #zelle-email="{ zeile }">
+                        <span class="break-all">{{ zeile.email }}</span>
+                        <!-- Auf dem Handy fehlen Rolle und Frist als Spalten. -->
+                        <span class="block text-xs text-muted-foreground md:hidden">
+                            {{ bezeichnung(zeile.role) }} · läuft ab {{ frist(zeile.expires_at) }}
+                        </span>
+                    </template>
+
                     <template #zelle-role="{ zeile }">
                         <Badge variant="secondary">{{ bezeichnung(zeile.role) }}</Badge>
                     </template>
@@ -286,6 +331,7 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Die Einladung geht per E-Mail raus und gilt 14 Tage."
             :laeuft="einladung.processing"
             absende-text="Einladen"
+            :absende-symbol="UserPlus"
             @absenden="einladen"
         >
             <div class="grid gap-2">
@@ -297,14 +343,14 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             <div class="grid gap-2">
                 <Label for="rolle">Rolle</Label>
                 <Select v-model="einladung.role">
-                    <SelectTrigger id="rolle"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="rolle" aria-describedby="rolle-hinweis"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         <SelectItem v-for="rolle in roles" :key="rolle.value" :value="rolle.value">
                             {{ rolle.label }}
                         </SelectItem>
                     </SelectContent>
                 </Select>
-                <p class="text-xs text-muted-foreground">
+                <p id="rolle-hinweis" class="text-xs text-muted-foreground">
                     {{ roles.find((rolle) => rolle.value === einladung.role)?.description }}
                 </p>
                 <InputError :message="einladung.errors.role" />
@@ -317,6 +363,7 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
             beschreibung="Für ein verlorenes Telefon. Die Person meldet sich danach nur mit Passwort an und richtet den zweiten Faktor neu ein. Der Vorgang steht im Protokoll."
             :laeuft="faktor.processing"
             absende-text="Zurücksetzen"
+            :absende-symbol="RotateCcw"
             @absenden="faktorZuruecksetzen"
         >
             <div class="grid gap-2">

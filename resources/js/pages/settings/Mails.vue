@@ -1,18 +1,20 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import AktionsButton from '@/components/AktionsButton.vue';
 import DataTable from '@/components/DataTable.vue';
-import HeadingSmall from '@/components/HeadingSmall.vue';
+import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import PostfachWarnung from '@/components/mail/PostfachWarnung.vue';
+import Speicherleiste from '@/components/Speicherleiste.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { type BreadcrumbItem, type Postfachstand, type Spalte } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { CheckCircle2, FileText, Image, Palette, PenLine, Pencil, Save, Send } from 'lucide-vue-next';
+import { CheckCircle2, FileText, Image, Palette, PenLine, Pencil } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 /**
@@ -48,7 +50,10 @@ const props = defineProps<{
     weitere: Weiterezeile[];
 }>();
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'E-Mails', href: '/settings/mails' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Einstellungen', href: '/settings/profile' },
+    { title: 'E-Mails', href: '/settings/mails' },
+];
 
 /* Signatur ------------------------------------------------------------------ */
 
@@ -82,66 +87,54 @@ const bearbeiten = (zeile: Vorlagenzeile) => router.visit(route('mailvorlagen.ed
         <Head title="E-Mails" />
 
         <SettingsLayout breit>
-            <div class="space-y-10">
-                <HeadingSmall title="E-Mails" description="Welche Mails Ihre Praxis verschickt, wie sie aussehen und was in den Terminmails steht." />
+            <Heading title="E-Mails" description="Welche Mails Ihre Praxis verschickt, wie sie aussehen und was in den Terminmails steht." />
 
-                <div class="grid gap-4 md:grid-cols-2">
-                    <!-- Versand ---------------------------------------------- -->
-                    <Card>
-                        <CardHeader class="pb-3">
-                            <CardTitle class="flex items-center gap-2 text-base font-medium"><Send class="size-4" /> Versand</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <PostfachWarnung v-if="!postfach.bereit" :postfach="postfach" />
-                            <p v-else class="flex items-start gap-2 text-sm">
-                                <CheckCircle2 class="mt-0.5 size-4 shrink-0 text-success" />
-                                <span>
-                                    Terminmails gehen über Ihr Postfach <strong class="break-all">{{ postfach.absender }}</strong> hinaus.
-                                </span>
-                            </p>
-                        </CardContent>
-                    </Card>
+            <div class="grid items-start gap-6 @3xl:grid-cols-2">
+                <!-- Versand ---------------------------------------------- -->
+                <Abschnitt titel="Versand">
+                    <PostfachWarnung v-if="!postfach.bereit" :postfach="postfach" />
+                    <Alert v-else variant="success">
+                        <CheckCircle2 />
+                        <AlertDescription>
+                            Terminmails gehen über Ihr Postfach <strong class="break-all">{{ postfach.absender }}</strong> hinaus.
+                        </AlertDescription>
+                    </Alert>
+                </Abschnitt>
 
-                    <!-- Aussehen --------------------------------------------- -->
-                    <Card>
-                        <CardHeader class="pb-3">
-                            <CardTitle class="flex items-center gap-2 text-base font-medium"><Palette class="size-4" /> Aussehen</CardTitle>
-                        </CardHeader>
-                        <CardContent class="space-y-3 text-sm">
-                            <!--
-                                Die Farbe ist ein Datum, keine Gestaltung
-                                (docs/konventionen.md) — wie im
-                                Erscheinungsbild als Fläche daneben.
-                            -->
-                            <div class="flex items-center gap-3">
-                                <span class="size-9 shrink-0 rounded-md border" :style="{ backgroundColor: marke.farbe }" />
-                                <div>
-                                    <p>{{ marke.eigeneFarbe ? 'Ihre Markenfarbe' : 'Die Farbe des Produkts' }}</p>
-                                    <p class="font-mono text-xs text-muted-foreground">{{ marke.farbe }}</p>
-                                </div>
-                            </div>
+                <!-- Aussehen --------------------------------------------- -->
+                <Abschnitt titel="Aussehen">
+                    <template #aktionen>
+                        <Button variant="outline" size="sm" as-child>
+                            <Link :href="route('erscheinungsbild.edit')">
+                                <Palette />
+                                Logo und Farbe ändern
+                            </Link>
+                        </Button>
+                    </template>
 
-                            <p class="flex items-start gap-2">
-                                <Image class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                                <span>{{
-                                    marke.hatLogo ? 'Ihr Logo steht im Kopf jeder Mail.' : 'Kein Logo hinterlegt — im Kopf steht Ihr Name.'
-                                }}</span>
-                            </p>
+                    <!--
+                        Die Farbe ist ein Datum, keine Gestaltung
+                        (docs/konventionen.md) — wie im
+                        Erscheinungsbild als Fläche daneben.
+                    -->
+                    <div class="flex items-center gap-3 text-sm">
+                        <span class="size-9 shrink-0 rounded-md border" :style="{ backgroundColor: marke.farbe }" />
+                        <div>
+                            <p>{{ marke.eigeneFarbe ? 'Ihre Markenfarbe' : 'Die Farbe des Produkts' }}</p>
+                            <p class="font-mono text-xs text-muted-foreground">{{ marke.farbe }}</p>
+                        </div>
+                    </div>
 
-                            <Button variant="outline" size="sm" as-child>
-                                <Link :href="route('erscheinungsbild.edit')">
-                                    <Palette />
-                                    Logo und Farbe ändern
-                                </Link>
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </div>
+                    <p class="flex items-start gap-2 text-sm">
+                        <Image class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <span>{{ marke.hatLogo ? 'Ihr Logo steht im Kopf jeder Mail.' : 'Kein Logo hinterlegt — im Kopf steht Ihr Name.' }}</span>
+                    </p>
+                </Abschnitt>
+            </div>
 
-                <!-- Signatur ------------------------------------------------- -->
-                <form class="max-w-xl space-y-4" @submit.prevent="signaturSpeichern">
-                    <HeadingSmall title="Signatur" />
-
+            <!-- Signatur ------------------------------------------------- -->
+            <form class="space-y-6" @submit.prevent="signaturSpeichern">
+                <Abschnitt titel="Signatur">
                     <div class="grid gap-2">
                         <Textarea
                             id="signatur"
@@ -158,69 +151,57 @@ const bearbeiten = (zeile: Vorlagenzeile) => router.visit(route('mailvorlagen.ed
                         </div>
                         <InputError id="signatur-fehler" :message="signaturFormular.errors.signatur" />
                     </div>
+                </Abschnitt>
 
-                    <Button type="submit" :disabled="signaturFormular.processing">
-                        <Save />
-                        Speichern
-                    </Button>
-                </form>
+                <Speicherleiste :formular="signaturFormular" @speichern="signaturSpeichern" />
+            </form>
 
-                <!-- Terminmails ---------------------------------------------- -->
-                <div class="space-y-4">
-                    <HeadingSmall
-                        title="Terminmails"
-                        description="Diese Mails schreiben Sie selbst — um den Termin herum. Datum, Uhrzeit, Terminart und Anschrift setzt das Produkt."
-                    />
+            <!-- Terminmails ---------------------------------------------- -->
+            <Abschnitt
+                titel="Terminmails"
+                beschreibung="Diese Mails schreiben Sie selbst — um den Termin herum. Datum, Uhrzeit, Terminart und Anschrift setzt das Produkt."
+            >
+                <DataTable :spalten="vorlagenSpalten" :zeilen="vorlagen" schluessel="art">
+                    <template #zelle-label="{ zeile }">
+                        <Link :href="route('mailvorlagen.edit', { mailart: zeile.art })" class="font-medium hover:underline">{{ zeile.label }}</Link>
+                        <p class="text-xs text-muted-foreground">{{ zeile.beschreibung }}</p>
+                    </template>
 
-                    <DataTable :spalten="vorlagenSpalten" :zeilen="vorlagen" schluessel="art">
-                        <template #zelle-label="{ zeile }">
-                            <Link :href="route('mailvorlagen.edit', { mailart: zeile.art })" class="font-medium hover:underline">{{
-                                zeile.label
-                            }}</Link>
-                            <p class="text-xs text-muted-foreground">{{ zeile.beschreibung }}</p>
-                        </template>
+                    <template #zelle-angepasst="{ zeile }">
+                        <Badge v-if="zeile.angepasst" variant="info">
+                            <PenLine />
+                            Angepasst
+                        </Badge>
+                        <Badge v-else variant="secondary">
+                            <FileText />
+                            Standard
+                        </Badge>
+                        <p v-if="zeile.angepasst && zeile.geaendertAm" class="mt-1 text-xs text-muted-foreground">
+                            am {{ datum(zeile.geaendertAm) }}
+                        </p>
+                    </template>
 
-                        <template #zelle-angepasst="{ zeile }">
-                            <Badge v-if="zeile.angepasst" variant="info">
-                                <PenLine />
-                                Angepasst
-                            </Badge>
-                            <Badge v-else variant="secondary">
-                                <FileText />
-                                Standard
-                            </Badge>
-                            <p v-if="zeile.angepasst && zeile.geaendertAm" class="mt-1 text-xs text-muted-foreground">
-                                am {{ datum(zeile.geaendertAm) }}
-                            </p>
-                        </template>
+                    <template #aktionen="{ zeile }">
+                        <AktionsButton :icon="Pencil" beschriftung="Bearbeiten" @click="bearbeiten(zeile)" />
+                    </template>
 
-                        <template #aktionen="{ zeile }">
-                            <AktionsButton :icon="Pencil" beschriftung="Bearbeiten" @click="bearbeiten(zeile)" />
-                        </template>
+                    <template #leer>Es gibt keine Terminmails zum Anpassen.</template>
+                </DataTable>
+            </Abschnitt>
 
-                        <template #leer>Es gibt keine Terminmails zum Anpassen.</template>
-                    </DataTable>
-                </div>
+            <!-- Weitere Mails -------------------------------------------- -->
+            <Abschnitt titel="Weitere Mails" beschreibung="Diese Mails gehen ebenfalls hinaus. Ihren Text setzt das Produkt oder der Betreiber.">
+                <DataTable :spalten="weitereSpalten" :zeilen="weitere" schluessel="art">
+                    <template #zelle-label="{ zeile }">
+                        <span class="font-medium">{{ zeile.label }}</span>
+                        <p class="text-xs text-muted-foreground">{{ zeile.beschreibung }}</p>
+                        <!-- Auf dem Telefon fehlt die Spalte — der Versandweg gehört trotzdem zur Antwort. -->
+                        <p class="mt-1 text-xs text-muted-foreground md:hidden">{{ zeile.weg }}</p>
+                    </template>
 
-                <!-- Weitere Mails -------------------------------------------- -->
-                <div class="space-y-4">
-                    <HeadingSmall
-                        title="Weitere Mails"
-                        description="Diese Mails gehen ebenfalls hinaus. Ihren Text setzt das Produkt oder der Betreiber."
-                    />
-
-                    <DataTable :spalten="weitereSpalten" :zeilen="weitere" schluessel="art">
-                        <template #zelle-label="{ zeile }">
-                            <span class="font-medium">{{ zeile.label }}</span>
-                            <p class="text-xs text-muted-foreground">{{ zeile.beschreibung }}</p>
-                            <!-- Auf dem Telefon fehlt die Spalte — der Versandweg gehört trotzdem zur Antwort. -->
-                            <p class="mt-1 text-xs text-muted-foreground md:hidden">{{ zeile.weg }}</p>
-                        </template>
-
-                        <template #leer>Keine weiteren Mails.</template>
-                    </DataTable>
-                </div>
-            </div>
+                    <template #leer>Keine weiteren Mails.</template>
+                </DataTable>
+            </Abschnitt>
         </SettingsLayout>
     </AppLayout>
 </template>

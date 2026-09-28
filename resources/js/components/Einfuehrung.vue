@@ -5,6 +5,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { useEinfuehrung } from '@/composables/useEinfuehrung';
 import type { SharedData } from '@/types';
 import { usePage } from '@inertiajs/vue3';
+import { Compass, X } from 'lucide-vue-next';
 import { onMounted, ref, watch } from 'vue';
 
 /**
@@ -95,8 +96,14 @@ onMounted(() => {
             </DialogHeader>
 
             <DialogFooter>
-                <Button type="button" variant="ghost" @click="spaeter">Nicht jetzt</Button>
-                <Button type="button" @click="starte">Führung starten</Button>
+                <Button type="button" variant="ghost" @click="spaeter">
+                    <X />
+                    Nicht jetzt
+                </Button>
+                <Button type="button" @click="starte">
+                    <Compass />
+                    Führung starten
+                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

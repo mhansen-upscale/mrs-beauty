@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
@@ -54,10 +55,10 @@ const kontext = (werte: Record<string, unknown>): string =>
         <div class="space-y-6 p-4">
             <Heading title="Protokoll" description="Wer wann was getan hat. Einträge lassen sich nicht ändern und nicht löschen." />
 
-            <p class="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
-                <Lock class="size-4 shrink-0" />
-                Aus Datenschutzgründen stehen hier keine Inhalte — nur, welche Felder sich geändert haben.
-            </p>
+            <Alert>
+                <Lock />
+                <AlertDescription>Aus Datenschutzgründen stehen hier keine Inhalte — nur, welche Felder sich geändert haben.</AlertDescription>
+            </Alert>
 
             <DataTable
                 :spalten="spalten"
@@ -74,10 +75,12 @@ const kontext = (werte: Record<string, unknown>): string =>
 
                 <template #zelle-label="{ zeile }">
                     <span class="flex items-center gap-2">
-                        <span class="font-medium">{{ zeile.label }}</span>
-                        <ShieldAlert v-if="zeile.impersonated" class="size-3.5 text-warning" aria-label="Während einer Impersonation" />
+                        <span class="min-w-0 break-words font-medium">{{ zeile.label }}</span>
+                        <ShieldAlert v-if="zeile.impersonated" class="size-3.5 shrink-0 text-warning" aria-label="Während einer Impersonation" />
                     </span>
-                    <span v-if="zeile.reason" class="block text-xs italic text-muted-foreground">„{{ zeile.reason }}“</span>
+                    <span v-if="zeile.reason" class="block break-words text-xs italic text-muted-foreground">„{{ zeile.reason }}“</span>
+                    <!-- Unter lg fehlt die Spalte „Wer“ — wer es war, gehört trotzdem zum Eintrag. -->
+                    <span class="block text-xs text-muted-foreground lg:hidden">{{ zeile.actor ?? 'System' }}</span>
                 </template>
 
                 <template #zelle-subject="{ zeile }">

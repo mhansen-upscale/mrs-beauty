@@ -2,6 +2,7 @@
 import { Button } from '@/components/ui/button';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import { LogIn } from 'lucide-vue-next';
 
 defineProps<{ reason: string }>();
 </script>
@@ -14,7 +15,10 @@ defineProps<{ reason: string }>();
             <p class="text-sm text-muted-foreground">Bitten Sie die Praxis, Ihnen eine neue Einladung zu schicken.</p>
 
             <Button as-child variant="outline" class="w-full">
-                <Link :href="route('login')">Zur Anmeldung</Link>
+                <Link :href="route('login')">
+                    <LogIn />
+                    Zur Anmeldung
+                </Link>
             </Button>
         </div>
     </AuthBase>

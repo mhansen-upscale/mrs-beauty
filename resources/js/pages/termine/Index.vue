@@ -4,13 +4,14 @@ import TerminAnlegen from '@/components/termine/TerminAnlegen.vue';
 import TerminDetail from '@/components/termine/TerminDetail.vue';
 import Wochenraster from '@/components/termine/Wochenraster.vue';
 import type { Auswahl, Behandler, Kontakt, Termin, Terminart, Vorschlag } from '@/components/termine/typen';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
-import { AlertTriangle, CalendarClock, ChevronLeft, ChevronRight, Clock, Dot, MapPin } from 'lucide-vue-next';
+import { AlertTriangle, Calendar, CalendarClock, CalendarRange, ChevronLeft, ChevronRight, Clock, Dot, Info, MapPin } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 const props = defineProps<{
@@ -125,9 +126,12 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
         <div class="space-y-6 p-4">
             <Heading title="Termine" description="Der Tag oder die Woche der Praxis. Angezeigt wird die Terminzeit, belegt wird mehr." />
 
-            <div v-if="!location" class="rounded-md border p-6 text-sm text-muted-foreground">
-                Noch kein aktiver Standort. Termine brauchen einen Ort und Arbeitszeiten — beides steht unter Praxis.
-            </div>
+            <Alert v-if="!location">
+                <Info />
+                <AlertDescription>
+                    Noch kein aktiver Standort. Termine brauchen einen Ort und Arbeitszeiten — beides steht unter Praxis.
+                </AlertDescription>
+            </Alert>
 
             <template v-else>
                 <div class="flex flex-wrap items-center gap-2">
@@ -145,9 +149,11 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                     <!-- Tag oder Woche: dieselbe Seite, dieselben Termine, ein anderer Ausschnitt. -->
                     <div class="inline-flex rounded-md border p-0.5" role="group" aria-label="Ansicht">
                         <Button size="sm" :variant="woche ? 'ghost' : 'secondary'" :aria-pressed="!woche" @click="gehe({ ansicht: 'tag' })">
+                            <Calendar />
                             Tag
                         </Button>
                         <Button size="sm" :variant="woche ? 'secondary' : 'ghost'" :aria-pressed="woche" @click="gehe({ ansicht: 'woche' })">
+                            <CalendarRange />
                             Woche
                         </Button>
                     </div>
@@ -159,7 +165,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                         :model-value="location.uuid"
                         @update:model-value="(wert: unknown) => gehe({ location: String(wert) })"
                     >
-                        <SelectTrigger class="w-full sm:w-56">
+                        <SelectTrigger class="w-full sm:w-56" aria-label="Standort">
                             <MapPin class="size-4 text-muted-foreground" />
                             <SelectValue />
                         </SelectTrigger>
@@ -189,7 +195,10 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                     </div>
                 </div>
 
-                <p v-if="!practitioners.length" class="rounded-md border p-6 text-sm text-muted-foreground">An diesem Standort arbeitet niemand.</p>
+                <Alert v-if="!practitioners.length">
+                    <Info />
+                    <AlertDescription>An diesem Standort arbeitet niemand.</AlertDescription>
+                </Alert>
 
                 <Wochenraster
                     v-else-if="woche"
@@ -205,7 +214,11 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                 <div v-else class="grid gap-4" :class="spaltenraster">
                     <section v-for="person in practitioners" :key="person.uuid" class="space-y-2">
                         <h2 class="flex items-center gap-2 text-sm font-medium">
-                            <span class="size-2.5 rounded-full" :style="{ backgroundColor: kalenderfarbe(person.color_index) }" aria-hidden="true" />
+                            <span
+                                class="size-2.5 shrink-0 rounded-full"
+                                :style="{ backgroundColor: kalenderfarbe(person.color_index) }"
+                                aria-hidden="true"
+                            />
                             {{ person.name }}
                         </h2>
 
@@ -224,7 +237,7 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                         >
                             <span class="flex items-center gap-2 text-sm font-medium">
                                 <span class="shrink-0 tabular-nums">{{ termin.starts_at }}–{{ termin.ends_at }}</span>
-                                <Dot class="size-3 text-muted-foreground" />
+                                <Dot class="size-3 shrink-0 text-muted-foreground" />
                                 <span class="min-w-0 truncate">{{ termin.contact_name }}</span>
                             </span>
 

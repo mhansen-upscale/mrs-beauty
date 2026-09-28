@@ -222,6 +222,10 @@ return [
         // Zweiter Faktor (WP-35)
         'code' => 'Code',
 
+        // Demo-Anfrage (WP-38)
+        'practice_name' => 'Praxis',
+        'merkmal' => 'Formular',
+
         // Standorte
         'slug' => 'Kurzname',
         'timezone' => 'Zeitzone',

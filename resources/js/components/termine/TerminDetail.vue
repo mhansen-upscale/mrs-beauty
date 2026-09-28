@@ -6,7 +6,19 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, CalendarX2, Clock, MailCheck, MoveRight, X } from 'lucide-vue-next';
+import {
+    AlertTriangle,
+    CalendarCheck,
+    CalendarX2,
+    CircleDot,
+    Clock,
+    MailCheck,
+    MoveRight,
+    UserCheck,
+    UserX,
+    X,
+    type LucideIcon,
+} from 'lucide-vue-next';
 import { ref, watch } from 'vue';
 import SlotWahl from './SlotWahl.vue';
 import type { Auswahl, Named, Termin, Vorschlag } from './typen';
@@ -52,6 +64,16 @@ watch(
 
 const schliessen = () => emit('close');
 
+/** Das Symbol je Zielstatus (App\Enums\AppointmentStatus); unbekannte bekommen einen Punkt. */
+const statussymbole: Record<string, LucideIcon> = {
+    pending: Clock,
+    confirmed: CalendarCheck,
+    attended: UserCheck,
+    no_show: UserX,
+};
+
+const statussymbol = (status: string): LucideIcon => statussymbole[status] ?? CircleDot;
+
 const statusSetzen = (status: string) => {
     if (!props.termin) {
         return;
@@ -95,13 +117,13 @@ const absagen = () => {
 
             <dl class="grid grid-cols-2 gap-2 text-sm">
                 <dt class="text-muted-foreground">Status</dt>
-                <dd>{{ termin.status_label }}</dd>
+                <dd class="min-w-0 break-words">{{ termin.status_label }}</dd>
 
                 <dt class="text-muted-foreground">Im Kalender belegt</dt>
                 <dd>{{ termin.blocked_from }}–{{ termin.blocked_until }}</dd>
 
                 <dt class="text-muted-foreground">Gebucht</dt>
-                <dd>
+                <dd class="min-w-0 break-words">
                     {{ termin.booked_via }}
                     <span v-if="termin.is_override"> · übersteuert</span>
                 </dd>
@@ -114,13 +136,16 @@ const absagen = () => {
                     <p class="text-sm font-medium">Nachrichten</p>
 
                     <ul class="space-y-1 text-sm">
-                        <li v-for="nachricht in termin.notifications" :key="nachricht.label" class="flex items-center gap-2">
-                            <MailCheck v-if="nachricht.state === 'verschickt'" class="size-3.5 shrink-0 text-success" />
-                            <AlertTriangle v-else-if="nachricht.state === 'fehlgeschlagen'" class="size-3.5 shrink-0 text-warning" />
-                            <Clock v-else class="size-3.5 shrink-0 text-muted-foreground" />
+                        <li v-for="nachricht in termin.notifications" :key="nachricht.label" class="flex items-start gap-2">
+                            <MailCheck v-if="nachricht.state === 'verschickt'" class="mt-0.5 size-3.5 shrink-0 text-success" />
+                            <AlertTriangle v-else-if="nachricht.state === 'fehlgeschlagen'" class="mt-0.5 size-3.5 shrink-0 text-warning" />
+                            <Clock v-else class="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
 
-                            <span>{{ nachricht.label }}</span>
-                            <span class="text-muted-foreground">{{ nachricht.detail }}</span>
+                            <!-- Bezeichnung und Stand brechen auf dem Handy um, statt seitlich überzulaufen. -->
+                            <span class="flex min-w-0 flex-wrap gap-x-2">
+                                <span class="break-words">{{ nachricht.label }}</span>
+                                <span class="break-words text-muted-foreground">{{ nachricht.detail }}</span>
+                            </span>
                         </li>
                     </ul>
                 </div>
@@ -136,6 +161,7 @@ const absagen = () => {
                         size="sm"
                         @click="statusSetzen(status.value)"
                     >
+                        <component :is="statussymbol(status.value)" />
                         {{ status.label }}
                     </Button>
                 </div>
@@ -169,12 +195,15 @@ const absagen = () => {
 
                     <InputError :message="umbuchung.errors.blocked_from" />
 
-                    <div class="flex gap-2">
+                    <div class="flex flex-wrap gap-2">
                         <Button size="sm" :disabled="umbuchung.processing || !umbuchung.blocked_from" @click="umbuchen">
                             <MoveRight />
                             Verschieben
                         </Button>
-                        <Button size="sm" variant="ghost" @click="verschieben = false">Abbrechen</Button>
+                        <Button size="sm" variant="ghost" @click="verschieben = false">
+                            <X />
+                            Abbrechen
+                        </Button>
                     </div>
                 </div>
             </template>
@@ -183,23 +212,21 @@ const absagen = () => {
                 <Separator />
 
                 <div class="space-y-3">
-                    <div class="grid gap-1.5">
+                    <div class="grid gap-2">
                         <Label for="absagegrund">Absagegrund</Label>
                         <Select v-model="absage.reason">
-                            <SelectTrigger id="absagegrund"><SelectValue /></SelectTrigger>
+                            <SelectTrigger id="absagegrund" aria-describedby="absagegrund-hinweis"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem v-for="grund in reasons" :key="grund.value" :value="grund.value">
                                     {{ grund.label }}
                                 </SelectItem>
                             </SelectContent>
                         </Select>
+                        <p id="absagegrund-hinweis" class="text-xs text-muted-foreground">
+                            Die Absage gibt die Zeit sofort frei und lässt sich nicht zurücknehmen. Der Termin bleibt in der Auswertung.
+                        </p>
+                        <InputError :message="absage.errors.reason" />
                     </div>
-
-                    <p class="text-sm text-muted-foreground">
-                        Die Absage gibt die Zeit sofort frei und lässt sich nicht zurücknehmen. Der Termin bleibt in der Auswertung.
-                    </p>
-
-                    <InputError :message="absage.errors.reason" />
 
                     <Button variant="destructive" size="sm" :disabled="absage.processing" @click="absagen">
                         <CalendarX2 />

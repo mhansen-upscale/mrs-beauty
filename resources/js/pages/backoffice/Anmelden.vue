@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { LoaderCircle, LogIn } from 'lucide-vue-next';
+import { CheckCircle2, LoaderCircle, LogIn } from 'lucide-vue-next';
 
 /**
  * Der eigene Eingang des Betreibers (WP-34a, Entscheidung C14).
@@ -38,9 +39,10 @@ const absenden = () => {
     <AuthBase title="Betreiber" description="Anmeldung für das Team des Betreibers.">
         <Head title="Anmelden · Betreiber" />
 
-        <div v-if="status" class="mb-4 text-center text-sm font-medium text-success">
-            {{ status }}
-        </div>
+        <Alert v-if="status" variant="success">
+            <CheckCircle2 />
+            <AlertDescription>{{ status }}</AlertDescription>
+        </Alert>
 
         <form class="flex flex-col gap-6" @submit.prevent="absenden">
             <div class="grid gap-6">
@@ -54,7 +56,7 @@ const absenden = () => {
                         autofocus
                         :tabindex="1"
                         autocomplete="email"
-                        placeholder="name@mrs-beauty.de"
+                        placeholder="name@mrs-beauty.ai"
                     />
                     <InputError :message="form.errors.email" />
                 </div>

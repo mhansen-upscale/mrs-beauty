@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Benachrichtigung;
 
 use App\Benachrichtigung\Vorlagen\Festblock;
+use App\Benachrichtigung\Vorlagen\Mailinhalt;
 use App\Benachrichtigung\Vorlagen\Mailtext;
 use App\Benachrichtigung\Vorlagen\Mailvorlagen;
 use App\Benachrichtigung\Vorlagen\Textbaustein;
 use App\Enums\Mailart;
 use App\Enums\Platzhalter;
+use Carbon\CarbonImmutable;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
@@ -102,6 +104,34 @@ final class Plattformmails
                 ? 'Haben Sie das nicht angefordert? Dann kennt jemand Ihr Passwort — bitte ändern Sie es.'
                 : 'Haben Sie sich nicht gerade angemeldet? Dann kennt jemand Ihr Passwort — bitte ändern Sie es.',
         ]));
+    }
+
+    /**
+     * **Ohne eine Angabe der Anfrage** (WP-38). Eine Kopie in einem Postfach
+     * erreicht keine Aufbewahrungsfrist, und ein Betreff mit Namen steht auf
+     * einem Sperrbildschirm. Die Mail sagt, dass eine kam und wann -- gelesen
+     * wird im Backoffice.
+     *
+     * Fest, keine Vorlage: sie geht an den Betreiber selbst.
+     */
+    public function demoanfrage(CarbonImmutable $eingang, string $url): MailMessage
+    {
+        $ortszeit = $eingang->setTimezone((string) config('mrs.business_timezone'))->format('d.m.Y, H:i');
+
+        return Mailaufbau::baue(Mailmarke::fuerPlattform(), new Mailinhalt(
+            betreff: Mailart::Demoanfrage->label(),
+            anrede: 'Guten Tag,',
+            einleitung: ['auf der Startseite hat jemand eine Demo angefragt.'],
+            schluss: [],
+            gruss: 'Viele Grüße von '.Textbaustein::maskiere((string) config('app.name')),
+        ), new Festblock(
+            vorher: [
+                "Eingegangen am {$ortszeit} Uhr.",
+                'Die Angaben stehen **nicht** in dieser E-Mail, sondern im Backoffice.',
+            ],
+            schaltflaeche: 'Im Backoffice öffnen',
+            ziel: $url,
+        ));
     }
 
     /**

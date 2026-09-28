@@ -45,6 +45,8 @@ const texte: Record<string, string> = {
     '/backoffice/betreiber':
         'Die Konten Ihres Teams: Super-Admin, Customer Success und Finanzen. Das Passwort setzt jede Person selbst über einen Link.',
     '/backoffice/protokoll': 'Was quer zu den Praxen geschah: Zugriffe, Anmeldungen und jede Handlung des Teams an einer Praxis.',
+    '/backoffice/demoanfragen':
+        'Wer auf der Startseite eine Demo angefragt hat. Setzen Sie den Status, sobald sich jemand gemeldet hat — nach der Frist löscht das System die Anfrage von selbst.',
     '/team': 'Wer Zugang hat und mit welcher Rolle. Neue Kolleginnen kommen über eine Einladung herein.',
     '/protokoll': 'Wer was geändert hat. Jeder Zugriff über Praxisgrenzen hinweg trägt eine Begründung und landet hier.',
     '/datenschutz': 'Aufbewahrungsfristen und Auskunftsersuchen. Was nicht mehr gebraucht wird, löscht das System von selbst.',

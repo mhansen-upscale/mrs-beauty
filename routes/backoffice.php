@@ -9,6 +9,7 @@ use App\Http\Controllers\Backoffice\BackofficeController;
 use App\Http\Controllers\Backoffice\BetreiberAnmeldungController;
 use App\Http\Controllers\Backoffice\BetreiberController;
 use App\Http\Controllers\Backoffice\BetreiberprotokollController;
+use App\Http\Controllers\Backoffice\DemoanfragenController;
 use App\Http\Controllers\Backoffice\PaketController;
 use App\Http\Controllers\Backoffice\PlattformmailController;
 use App\Http\Controllers\Backoffice\VersandController;
@@ -110,6 +111,14 @@ Route::middleware(['auth', 'verified', 'betreiber'])->prefix('backoffice')->grou
     Route::get('protokoll', [BetreiberprotokollController::class, 'index'])
         ->middleware('betreiber:protokoll.sehen')
         ->name('backoffice.protokoll');
+
+    // Die Demo-Anfragen der Startseite (WP-38). Keine Praxis, kein
+    // Querzugriff -- aber Namen und Adressen, deshalb nicht fuer Finanzen.
+    Route::middleware('betreiber:demoanfragen.verwalten')->group(function () {
+        Route::get('demoanfragen', [DemoanfragenController::class, 'index'])->name('backoffice.demoanfragen');
+        Route::patch('demoanfragen/{demoanfrage}/status', [DemoanfragenController::class, 'status'])->name('backoffice.demoanfragen.status');
+        Route::delete('demoanfragen/{demoanfrage}', [DemoanfragenController::class, 'loeschen'])->name('backoffice.demoanfragen.loeschen');
+    });
 
     // **Nur UUIDs** -- sonst schluckte der Platzhalter jede feste Route, die
     // nach ihm in diese Gruppe kommt.

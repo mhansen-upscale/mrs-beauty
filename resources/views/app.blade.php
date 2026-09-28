@@ -4,7 +4,26 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        <title inertia>{{ config('app.name', 'Laravel') }}</title>
+        <title inertia>{{ $meta['titel'] ?? config('app.name', 'Laravel') }}</title>
+
+        {{--
+            Die öffentlichen Seiten (WP-38). Ohne SSR entsteht ihr Inhalt im
+            Browser; was eine Suchmaschine oder eine Linkvorschau ohne Skript
+            liest, steht deshalb hier. **Ohne `inertia`-Attribut** -- sonst
+            entfernt der Kopf-Verwalter die Angaben beim ersten Seitenwechsel.
+        --}}
+        @isset($meta)
+            <meta name="description" content="{{ $meta['beschreibung'] }}">
+            <link rel="canonical" href="{{ $meta['kanonisch'] }}">
+            <meta property="og:type" content="website">
+            <meta property="og:locale" content="de_DE">
+            <meta property="og:site_name" content="{{ config('app.name') }}">
+            <meta property="og:title" content="{{ $meta['titel'] }}">
+            <meta property="og:description" content="{{ $meta['beschreibung'] }}">
+            <meta property="og:url" content="{{ $meta['kanonisch'] }}">
+            <meta property="og:image" content="{{ $meta['bild'] }}">
+            <meta name="twitter:card" content="summary">
+        @endisset
 
         {{--
             Das Zeichen in vier Fassungen: SVG für alles Moderne, ICO für

@@ -7,6 +7,7 @@ import { type NavGroup, type SharedData } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import {
     Building2,
+    CalendarCheck,
     CalendarDays,
     CalendarSync,
     ClipboardList,
@@ -149,6 +150,10 @@ const gruppen = computed<NavGroup[]>(() =>
                               : []),
                           ...(betreiberDarf('protokoll.sehen')
                               ? [{ title: 'Betreiberprotokoll', href: '/backoffice/protokoll', icon: ScrollText }]
+                              : []),
+                          // Die Anfragen der Startseite (WP-38).
+                          ...(betreiberDarf('demoanfragen.verwalten')
+                              ? [{ title: 'Demo-Anfragen', href: '/backoffice/demoanfragen', icon: CalendarCheck }]
                               : []),
                       ],
                   },

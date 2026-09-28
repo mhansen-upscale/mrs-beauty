@@ -1,6 +1,6 @@
 import type { Mailfeld, Mailfelder } from '@/types';
 import { useForm } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, onScopeDispose, reactive, ref } from 'vue';
 
 /**
  * Das Formular einer Mailvorlage — für die Terminmails der Praxis (WP-36) und
@@ -29,6 +29,9 @@ const auswahl = (quelle: Mailfelder): Mailfelder => ({
     salutation: quelle.salutation ?? '',
 });
 
+/** So lange wie bei Inertia selbst (`recentlySuccessful`). */
+const GESPEICHERT_ANZEIGEN_MS = 2000;
+
 export function useMailentwurf(props: { felder: Mailfelder; standard: Mailfelder; entwurf: Mailfelder | null }) {
     const formular = useForm<Mailfelder>(auswahl(props.entwurf ?? props.felder));
 
@@ -51,5 +54,55 @@ export function useMailentwurf(props: { felder: Mailfelder; standard: Mailfelder
 
     const istStandard = computed(() => gleich(eingabe.value, props.standard));
 
-    return { formular, eingabe, uebernehmen, ungespeichert, vorschauVeraltet, istStandard };
+    /* Speicherleiste ------------------------------------------------------- */
+
+    /*
+     * `formular.isDirty` taugt hier nicht. Vorschau und Probemail gehen über
+     * dasselbe Formular, und nach jeder erfolgreichen Anfrage setzt Inertia
+     * die Ausgangswerte neu: nach „Vorschau aktualisieren" stünde die Leiste
+     * auf „Gespeichert.", obwohl nichts gespeichert ist. Und kommt die Seite
+     * mit einem Entwurf zurück, wäre das Formular „unverändert", obwohl der
+     * Entwurf nirgends gespeichert ist. Maßstab ist deshalb allein die
+     * gespeicherte Fassung (`props.felder`) — wie vorher beim Abzeichen
+     * „Nicht gespeichert".
+     */
+    const kuerzlichGespeichert = ref(false);
+    let uhr: ReturnType<typeof setTimeout> | null = null;
+
+    /** Nach dem erfolgreichen Speichern aufrufen: die Leiste zeigt kurz „Gespeichert.". */
+    const gespeichert = (): void => {
+        if (uhr !== null) {
+            clearTimeout(uhr);
+        }
+
+        kuerzlichGespeichert.value = true;
+        uhr = setTimeout(() => (kuerzlichGespeichert.value = false), GESPEICHERT_ANZEIGEN_MS);
+    };
+
+    onScopeDispose(() => {
+        if (uhr !== null) {
+            clearTimeout(uhr);
+        }
+    });
+
+    /** „Verwerfen" kehrt zur gespeicherten Fassung zurück, nicht zum Entwurf der Vorschau. */
+    const verwerfen = (): void => {
+        formular.clearErrors();
+        uebernehmen(props.felder);
+    };
+
+    /**
+     * Was die Speicherleiste liest. `speichert` sagt, ob gerade die Anfrage
+     * läuft, die speichert — Vorschau und Probe laufen über dasselbe
+     * Formular und sollen dort keine Ladeanzeige auslösen.
+     */
+    const speicherleiste = (speichert: () => boolean) =>
+        reactive({
+            isDirty: ungespeichert,
+            processing: computed(speichert),
+            recentlySuccessful: kuerzlichGespeichert,
+            reset: verwerfen,
+        });
+
+    return { formular, eingabe, uebernehmen, ungespeichert, vorschauVeraltet, istStandard, gespeichert, speicherleiste };
 }

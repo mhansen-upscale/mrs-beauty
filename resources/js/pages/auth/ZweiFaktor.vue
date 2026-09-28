@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthBase from '@/layouts/AuthLayout.vue';
 import { type SharedData, type ZweiFaktorVerfahren } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { LoaderCircle, LogIn, Send } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, LoaderCircle, LogIn, Send, XCircle } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 /**
@@ -94,9 +95,20 @@ const beschreibung = computed(() => {
     <AuthBase :title="titel" :description="beschreibung">
         <Head :title="eingang === 'betreiber' ? 'Code · Betreiber' : 'Code'" />
 
-        <div v-if="flash.erfolg" class="mb-4 text-center text-sm font-medium text-success">{{ flash.erfolg }}</div>
-        <div v-if="flash.fehler" class="mb-4 text-center text-sm font-medium text-destructive">{{ flash.fehler }}</div>
-        <div v-for="hinweis in flash.hinweise ?? []" :key="hinweis" class="mb-4 text-center text-sm text-warning">{{ hinweis }}</div>
+        <div v-if="flash.erfolg || flash.fehler || flash.hinweise?.length" class="space-y-3">
+            <Alert v-if="flash.erfolg" variant="success">
+                <CheckCircle2 />
+                <AlertDescription>{{ flash.erfolg }}</AlertDescription>
+            </Alert>
+            <Alert v-if="flash.fehler" variant="destructive">
+                <XCircle />
+                <AlertDescription>{{ flash.fehler }}</AlertDescription>
+            </Alert>
+            <Alert v-for="hinweis in flash.hinweise ?? []" :key="hinweis" variant="warning">
+                <AlertTriangle />
+                <AlertDescription>{{ hinweis }}</AlertDescription>
+            </Alert>
+        </div>
 
         <form class="flex flex-col gap-6" @submit.prevent="absenden">
             <div class="grid gap-2">

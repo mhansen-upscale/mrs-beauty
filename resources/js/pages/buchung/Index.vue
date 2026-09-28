@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import BuchungLayout from '@/layouts/buchung/BuchungLayout.vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock, LoaderCircle, MapPin, Timer } from 'lucide-vue-next';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock, Info, LoaderCircle, MapPin, Timer } from 'lucide-vue-next';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 interface Behandler {
@@ -305,9 +306,10 @@ const behandlerNamen = (eintrag: Terminart): string =>
         :privacy-url="privacyUrl"
         title="Termin buchen"
     >
-        <div v-if="!appointmentTypes.length" class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-            Zurzeit sind keine Termine online buchbar. Bitte rufen Sie uns an.
-        </div>
+        <Alert v-if="!appointmentTypes.length">
+            <Info />
+            <AlertDescription>Zurzeit sind keine Termine online buchbar. Bitte rufen Sie uns an.</AlertDescription>
+        </Alert>
 
         <!-- Schritt 4: die Reservierung steht, jetzt die Kontaktdaten. -->
         <div v-else-if="hold" class="space-y-5">
@@ -483,9 +485,10 @@ const behandlerNamen = (eintrag: Terminart): string =>
                     Freie Zeiten werden gesucht …
                 </div>
 
-                <p v-else-if="!tage.length" class="rounded-xl border bg-card p-6 text-sm text-muted-foreground">
-                    In den nächsten Wochen ist online nichts frei. Bitte rufen Sie uns an.
-                </p>
+                <Alert v-else-if="!tage.length">
+                    <Info />
+                    <AlertDescription>In den nächsten Wochen ist online nichts frei. Bitte rufen Sie uns an.</AlertDescription>
+                </Alert>
 
                 <div v-else class="overflow-hidden rounded-xl border bg-card shadow-sm">
                     <!-- Der Kalender -->

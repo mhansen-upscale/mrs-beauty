@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import Abschnitt from '@/components/Abschnitt.vue';
 import AktionsButton from '@/components/AktionsButton.vue';
 import DataTable from '@/components/DataTable.vue';
 import Heading from '@/components/Heading.vue';
-import HeadingSmall from '@/components/HeadingSmall.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type Spalte } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { AlertTriangle, CheckCircle2, FileText, Info, PenLine, Pencil, Send } from 'lucide-vue-next';
+import { AlertTriangle, CheckCircle2, FileText, Info, PenLine, Pencil, Send, XCircle, type LucideIcon } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 /**
@@ -44,8 +45,10 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'E-Mails', href: '/backoffice/mails' },
 ];
 
+type Ton = 'success' | 'warning' | 'destructive' | 'default';
+
 /** Welcher Server die Produktmails gerade trägt — in einem Satz, mit Ton. */
-const serverstand = computed<{ text: string; ton: 'success' | 'warning' | 'destructive' | 'neutral' }>(() => {
+const serverstand = computed<{ text: string; ton: Ton }>(() => {
     if (props.versand.stoerung) {
         return { text: 'Der hinterlegte Server ist gestört — Produktmails gehen über die Umgebung.', ton: 'destructive' };
     }
@@ -58,14 +61,14 @@ const serverstand = computed<{ text: string; ton: 'success' | 'warning' | 'destr
         return { text: 'Ein Server ist hinterlegt, aber noch nicht geprüft — bis zur Probemail gilt die Umgebung.', ton: 'warning' };
     }
 
-    return { text: 'Kein Server hinterlegt — Produktmails gehen über die Umgebung.', ton: 'neutral' };
+    return { text: 'Kein Server hinterlegt — Produktmails gehen über die Umgebung.', ton: 'default' };
 });
 
-const tonklasse: Record<'success' | 'warning' | 'destructive' | 'neutral', string> = {
-    success: 'border-success/40 bg-success/5',
-    warning: 'border-warning/40 bg-warning/5 text-warning',
-    destructive: 'border-destructive/40 bg-destructive/5 text-destructive',
-    neutral: 'bg-muted/40 text-muted-foreground',
+const tonsymbol: Record<Ton, LucideIcon> = {
+    success: CheckCircle2,
+    warning: AlertTriangle,
+    destructive: XCircle,
+    default: Info,
 };
 
 const vorlagenSpalten: Spalte<Vorlagenzeile>[] = [
@@ -94,27 +97,28 @@ const bearbeiten = (zeile: Vorlagenzeile) => router.visit(route('backoffice.mail
                 description="Die Mails an Konten — Anmeldecodes, Einladungen, Passwort-Links und Alarme. Eine Vorlage gilt für alle Praxen, ab der nächsten Mail."
             />
 
-            <div class="flex flex-wrap items-center gap-3 rounded-md border px-4 py-3 text-sm" :class="tonklasse[serverstand.ton]">
-                <p class="flex min-w-0 flex-1 items-start gap-2">
-                    <CheckCircle2 v-if="serverstand.ton === 'success'" class="mt-0.5 size-4 shrink-0 text-success" />
-                    <AlertTriangle v-else-if="serverstand.ton !== 'neutral'" class="mt-0.5 size-4 shrink-0" />
-                    <Info v-else class="mt-0.5 size-4 shrink-0" />
-                    <span>{{ serverstand.text }}</span>
-                </p>
-                <Button variant="outline" size="sm" class="w-full sm:w-auto" as-child>
-                    <Link :href="route('backoffice.versand')">
-                        <Send />
-                        Versand einrichten
-                    </Link>
-                </Button>
-            </div>
+            <!-- Versand ------------------------------------------------------ -->
+            <Abschnitt titel="Versand">
+                <template #aktionen>
+                    <Button variant="outline" size="sm" as-child>
+                        <Link :href="route('backoffice.versand')">
+                            <Send />
+                            Versand einrichten
+                        </Link>
+                    </Button>
+                </template>
 
-            <div class="space-y-4">
-                <HeadingSmall
-                    title="Produktmails"
-                    description="Links, Codes, Fristen und der Alarmsatz setzt das Produkt. Die Vorlage schreibt davor und danach."
-                />
+                <Alert :variant="serverstand.ton">
+                    <component :is="tonsymbol[serverstand.ton]" />
+                    <AlertDescription>{{ serverstand.text }}</AlertDescription>
+                </Alert>
+            </Abschnitt>
 
+            <!-- Produktmails ------------------------------------------------- -->
+            <Abschnitt
+                titel="Produktmails"
+                beschreibung="Links, Codes, Fristen und der Alarmsatz setzt das Produkt. Die Vorlage schreibt davor und danach."
+            >
                 <DataTable :spalten="vorlagenSpalten" :zeilen="vorlagen" schluessel="art">
                     <template #zelle-label="{ zeile }">
                         <Link :href="route('backoffice.mails.edit', { mailart: zeile.art })" class="font-medium hover:underline">{{
@@ -143,11 +147,10 @@ const bearbeiten = (zeile: Vorlagenzeile) => router.visit(route('backoffice.mail
 
                     <template #leer>Es gibt keine Produktmails zum Anpassen.</template>
                 </DataTable>
-            </div>
+            </Abschnitt>
 
-            <div class="space-y-4">
-                <HeadingSmall title="Weitere Mails" description="Diese Mails gestaltet jede Praxis selbst oder das Produkt." />
-
+            <!-- Weitere Mails ------------------------------------------------ -->
+            <Abschnitt titel="Weitere Mails" beschreibung="Diese Mails gestaltet jede Praxis selbst oder das Produkt.">
                 <DataTable :spalten="weitereSpalten" :zeilen="weitere" schluessel="art">
                     <template #zelle-label="{ zeile }">
                         <span class="font-medium">{{ zeile.label }}</span>
@@ -158,7 +161,7 @@ const bearbeiten = (zeile: Vorlagenzeile) => router.visit(route('backoffice.mail
 
                     <template #leer>Keine weiteren Mails.</template>
                 </DataTable>
-            </div>
+            </Abschnitt>
         </div>
     </AppLayout>
 </template>

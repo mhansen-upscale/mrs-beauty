@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import InputError from '@/components/InputError.vue';
 import TextLink from '@/components/TextLink.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
-import { LoaderCircle, Mail } from 'lucide-vue-next';
+import { CheckCircle2, LoaderCircle, Mail } from 'lucide-vue-next';
 
 defineProps<{
     status?: string;
@@ -23,9 +24,10 @@ const absenden = () => form.post(route('password.email'));
     <AuthLayout title="Passwort vergessen" description="Wir schicken einen Link zum Zurücksetzen an diese Adresse.">
         <Head title="Passwort vergessen" />
 
-        <div v-if="status" class="mb-4 text-center text-sm font-medium text-success">
-            {{ status }}
-        </div>
+        <Alert v-if="status" variant="success">
+            <CheckCircle2 />
+            <AlertDescription>{{ status }}</AlertDescription>
+        </Alert>
 
         <div class="space-y-6">
             <form @submit.prevent="absenden">
