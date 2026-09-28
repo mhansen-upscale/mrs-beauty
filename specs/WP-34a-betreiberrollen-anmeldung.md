@@ -72,7 +72,8 @@ die genau damit rechnet, dass der Betreiber ein `User` ist.
 - `/backoffice/anmelden` nimmt nur Betreiberkonten an, `/login` nur
   Praxiskonten. **Die Abweisung kommt erst nach der Passwortprüfung.** Wer
   vorher abweist, verrät, welche Adressen Betreiberkonten sind.
-- **Vorerst ohne zweiten Faktor** (C14). Als Ausgleich:
+- **Vorerst ohne zweiten Faktor** (C14). *Nachtrag 27.09.2026: freiwillig
+  mit WP-35 (C16); der Ausgleich bleibt.* Als Ausgleich:
   - eine strengere Drosselung,
   - kein „Angemeldet bleiben",
   - eine Leerlauf-Abmeldung,
@@ -249,7 +250,7 @@ die genau damit rechnet, dass der Betreiber ein `User` ist.
 ## Nicht in diesem Paket
 
 - **Zweiter Faktor.** Zurückgestellt (C14). Die Anmeldeseite ist so
-  gebaut, dass ein zweiter Schritt dazwischen passt.
+  gebaut, dass ein zweiter Schritt dazwischen passt. *Kommt mit WP-35 (C16).*
 - **Frei zusammenstellbare Rechte.** Wie in WP-04: feste Rollen.
 - **Ein zweiter Guard oder eine eigene Tabelle für Betreiber.** Das würde
   die Impersonation zerlegen.
@@ -390,7 +391,7 @@ Anzeige.
 
 ## Offen
 
-- **Zweiter Faktor** (C14, zurückgestellt).
+- ~~**Zweiter Faktor** (C14, zurückgestellt).~~ Freiwillig, mit WP-35 (C16).
 - **Den Rollenkatalog bestätigen.** Die Tabelle oben ist abgeleitet.
 - **Die Mail zum Passwort** sagt auch einem neuen Konto „weil für Ihren
   Zugang ein neues Passwort angefordert wurde". Richtig ist: ein erstes.

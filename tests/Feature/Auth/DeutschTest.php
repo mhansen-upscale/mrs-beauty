@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\Role;
 use App\Models\User;
+use App\Notifications\Anmeldecode;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 
@@ -100,4 +101,40 @@ it('bietet die Registrierung nur an, wenn sie offen ist', function (): void {
     config(['mrs.registration.self_service' => true]);
 
     get(route('login'))->assertInertia(fn ($seite) => $seite->where('canRegister', true));
+});
+
+it('verschickt den Anmeldecode auf Deutsch und im Produktlayout (WP-35, AK 46)', function (): void {
+    $organisation = alsMandant();
+    $benutzer = User::factory()->fuer($organisation, Role::Owner)->create();
+
+    $nachricht = (new Anmeldecode('123456', 10, false))->toMail($benutzer);
+    $html = (string) $nachricht->render();
+
+    expect($nachricht->subject)->toBe('Ihr Anmeldecode')
+        ->and(implode(' ', $nachricht->introLines))->toContain('123456')
+        // Ohne Knopf stehen alle Zeilen oben -- der Rat zum Passwort auch.
+        ->and(implode(' ', $nachricht->introLines))->toContain('ändern Sie es')
+        ->and($nachricht->salutation)->toContain('Viele Grüße')
+        // Das Layout der Praxis traegt ihr Logo und ihre Farbe. Diese Mail
+        // kommt vom Produkt, nicht von der Praxis.
+        ->and($nachricht->markdown)->toBe('notifications::email')
+        ->and($html)->toContain('Alle Rechte vorbehalten.');
+
+    $einrichtung = (new Anmeldecode('123456', 10, true))->toMail($benutzer);
+
+    expect($einrichtung->subject)->toBe('Code zur Einrichtung des zweiten Faktors');
+});
+
+it('meldet einen falschen Code auf Deutsch (WP-35, AK 46)', function (): void {
+    $organisation = alsMandant();
+    User::factory()->fuer($organisation, Role::Owner)->mitAuthenticator()->create(['email' => 'chefin@praxis.test']);
+    ohneMandant();
+
+    post(route('login'), ['email' => 'chefin@praxis.test', 'password' => 'password']);
+
+    post(route('login.zwei-faktor.pruefen'), ['code' => ''])
+        ->assertSessionHasErrors(['code' => 'Code ist erforderlich.']);
+
+    post(route('login.zwei-faktor.pruefen'), ['code' => '000000'])
+        ->assertSessionHasErrors(['code' => 'Der Code stimmt nicht.']);
 });

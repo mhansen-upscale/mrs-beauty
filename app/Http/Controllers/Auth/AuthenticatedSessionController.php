@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\Anmeldeeingang;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Models\User;
+use App\ZweiFaktor\AusstehendeAnmeldung;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -33,15 +35,13 @@ class AuthenticatedSessionController extends Controller
     }
 
     /**
-     * Handle an incoming authentication request.
+     * Nach dem Passwort: angemeldet oder weiter zum Code (WP-35).
      */
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request, AusstehendeAnmeldung $anmeldung): RedirectResponse
     {
-        $request->authenticate();
+        $benutzer = $request->authenticate();
 
-        $request->session()->regenerate();
-
-        return redirect()->intended(route('dashboard', absolute: false));
+        return $anmeldung->beginne($request, $benutzer, Anmeldeeingang::Praxis, $request->boolean('remember'));
     }
 
     /**

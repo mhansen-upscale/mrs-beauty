@@ -31,6 +31,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 const page = usePage<SharedData>();
 const user = page.props.auth.user as User;
 
+// Solange der zweite Faktor per E-Mail läuft, ist die Adresse der Faktor
+// (WP-35) — sie ändert sich erst nach einem Wechsel des Verfahrens.
+const adresseGesperrt = page.props.auth.zweiFaktor?.verfahren === 'email';
+
 const form = useForm({
     name: user.name,
     email: user.email,
@@ -60,7 +64,19 @@ const submit = () => {
 
                     <div class="grid gap-2">
                         <Label for="email">E-Mail-Adresse</Label>
-                        <Input id="email" type="email" v-model="form.email" required autocomplete="username" placeholder="name@praxis.de" />
+                        <Input
+                            id="email"
+                            type="email"
+                            v-model="form.email"
+                            required
+                            autocomplete="username"
+                            placeholder="name@praxis.de"
+                            :readonly="adresseGesperrt"
+                        />
+                        <p v-if="adresseGesperrt" class="text-xs text-muted-foreground">
+                            An diese Adresse geht Ihr Anmeldecode. Um sie zu ändern, wechseln Sie zuerst unter
+                            <Link :href="route('zwei-faktor.edit')" class="underline">Zweiter Faktor</Link> das Verfahren oder schalten es ab.
+                        </p>
                         <InputError :message="form.errors.email" />
                     </div>
 

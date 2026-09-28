@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Auth\ZweiFaktorAnmeldungController;
 use App\Http\Controllers\Backoffice\BackofficeController;
 use App\Http\Controllers\Backoffice\BetreiberAnmeldungController;
 use App\Http\Controllers\Backoffice\BetreiberController;
@@ -33,6 +34,23 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('backoffice/anmelden', [BetreiberAnmeldungController::class, 'create'])->name('backoffice.anmelden');
     Route::post('backoffice/anmelden', [BetreiberAnmeldungController::class, 'store'])->name('backoffice.anmelden.senden');
+
+    // Der Code-Schritt (WP-35) -- derselbe Controller wie an /login, aber
+    // eine ausstehende Anmeldung der Praxis gilt hier nicht.
+    Route::get('backoffice/anmelden/code', [ZweiFaktorAnmeldungController::class, 'show'])
+        ->defaults('eingang', 'betreiber')
+        ->name('backoffice.anmelden.code');
+    Route::post('backoffice/anmelden/code', [ZweiFaktorAnmeldungController::class, 'pruefe'])
+        ->defaults('eingang', 'betreiber')
+        ->middleware('throttle:30,1')
+        ->name('backoffice.anmelden.code.pruefen');
+    Route::post('backoffice/anmelden/code/erneut', [ZweiFaktorAnmeldungController::class, 'erneut'])
+        ->defaults('eingang', 'betreiber')
+        ->middleware('throttle:10,1')
+        ->name('backoffice.anmelden.code.erneut');
+    Route::delete('backoffice/anmelden/code', [ZweiFaktorAnmeldungController::class, 'abbrechen'])
+        ->defaults('eingang', 'betreiber')
+        ->name('backoffice.anmelden.code.abbrechen');
 });
 
 Route::middleware(['auth', 'verified', 'betreiber'])->prefix('backoffice')->group(function () {
@@ -46,6 +64,7 @@ Route::middleware(['auth', 'verified', 'betreiber'])->prefix('backoffice')->grou
         Route::patch('betreiber/{betreiber}/rolle', [BetreiberController::class, 'rolle'])->name('backoffice.betreiber.rolle');
         Route::post('betreiber/{betreiber}/deaktivieren', [BetreiberController::class, 'deaktivieren'])->name('backoffice.betreiber.deaktivieren');
         Route::post('betreiber/{betreiber}/reaktivieren', [BetreiberController::class, 'reaktivieren'])->name('backoffice.betreiber.reaktivieren');
+        Route::post('betreiber/{betreiber}/zwei-faktor-zuruecksetzen', [BetreiberController::class, 'zweiFaktorZuruecksetzen'])->name('backoffice.betreiber.zwei-faktor');
     });
 
     // Das Paket in Fassungen (WP-06b, B20): Speichern legt eine neue an.

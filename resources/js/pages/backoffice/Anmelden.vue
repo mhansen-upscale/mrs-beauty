@@ -12,8 +12,9 @@ import { LoaderCircle, LogIn } from 'lucide-vue-next';
  * Der eigene Eingang des Betreibers (WP-34a, Entscheidung C14).
  *
  * Bewusst ohne „Angemeldet bleiben“: ein Betreiberkonto reicht quer über alle
- * Praxen, und es gibt vorerst keinen zweiten Faktor. Nach der Leerlauffrist
- * ist man abgemeldet.
+ * Praxen, und der zweite Faktor ist freiwillig (C16). Nach der Leerlauffrist
+ * ist man abgemeldet. Wer ihn eingeschaltet hat, gibt danach den Code ein
+ * (WP-35).
  */
 defineProps<{
     status?: string;

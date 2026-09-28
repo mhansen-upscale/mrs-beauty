@@ -99,7 +99,7 @@ Passworts. Deshalb empfiehlt das Produkt die App und sagt warum.
      Erneutes Senden mit Abstand und Stundenhöchstzahl.
    - `ZweiterFaktor`: einschalten, wechseln, abschalten, zurücksetzen,
      jeweils mit Protokoll und neuem `remember_token`.
-   - `AusstehendeAnmeldung`: `beginne()` und `abschliessen()`, siehe 4.
+   - `AusstehendeAnmeldung`: `beginne()` und `schliesseAb()`, siehe 4.
 4. **Die Anmeldung.**
    - `LoginRequest::authenticate()` und `BetreiberLoginRequest::authenticate()`
      geben den geprüften `User` zurück und melden **nicht mehr selbst** an.
@@ -108,12 +108,12 @@ Passworts. Deshalb empfiehlt das Produkt die App und sagt warum.
      **deaktiviert** → zweiter Faktor.
    - `/backoffice/anmelden`: Passwort und Betreiber → **deaktiviert** →
      zweiter Faktor.
-   - Ohne zweiten Faktor ruft der Controller sofort `abschliessen()`.
+   - Ohne zweiten Faktor ruft der Controller sofort `schliesseAb()`.
    - `beginne()` legt in die Sitzung: `uuid`, Eingang (`praxis` oder
      `betreiber`), Merken (beim Betreiber immer `false`), Ablauf,
      Fehlversuche, einen Fingerabdruck des Passwort-Hashes. Beim E-Mail-
      Verfahren geht der Code los.
-   - `abschliessen()`: `Auth::login`, Sitzung erneuern, `intended`. Für den
+   - `schliesseAb()`: `Auth::login`, Sitzung erneuern, `intended`. Für den
      Betreiber außerdem, was bisher Request und Controller taten:
      `OperatorLoggedIn` ins Protokoll, `BetreiberLeerlauf::SESSION_KEY`
      setzen — **dort und nur dort**.
@@ -131,11 +131,13 @@ Passworts. Deshalb empfiehlt das Produkt die App und sagt warum.
    - Ein Eingabefeld mit `autocomplete="one-time-code"` und
      `inputmode="numeric"`, bei der App der Wechsel zum
      Wiederherstellungscode, beim E-Mail-Code „Erneut senden".
-6. **Die Mail.** `Notifications\Anmeldecode`, nur Mail, **sofort, ohne
-   `ShouldQueue`**: Die Person wartet, und in der Warteschlange stünde der
-   Code im Klartext — in Redis und in `failed_jobs`. Produktlayout, der Code
-   nicht im Betreff, „Nicht Sie? Dann ändern Sie Ihr Passwort." Ein
-   Versandfehler wird zum Hinweis auf der Seite, nicht zu einem 500.
+6. **Die Mail.** `Notifications\Anmeldecode`, nur Mail, über die
+   Warteschlange `realtime`, **verschlüsselt** (`ShouldBeEncrypted`, B21):
+   Die Person wartet, und im Klartext stünde der Code in Redis und in
+   `failed_jobs`. Produktlayout, der Code nicht im Betreff, „Nicht Sie? Dann
+   ändern Sie Ihr Passwort." Scheitert schon das Einreihen, wird das zum
+   Hinweis auf der Seite, nicht zu einem 500. *(Bis 28.09.2026 ging die Mail
+   sofort, am Arbeiter vorbei.)*
 7. **Einstellungen → Zweiter Faktor** (`settings/zwei-faktor`, ohne `can:`,
    auch für Betreiber):
    - Einrichten, wechseln, abschalten und neue Codes nur mit
@@ -238,7 +240,8 @@ Passworts. Deshalb empfiehlt das Produkt die App und sagt warum.
 31. „Erneut senden" folgt Abstand und Stundenhöchstzahl.
 32. Ein Einrichtungscode wirkt nicht bei der Anmeldung und umgekehrt.
 33. Der Code steht nie im Klartext in Cache, Sitzung, Log, Protokoll oder
-    Warteschlange.
+    Warteschlange — dort nur verschlüsselt (B21, geprüft an einer echten
+    Schlange in `tests/Feature/Benachrichtigung/WarteschlangeTest.php`).
 
 **Wiederherstellung**
 
@@ -285,6 +288,61 @@ Passworts. Deshalb empfiehlt das Produkt die App und sagt warum.
 46. Die Mail und alle Meldungen des Pakets sind deutsch, mit Umlauten, die
     Mail im Produktlayout und nicht im Layout einer Praxis.
 
+## Stand
+
+*28.09.2026 — steht.* 52 Tests in `tests/Feature/ZweiFaktor`, dazu zwei in
+`tests/Feature/Auth/DeutschTest.php`; die ganze Suite (1464) ist grün, PHPStan
+Stufe 8, Pint, Prettier, ESLint und vue-tsc sind sauber.
+
+| Testdatei | Abnahmekriterien |
+|---|---|
+| `EinrichtungTest.php` | 1–13 |
+| `AnmeldungTest.php` | 14–24 |
+| `BetreiberZweiFaktorTest.php` | 25–28 |
+| `EmailCodeTest.php` | 29–33 |
+| `WiederherstellungTest.php` | 34–35 |
+| `ZuruecksetzenTest.php` | 36–40 |
+| `HinweisTest.php` | 41–43 |
+| `ProtokollTest.php` | 44–45 |
+| `Auth/DeutschTest.php` | 46 |
+
+Im Browser nachgesehen: App einrichten mit QR-Code und Schlüssel, Anmeldung
+mit Code und Rückkehr zum ursprünglichen Ziel, neue Wiederherstellungscodes
+genau einmal (danach auch aus der Browser-History verschwunden), „Neues
+Telefon einrichten" lässt die alte App bis zur Bestätigung gelten,
+Zurücksetzen über die Konsole.
+
+## Was das Bauen zutage gefördert hat
+
+- **Eine deaktivierte Person wurde bis hier angemeldet** und erst mit der
+  nächsten Anfrage von `EnsureUserIsActive` hinausgeworfen. Mit dem zweiten
+  Faktor wäre ihr dazwischen eine Mail zugegangen. Beide Eingänge weisen sie
+  jetzt nach der Passwortprüfung ab, mit derselben Meldung
+  (`EnsureUserIsActive::MELDUNG`).
+- **AK 18 ohne zweite Datenbankverbindung.** Das Rennen zweier Anmeldungen
+  mit demselben Code ist nachgestellt, indem beide die Person laden, bevor
+  eine schreibt. Genau dann ließe ein „lesen, dann schreiben" beide durch —
+  das einzelne bedingte `UPDATE` nicht.
+- **Die neue Sitzungskennung nach dem Code lässt sich im Test nicht prüfen.**
+  Ohne Cookie bekommt dort jede Anfrage eine neue; ein solcher Test bestünde
+  immer. `schliesseAb()` erneuert sie trotzdem.
+- **Pint macht aus `==` ein `===`**, auch beim Vergleich zweier Arrays, deren
+  Reihenfolge nicht zählt. Die Tests sortieren deshalb beide Seiten.
+- **Der Zeitstempel von google2fa ist der Takt**, nicht die Unix-Zeit.
+  `Authenticator` rechnet ihn aus `CarbonImmutable::now()` selbst aus.
+
+## Offen
+
+- **Den Rollenschnitt bestätigen**: Den zweiten Faktor einer Inhaberin setzt
+  nur eine Inhaberin zurück (abgeleitet).
+- **`Auth::validate()` erneuert keinen veralteten Passwort-Hash**, anders als
+  `Auth::attempt()`. Das gilt seit WP-34a für beide Eingänge; wird die
+  Hash-Stärke je erhöht, bleibt der alte Hash stehen, bis die Person ihr
+  Passwort ändert.
+- ~~**Die übrigen Mails laufen ebenfalls sofort.**~~ *Erledigt am
+  28.09.2026 (B21): jede Mail geht verschlüsselt über die Warteschlange,
+  der Anmeldecode auch.*
+
 ## Nicht in diesem Paket
 
 - **Pflicht.** Weder je Praxis noch für Betreiber (C16). Wer sie will,
@@ -300,7 +358,7 @@ Passworts. Deshalb empfiehlt das Produkt die App und sagt warum.
 - **`auth.user` gibt das Geheimnis an den Browser**, wenn `$hidden` nicht
   mitwächst.
 - **Die Betreiber-Nebenwirkungen doppelt.** `OperatorLoggedIn` und der
-  Leerlauf-Zeitstempel ziehen nach `abschliessen()` um. Bleiben sie auch im
+  Leerlauf-Zeitstempel ziehen nach `schliesseAb()` um. Bleiben sie auch im
   Request oder Controller stehen, steht jede Anmeldung zweimal im Protokoll —
   und die erste, bevor der Code stimmte.
 - **Alte Remember-Cookies.** Ohne neues `remember_token` beim Einschalten

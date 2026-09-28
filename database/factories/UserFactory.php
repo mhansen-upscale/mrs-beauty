@@ -6,6 +6,7 @@ namespace Database\Factories;
 
 use App\Enums\OperatorRole;
 use App\Enums\Role;
+use App\Enums\ZweiFaktorVerfahren;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -17,6 +18,12 @@ use Illuminate\Support\Str;
  */
 class UserFactory extends Factory
 {
+    /**
+     * Das Geheimnis der Authenticator-States (WP-35). Oeffentlich, damit ein
+     * Test den Code berechnen kann, den die App gerade zeigt.
+     */
+    public const TESTGEHEIMNIS = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+
     /**
      * The current password being used by the factory.
      */
@@ -38,6 +45,12 @@ class UserFactory extends Factory
             'role' => null,
             'deactivated_at' => null,
             'operator_role' => null,
+            'zwei_faktor_verfahren' => null,
+            'zwei_faktor_geheimnis' => null,
+            'zwei_faktor_wiederherstellung' => null,
+            'zwei_faktor_bestaetigt_at' => null,
+            'zwei_faktor_letzter_schritt' => null,
+            'zwei_faktor_hinweis_ausgeblendet_at' => null,
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
@@ -103,5 +116,25 @@ class UserFactory extends Factory
     public function finanzen(): static
     {
         return $this->betreiber(OperatorRole::Finanzen);
+    }
+
+    /** Mit Authenticator-App als zweitem Faktor, bestaetigt (WP-35). */
+    public function mitAuthenticator(string $geheimnis = self::TESTGEHEIMNIS): static
+    {
+        return $this->state(fn (): array => [
+            'zwei_faktor_verfahren' => ZweiFaktorVerfahren::Authenticator,
+            'zwei_faktor_geheimnis' => $geheimnis,
+            'zwei_faktor_wiederherstellung' => [],
+            'zwei_faktor_bestaetigt_at' => now(),
+        ]);
+    }
+
+    /** Mit Code per E-Mail als zweitem Faktor, bestaetigt (WP-35). */
+    public function mitEmailCode(): static
+    {
+        return $this->state(fn (): array => [
+            'zwei_faktor_verfahren' => ZweiFaktorVerfahren::Email,
+            'zwei_faktor_bestaetigt_at' => now(),
+        ]);
     }
 }

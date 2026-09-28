@@ -56,6 +56,19 @@ enum AuditEvent: string
     case OperatorDeactivated = 'operator.deactivated';
     case OperatorReactivated = 'operator.reactivated';
 
+    /* Der zweite Faktor (WP-35, C16). Bei Praxispersonen im Protokoll der
+       Praxis, bei Betreibern ohne Organisation. Im Kontext hoechstens das
+       Verfahren oder die Zahl der uebrigen Codes -- nie das Geheimnis, nie
+       ein Code (C5). Ein einzelner falscher Code steht nicht hier, erst die
+       verworfene Anmeldung; beim Betreiber zaehlt jeder als
+       OperatorLoginFailed. */
+    case TwoFactorEnabled = 'two_factor.enabled';
+    case TwoFactorDisabled = 'two_factor.disabled';
+    case TwoFactorReset = 'two_factor.reset';
+    case TwoFactorRecoveryCodesRenewed = 'two_factor.recovery_codes_renewed';
+    case TwoFactorRecoveryCodeUsed = 'two_factor.recovery_code_used';
+    case TwoFactorChallengeLocked = 'two_factor.challenge_locked';
+
     /* Abo-Eingriffe (WP-34c, B17) -- beim Mandanten, damit die Praxis
        nachlesen kann, was mit ihrem Abo geschehen ist. */
     case SubscriptionChangeRequested = 'subscription.change_requested';
@@ -107,6 +120,12 @@ enum AuditEvent: string
             self::OperatorRoleChanged => 'Betreiberrolle geändert',
             self::OperatorDeactivated => 'Betreiberkonto deaktiviert',
             self::OperatorReactivated => 'Betreiberkonto reaktiviert',
+            self::TwoFactorEnabled => 'Zweiter Faktor eingeschaltet',
+            self::TwoFactorDisabled => 'Zweiter Faktor abgeschaltet',
+            self::TwoFactorReset => 'Zweiter Faktor zurückgesetzt',
+            self::TwoFactorRecoveryCodesRenewed => 'Neue Wiederherstellungscodes erzeugt',
+            self::TwoFactorRecoveryCodeUsed => 'Wiederherstellungscode eingelöst',
+            self::TwoFactorChallengeLocked => 'Anmeldung nach falschen Codes verworfen',
             self::SubscriptionChangeRequested => 'Abo-Eingriff beauftragt',
             self::SubscriptionChangeFailed => 'Abo-Eingriff gescheitert',
             self::SubscriptionTrialExtended => 'Testphase verlängert',

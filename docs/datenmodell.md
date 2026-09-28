@@ -171,7 +171,7 @@ Mikroeinheiten (`cost_micros`), wie von der API geliefert.
 | Tabelle | Zweck | Belegte Felder |
 |---|---|---|
 | `organizations` | Mandant | `settings` (JSON), darin u. a. `waitlist_max_offers_per_contact_per_month` |
-| `users` | Benutzer | — |
+| `users` | Benutzer | Zweiter Faktor (WP-35, C16): `zwei_faktor_verfahren` (`authenticator`, `email`), `zwei_faktor_geheimnis`, `zwei_faktor_wiederherstellung` (nur SHA-256), `zwei_faktor_bestaetigt_at`, `zwei_faktor_letzter_schritt`, `zwei_faktor_hinweis_ausgeblendet_at` |
 | Rollen, Einladungen | WP-04 | — |
 | Audit-Log | WP-05, jeder lesende und schreibende Zugriff quer zum Mandanten | — |
 | `subscriptions` | WP-06 | Abgleich mit Stripe: Zustand, Periode, aufgestockte Mengen. **Keine Nutzungstabelle** — der Verbrauch wird aus `messages`, `agent_runs` und `waitlist_offers` gerechnet (B7) |
@@ -179,6 +179,16 @@ Mikroeinheiten (`cost_micros`), wie von der API geliefert.
 
 `organizations.settings` ist der Ort für alles, was je Mandant abweichen darf.
 Der jeweilige Standardwert steht in `config/mrs.php`, nicht im Code.
+
+**Das Geheimnis der Authenticator-App liegt mit dem App-Schlüssel
+verschlüsselt, nicht mit dem Schlüssel der Praxis** (Cast `encrypted`, nicht
+`App\Casts\Encrypted`). Zwei Gründe: Betreiber haben keine Praxis, und das
+Crypto-Löschen einer Praxis (A5) sperrte die Person sonst aus ihrem Konto aus,
+statt nur ihre Daten unlesbar zu machen. Es ist ein Zugangsmerkmal wie der
+Passwort-Hash, kein Personendatum im Sinne von Regel 3. Die Spalten des
+zweiten Faktors stehen in `User::$hidden`: `auth.user` geht mit jeder Antwort
+an den Browser. Ein Code per E-Mail liegt nie in der Datenbank, sondern zehn
+Minuten als Hash im Cache.
 
 ---
 

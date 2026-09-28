@@ -86,6 +86,57 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Zweiter Faktor (WP-35)
+    |--------------------------------------------------------------------------
+    |
+    | Entscheidung C16. Freiwillig, fuer Praxen und Betreiber, per
+    | Authenticator-App oder Code per E-Mail.
+    |
+    | **Sechs Stellen sind schwach, und das ist in Ordnung**, solange drei
+    | Dinge gelten: der Code lebt kurz, die ausstehende Anmeldung verbrennt
+    | nach max_versuche, und je Person wird ueber alle Sitzungen gedrosselt.
+    | Wer eine der drei Grenzen lockert, macht den Code ratbar (wie C15).
+    |
+    */
+
+    'zwei_faktor' => [
+        // Authenticator-Apps erwarten sechs Stellen im 30-Sekunden-Takt.
+        // **Eine Aenderung entwertet jede eingerichtete App.**
+        'code_stellen' => 6,
+        'totp_takt_sekunden' => 30,
+
+        // Ein Takt davor und danach gilt auch -- die Uhr eines Telefons geht
+        // selten ganz genau, und wer tippt, braucht ein paar Sekunden.
+        'totp_fenster' => 1,
+
+        // So lange wartet eine Anmeldung nach dem Passwort auf den Code.
+        'anmeldung_gueltig_minuten' => 10,
+
+        // Nach so vielen falschen Codes ist die ausstehende Anmeldung
+        // verworfen; das Passwort muss neu eingegeben werden.
+        'max_versuche' => 5,
+
+        // Je Person ueber alle Sitzungen: wer sich immer wieder neu anmeldet,
+        // um fuenf weitere Versuche zu bekommen, bekommt sie nicht.
+        'fehlversuche_je_stunde' => 10,
+
+        // Der Code per E-Mail: kurz gueltig, und "Erneut senden" mit Abstand.
+        'email_code_gueltig_minuten' => 10,
+        'email_erneut_nach_sekunden' => 60,
+        'email_sendungen_je_stunde' => 5,
+
+        // Wiederherstellungscodes fuer die App, jeder einmal. Ab so wenigen
+        // uebrigen raet das Produkt, neue zu erzeugen.
+        'wiederherstellungscodes' => 8,
+        'wiederherstellung_warnung_ab' => 2,
+
+        // "Spaeter" am Hinweis blendet ihn so lange aus -- dann fragt das
+        // Produkt wieder, ohne zu draengen.
+        'hinweis_pause_tage' => 90,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Backoffice des Betreibers (WP-34)
     |--------------------------------------------------------------------------
     |
@@ -94,10 +145,10 @@ return [
     */
 
     'backoffice' => [
-        // **Die Anmeldung der Betreiber** (WP-34a, Entscheidung C14). Ohne
-        // zweiten Faktor ist sie strenger als die der Praxen: ein
-        // Betreiberkonto reicht quer ueber alle Praxen. Drei Versuche, dann
-        // eine Viertelstunde Pause -- je Adresse und Rechner.
+        // **Die Anmeldung der Betreiber** (WP-34a, Entscheidung C14). Solange
+        // der zweite Faktor freiwillig ist (C16), ist sie strenger als die der
+        // Praxen: ein Betreiberkonto reicht quer ueber alle Praxen. Drei
+        // Versuche, dann eine Viertelstunde Pause -- je Adresse und Rechner.
         'login_versuche' => 3,
         'login_sperrminuten' => 15,
 

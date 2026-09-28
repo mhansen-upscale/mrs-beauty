@@ -72,6 +72,24 @@ class HandleInertiaRequests extends Middleware
             ->exists();
     }
 
+    /**
+     * Der Hinweis erscheint nicht waehrend der Einfuehrung -- ein Overlay
+     * genuegt -- und nicht in einer Impersonation: der Support sieht die
+     * Praxis, nicht sein eigenes Konto.
+     *
+     * @return array{aktiv: bool, verfahren: string|null, hinweis: bool}
+     */
+    private function zweiFaktor(User $benutzer): array
+    {
+        return [
+            'aktiv' => $benutzer->hatZweiFaktor(),
+            'verfahren' => $benutzer->zweiFaktorVerfahren()?->value,
+            'hinweis' => $benutzer->zweiFaktorHinweisFaellig()
+                && ! $benutzer->einfuehrungStehtAus()
+                && ! app(ImpersonationContext::class)->isActive(),
+        ];
+    }
+
     public function version(Request $request): ?string
     {
         return parent::version($request);
@@ -108,6 +126,10 @@ class HandleInertiaRequests extends Middleware
                         array_filter(OperatorAbility::cases(), fn (OperatorAbility $faehigkeit): bool => $benutzer->betreiberDarf($faehigkeit)),
                     )),
                 ] : null,
+
+                // Der zweite Faktor (WP-35). **Nur Verfahren und Hinweis**,
+                // nie Geheimnis oder Codes -- die stehen in User::$hidden.
+                'zweiFaktor' => $benutzer instanceof User ? $this->zweiFaktor($benutzer) : null,
             ],
 
             // Die Oberflaeche blendet danach aus, was jemand nicht darf. Das

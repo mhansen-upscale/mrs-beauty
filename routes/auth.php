@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\Auth\ZweiFaktorAnmeldungController;
 use App\Http\Controllers\Team\AcceptInvitationController;
 use Illuminate\Support\Facades\Route;
 
@@ -32,6 +33,27 @@ Route::middleware('guest')->group(function () {
         ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
+
+    // Der zweite Faktor (WP-35). Gast-Routen: nach dem Passwort ist noch
+    // niemand angemeldet. Die Drosselung je Person steht im Controller, diese
+    // hier je Rechner ist nur der aeussere Zaun.
+    Route::get('login/zwei-faktor', [ZweiFaktorAnmeldungController::class, 'show'])
+        ->defaults('eingang', 'praxis')
+        ->name('login.zwei-faktor');
+
+    Route::post('login/zwei-faktor', [ZweiFaktorAnmeldungController::class, 'pruefe'])
+        ->defaults('eingang', 'praxis')
+        ->middleware('throttle:30,1')
+        ->name('login.zwei-faktor.pruefen');
+
+    Route::post('login/zwei-faktor/erneut', [ZweiFaktorAnmeldungController::class, 'erneut'])
+        ->defaults('eingang', 'praxis')
+        ->middleware('throttle:10,1')
+        ->name('login.zwei-faktor.erneut');
+
+    Route::delete('login/zwei-faktor', [ZweiFaktorAnmeldungController::class, 'abbrechen'])
+        ->defaults('eingang', 'praxis')
+        ->name('login.zwei-faktor.abbrechen');
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');

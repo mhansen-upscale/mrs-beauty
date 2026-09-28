@@ -26,12 +26,17 @@ eingerichtet — ein Prozess je Warteschlange, mit genau diesen Werten:
 
 | Warteschlange | Was | Kommando |
 |---|---|---|
-| `realtime` | eingehende Webhooks, Agentenläufe, Kanalversand | `php artisan queue:work cloud --queue=realtime --tries=3 --timeout=60 --memory=128` |
-| `default` | alles Übrige aus dem Produkt | `php artisan queue:work cloud --queue=default --tries=3 --timeout=60 --memory=128` |
+| `realtime` | eingehende Webhooks, Agentenläufe, Kanalversand, Mails an wartende Menschen (Anmeldecode, Passwortlink, Bestätigung, Alarm) | `php artisan queue:work cloud --queue=realtime --tries=3 --timeout=60 --memory=128` |
+| `default` | alles Übrige aus dem Produkt, darunter Einladung und Terminnachricht | `php artisan queue:work cloud --queue=default --tries=3 --timeout=60 --memory=128` |
 | `sync` | Kalender- und Meta-Abgleich | `php artisan queue:work cloud --queue=sync --tries=1 --timeout=600 --memory=256` |
 | `maintenance` | Aufbewahrung, Aufräumen, Aggregation, Bilderzeugung | `php artisan queue:work cloud --queue=maintenance --tries=1 --timeout=900 --memory=256` |
 
 Prozesszahlen: realtime 10, default 6, sync 4, maintenance 2.
+
+**Jede Mail ist ein Auftrag** (B21), verschlüsselt. Steht `realtime`, kommt
+kein Anmeldecode an — die Anmeldung mit E-Mail-Faktor hängt dann an diesem
+Arbeiter. **Lokal läuft kein Arbeiter von selbst**: Wer Mails in Mailhog sehen
+will, startet `php artisan queue:work --queue=realtime,default` im Workspace.
 
 **Nicht ein Prozess mit Prioritätenliste.** Die vier Profile unterscheiden sich
 in Versuchen, Zeitgrenze und Speicher; ein gemeinsamer Arbeiter müsste sich auf
@@ -350,6 +355,26 @@ den Fall, in dem etwas grundsätzlich schiefgeht.
    Ein einzelnes Kommando — läuft auch in der Cloud-Konsole, wo mehrzeiliges
    tinker nicht geht. Die UUID steht in der Seite unter
    `props.vorschlaege[].uebertragung.anzeige`.
+6. **Zweiter Faktor verloren** (WP-35). Die Person kommt nicht mehr hinein,
+   weil das Telefon weg ist und die Wiederherstellungscodes auch.
+   - In einer Praxis setzt ihn zurück, wer `team.manage` hat — unter *Team*,
+     mit dem eigenen Passwort. Den Faktor einer Inhaberin nur eine
+     Inhaberin.
+   - Beim Betreiber setzt ihn ein anderes Konto mit `betreiber.verwalten`
+     unter *Backoffice → Betreiberkonten* zurück.
+   - Bleibt niemand übrig — die letzte Inhaberin, der letzte Super-Admin —,
+     dann die Konsole, **nachdem geklärt ist, dass die Person die ist, die
+     sie zu sein behauptet** (Rückruf unter der bekannten Nummer, nicht unter
+     einer, die in der Anfrage steht):
+     `php artisan mrs:zwei-faktor-zuruecksetzen <email> --grund="Telefon verloren, Ticket 123"`.
+     Die Begründung steht im Protokoll, Handelnde ist „System“.
+   - Danach genügt das Passwort, und die Person richtet den Faktor neu ein.
+   - Ein Anmeldecode per E-Mail kommt nicht an? Er geht über `realtime`
+     (B21): Steht der Arbeiter, zeigt es `mrs:betrieb`; scheitert der
+     Versand, steht der Auftrag in `failed_jobs` (verschlüsselt). Das Log
+     („Anmeldecode konnte nicht versendet werden“) meldet nur, wenn schon
+     das Einreihen scheitert. Mit `MAIL_MAILER=log` steht der Code im Log —
+     das ist nur lokal hinnehmbar.
 
 
 ## Das Zeichen

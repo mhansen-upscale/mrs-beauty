@@ -14,8 +14,11 @@ return [
     |
     |   realtime     eingehende Webhooks und Agent-Laeufe. Eine Nachricht, die
     |                zehn Minuten hinter einem Insights-Sync wartet, ist fuer
-    |                den Kontakt eine unbeantwortete Nachricht.
-    |   default      alles Uebrige aus dem Produkt.
+    |                den Kontakt eine unbeantwortete Nachricht. Dazu jede
+    |                Mail, auf die ein Mensch wartet: Anmeldecode,
+    |                Passwortlink, Bestaetigung, Alarm (B21).
+    |   default      alles Uebrige aus dem Produkt, darunter Einladung und
+    |                Terminnachricht.
     |   sync         Kalender- und Meta-Abgleich. Lang, haeufig, darf warten.
     |   maintenance  Aufbewahrung, Aufraeumen, Aggregation, Bilderzeugung.
     |

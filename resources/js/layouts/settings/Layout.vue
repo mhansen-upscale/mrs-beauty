@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
-import { Bot, ChartNoAxesCombined, CreditCard, KeyRound, Mail, MessageCircle, Palette, User } from 'lucide-vue-next';
+import { Bot, ChartNoAxesCombined, CreditCard, KeyRound, Mail, MessageCircle, Palette, ShieldCheck, User } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 import type { SharedData } from '@/types';
@@ -21,6 +21,7 @@ const darf = (ability: string): boolean => page.props.abilities?.includes(abilit
 const sidebarNavItems = computed<NavItem[]>(() => [
     { title: 'Profil', href: '/settings/profile', icon: User },
     { title: 'Passwort', href: '/settings/password', icon: KeyRound },
+    { title: 'Zweiter Faktor', href: '/settings/zwei-faktor', icon: ShieldCheck },
     ...(darf('organization.manage')
         ? [
               { title: 'Postfach', href: '/settings/postfach', icon: Mail },

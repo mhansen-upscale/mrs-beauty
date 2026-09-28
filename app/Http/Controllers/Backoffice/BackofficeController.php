@@ -37,10 +37,11 @@ final class BackofficeController extends Controller
 {
     /**
      * **Das eigene Passwort vor jeder wirksamen Handlung** (WP-34a, C14) --
-     * der Ausgleich fuer den fehlenden zweiten Faktor. Als Feld im Dialog,
-     * nicht als `password.confirm`: dessen Mittelschicht merkt sich bei POST
-     * die POST-Adresse als Ziel und fuehrt nach der Bestaetigung auf einen
-     * 405, und `auth.password_timeout` betraegt drei Stunden.
+     * der Ausgleich dafuer, dass der zweite Faktor freiwillig ist (C16). Als
+     * Feld im Dialog, nicht als `password.confirm`: dessen Mittelschicht
+     * merkt sich bei POST die POST-Adresse als Ziel und fuehrt nach der
+     * Bestaetigung auf einen 405, und `auth.password_timeout` betraegt drei
+     * Stunden.
      */
     public const PASSWORT = ['current_password' => ['required', 'current_password']];
 

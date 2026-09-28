@@ -6,6 +6,7 @@ namespace App\Http\Requests\Backoffice;
 
 use App\Audit\AuditLogger;
 use App\Enums\AuditEvent;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -19,9 +20,13 @@ use Illuminate\Validation\ValidationException;
  * Die Anmeldung der Betreiber (WP-34a, Entscheidung C14).
  *
  * **Strenger als die der Praxen**, weil ein Betreiberkonto quer ueber alle
- * Praxen reicht und es vorerst keinen zweiten Faktor gibt: weniger
+ * Praxen reicht und der zweite Faktor freiwillig ist (C16): weniger
  * Versuche, kein Angemeldet-Bleiben, jede Anmeldung und jeder Fehlversuch
  * im Protokoll.
+ *
+ * **Prueft, meldet aber nicht an.** Das tut AusstehendeAnmeldung -- sofort
+ * oder nach dem Code, und erst dann steht die Anmeldung im Protokoll
+ * (WP-35).
  *
  * **Ein Fehlversuch nennt das Konto, wenn es eines gibt -- nie die
  * eingetippte Adresse** (C5). Ein Protokoll voller vertippter
@@ -72,16 +77,11 @@ final class BetreiberLoginRequest extends FormRequest
             throw ValidationException::withMessages(['email' => trans('auth.failed')]);
         }
 
-        // **Nie dauerhaft angemeldet**, gleich was das Formular schickt.
-        Auth::login($benutzer, false);
+        if ($benutzer->isDeactivated()) {
+            throw ValidationException::withMessages(['email' => EnsureUserIsActive::MELDUNG]);
+        }
 
         RateLimiter::clear($this->drosselschluessel());
-
-        $protokoll->record(
-            ereignis: AuditEvent::OperatorLoggedIn,
-            gegenstand: $benutzer,
-            ohneOrganisation: true,
-        );
 
         return $benutzer;
     }

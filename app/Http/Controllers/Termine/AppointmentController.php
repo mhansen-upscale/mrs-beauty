@@ -390,9 +390,11 @@ final class AppointmentController extends Controller
                     },
                     'detail' => match (true) {
                         $zeile->sent_at !== null => $standort->ortszeit($zeile->sent_at)->format('d.m.Y, H:i'),
-                        $zeile->failed_at !== null => $zeile->failure === 'no_channel'
-                            ? 'kein Kontaktweg hinterlegt'
-                            : (string) $zeile->failure,
+                        $zeile->failed_at !== null => match ($zeile->failure) {
+                            'no_channel' => 'kein Kontaktweg hinterlegt',
+                            'mail' => 'Mail ließ sich nicht verschicken',
+                            default => (string) $zeile->failure,
+                        },
                         default => $zeile->scheduled_for === null
                             ? 'steht aus'
                             : $standort->ortszeit($zeile->scheduled_for)->format('d.m.Y, H:i'),

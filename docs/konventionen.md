@@ -64,6 +64,17 @@ für viele Praxen der erste Kontakt und sollen nach dem Produkt klingen.
 
 Durchgesetzt durch `tests/Feature/Auth/DeutschTest.php`.
 
+**Jede Mail geht über die Warteschlange, verschlüsselt** (B21). Eine neue
+Notification implementiert `ShouldQueue` und `ShouldBeEncrypted`, die beiden
+des Frameworks laufen über `PasswortZuruecksetzen` und `EmailBestaetigen`
+(`User::sendPasswordResetNotification()` und `sendEmailVerificationNotification()`).
+`realtime`, wenn ein Mensch auf die Mail wartet, sonst `default`; dazu
+`afterCommit()`. **Kein TenantModel als Eigenschaft**: Der Arbeiter hat keinen
+Mandanten. Was die Mail braucht, entsteht im Konstruktor — fertige Zeilen,
+Kennungen, keine Modelle. Durchgesetzt durch
+`tests/Feature/Benachrichtigung/WarteschlangeTest.php`, der einen echten
+Arbeiter ohne Mandanten laufen lässt.
+
 **Ausgeblendet ist nicht geschützt.** Die Oberfläche blendet über
 `abilities` aus, was jemand nicht darf. Das ist Bequemlichkeit. Die
 Zugangskontrolle steht in den Gates und in den Controllern, und beides wird

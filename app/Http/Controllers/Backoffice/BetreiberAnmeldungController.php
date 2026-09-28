@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Backoffice;
 
 use App\Audit\AuditLogger;
+use App\Enums\Anmeldeeingang;
 use App\Http\Controllers\Controller;
-use App\Http\Middleware\BetreiberLeerlauf;
 use App\Http\Requests\Backoffice\BetreiberLoginRequest;
-use Carbon\CarbonImmutable;
+use App\ZweiFaktor\AusstehendeAnmeldung;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -34,16 +34,15 @@ final class BetreiberAnmeldungController extends Controller
         ]);
     }
 
-    public function store(BetreiberLoginRequest $request, AuditLogger $protokoll): RedirectResponse
+    /**
+     * Nach dem Passwort: angemeldet oder weiter zum Code (WP-35). Protokoll
+     * und Leerlauffrist setzt AusstehendeAnmeldung::schliesseAb() -- erst,
+     * wenn die Person wirklich angemeldet ist. Nie dauerhaft (C14).
+     */
+    public function store(BetreiberLoginRequest $request, AuditLogger $protokoll, AusstehendeAnmeldung $anmeldung): RedirectResponse
     {
-        $request->authenticate($protokoll);
+        $benutzer = $request->authenticate($protokoll);
 
-        $request->session()->regenerate();
-
-        // Die Leerlauffrist beginnt mit der Anmeldung, nicht mit der
-        // naechsten Anfrage.
-        $request->session()->put(BetreiberLeerlauf::SESSION_KEY, CarbonImmutable::now()->getTimestamp());
-
-        return redirect()->intended(route('dashboard', absolute: false));
+        return $anmeldung->beginne($request, $benutzer, Anmeldeeingang::Betreiber, merken: false);
     }
 }

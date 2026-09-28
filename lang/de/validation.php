@@ -219,6 +219,9 @@ return [
         'organization' => 'Name der Praxis',
         'role' => 'Rolle',
 
+        // Zweiter Faktor (WP-35)
+        'code' => 'Code',
+
         // Standorte
         'slug' => 'Kurzname',
         'timezone' => 'Zeitzone',

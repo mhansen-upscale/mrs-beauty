@@ -10,6 +10,7 @@ use App\Http\Controllers\Settings\PostfachController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\TrackingController;
 use App\Http\Controllers\Settings\WhatsAppController;
+use App\Http\Controllers\Settings\ZweiFaktorController;
 use App\Http\Controllers\Whitelabel\ErscheinungsbildController;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +41,24 @@ Route::middleware('auth')->group(function () {
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
     Route::put('settings/password', [PasswordController::class, 'update'])->name('password.update');
+
+    // Der zweite Faktor (WP-35, C16) -- fuer Praxis und Betreiber, ohne can:.
+    // Er haengt an der Person, nicht an einer Rolle. Bestaetigen ist
+    // gedrosselt: sechs Stellen sind ratbar, wenn man darf.
+    Route::get('settings/zwei-faktor', [ZweiFaktorController::class, 'edit'])->name('zwei-faktor.edit');
+    Route::delete('settings/zwei-faktor', [ZweiFaktorController::class, 'destroy'])->name('zwei-faktor.destroy');
+    Route::post('settings/zwei-faktor/app', [ZweiFaktorController::class, 'starteApp'])->name('zwei-faktor.app');
+    Route::post('settings/zwei-faktor/app/bestaetigen', [ZweiFaktorController::class, 'bestaetigeApp'])
+        ->middleware('throttle:10,1')
+        ->name('zwei-faktor.app.bestaetigen');
+    Route::post('settings/zwei-faktor/email', [ZweiFaktorController::class, 'starteEmail'])->name('zwei-faktor.email');
+    Route::post('settings/zwei-faktor/email/erneut', [ZweiFaktorController::class, 'erneutEmail'])->name('zwei-faktor.email.erneut');
+    Route::post('settings/zwei-faktor/email/bestaetigen', [ZweiFaktorController::class, 'bestaetigeEmail'])
+        ->middleware('throttle:10,1')
+        ->name('zwei-faktor.email.bestaetigen');
+    Route::delete('settings/zwei-faktor/einrichtung', [ZweiFaktorController::class, 'abbrechen'])->name('zwei-faktor.einrichtung.abbrechen');
+    Route::post('settings/zwei-faktor/codes', [ZweiFaktorController::class, 'codesNeu'])->name('zwei-faktor.codes');
+    Route::post('settings/zwei-faktor/hinweis', [ZweiFaktorController::class, 'hinweisAusblenden'])->name('zwei-faktor.hinweis');
 
     // Die Pixel-ID betrifft nicht die eigene Person, sondern die Praxis --
     // sie steht hier, weil sie eine Einstellung ist und kein Arbeitsbereich.

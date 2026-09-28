@@ -16,10 +16,11 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Meldet einen Betreiber nach einer Weile ohne Anfrage ab (WP-34a, C14).
  *
- * **Der Ausgleich fuer den fehlenden zweiten Faktor.** Ein Betreiberkonto
- * reicht quer ueber alle Praxen; ein Rechner, der unbeaufsichtigt
- * angemeldet bleibt, ist dort ein groesseres Risiko als am Empfang einer
- * Praxis. Fuer das Team einer Praxis gilt die Frist deshalb nicht.
+ * **Der Ausgleich dafuer, dass der zweite Faktor freiwillig ist** (C16).
+ * Ein Betreiberkonto reicht quer ueber alle Praxen; ein Rechner, der
+ * unbeaufsichtigt angemeldet bleibt, ist dort ein groesseres Risiko als am
+ * Empfang einer Praxis. Fuer das Team einer Praxis gilt die Frist deshalb
+ * nicht.
  *
  * Die Abmeldung loest das Ereignis Logout aus -- und das beendet eine
  * laufende Impersonation mit.

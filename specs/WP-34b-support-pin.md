@@ -163,7 +163,7 @@ durchprobieren. Fehlt eines davon, ist sie ratbar.
   WP-05 festlegt. Ein feinerer Zuschnitt wäre ein eigenes Paket.
 - **Benachrichtigung per E-Mail oder WhatsApp** bei Einlösung. Der Hinweis im
   Produkt und das Protokoll reichen vorerst.
-- **Zweiter Faktor für Betreiber** (C14, zurückgestellt).
+- **Zweiter Faktor für Betreiber.** Freiwillig, mit WP-35 (C16).
 
 ## Fallstricke
 

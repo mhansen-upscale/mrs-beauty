@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Team;
 
+use App\Audit\ImpersonationContext;
 use App\Enums\Ability;
 use App\Enums\Role;
 use App\Http\Controllers\Controller;
@@ -11,6 +12,7 @@ use App\Http\Requests\Team\UpdateMemberRequest;
 use App\Models\ImpersonationSession;
 use App\Models\Invitation;
 use App\Models\User;
+use App\ZweiFaktor\ZweiterFaktor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -37,6 +39,7 @@ final class MemberController extends Controller
                     'deactivated' => $mitglied->isDeactivated(),
                     'verified' => $mitglied->hasVerifiedEmail(),
                     'self' => $mitglied->getKey() === $request->user()?->getKey(),
+                    'zweiFaktor' => $mitglied->zweiFaktorVerfahren()?->value,
                 ])
                 ->values(),
 
@@ -137,6 +140,42 @@ final class MemberController extends Controller
         $member->save();
 
         return back();
+    }
+
+    /**
+     * Setzt den zweiten Faktor eines Mitglieds zurueck -- das Handy ist weg
+     * (WP-35).
+     *
+     * **Der zweite Faktor schuetzt auch vor Kolleginnen, die das Passwort
+     * kennen.** Deshalb: nur mit dem eigenen Passwort, nie der eigene, nie
+     * waehrend einer Impersonation, und den einer Inhaberin nur eine
+     * Inhaberin (abgeleitet, zu bestaetigen).
+     */
+    public function zweiFaktorZuruecksetzen(Request $request, User $member, ZweiterFaktor $zweiterFaktor): RedirectResponse
+    {
+        Gate::authorize(Ability::ManageTeam->value);
+
+        // Vor der Organisationspruefung: der Support hat keine eigene Praxis
+        // und bekaeme sonst 404 statt eines klaren Nein.
+        abort_if(app(ImpersonationContext::class)->isActive(), 403);
+
+        $this->stelleSicherDassEigeneOrganisation($request, $member);
+
+        abort_if($member->hasRole(Role::Owner) && ! $request->user()?->hasRole(Role::Owner), 403);
+
+        $request->validate(['current_password' => ['required', 'current_password']]);
+
+        if ($member->getKey() === $request->user()?->getKey()) {
+            throw ValidationException::withMessages([
+                'member' => 'Den eigenen zweiten Faktor ändern Sie unter Einstellungen.',
+            ]);
+        }
+
+        if ($member->hatZweiFaktor()) {
+            $zweiterFaktor->setzeZurueck($member);
+        }
+
+        return back()->with('erfolg', "Der zweite Faktor von {$member->name} ist zurückgesetzt. Die Person meldet sich jetzt nur mit Passwort an.");
     }
 
     /**

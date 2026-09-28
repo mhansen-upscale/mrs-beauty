@@ -7,8 +7,8 @@ use App\Enums\OperatorRole;
 use App\Enums\Role;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Notifications\PasswortZuruecksetzen;
 use Carbon\CarbonImmutable;
-use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Notification;
 
@@ -55,7 +55,7 @@ it('legt ein Konto fuer Customer Success an und schickt den Passwortlink', funct
         // Adresse ohnehin.
         ->and($konto->email_verified_at)->not->toBeNull();
 
-    Notification::assertSentTo($konto, ResetPassword::class);
+    Notification::assertSentTo($konto, PasswortZuruecksetzen::class);
 });
 
 it('fuehrt nach dem neuen Passwort zur Anmeldung der Betreiber', function (): void {
@@ -71,7 +71,7 @@ it('fuehrt nach dem neuen Passwort zur Anmeldung der Betreiber', function (): vo
     $konto = User::query()->where('email', 'clara@mrs-beauty.test')->firstOrFail();
     $merkmal = '';
 
-    Notification::assertSentTo($konto, ResetPassword::class, function (ResetPassword $nachricht) use (&$merkmal): bool {
+    Notification::assertSentTo($konto, PasswortZuruecksetzen::class, function (PasswortZuruecksetzen $nachricht) use (&$merkmal): bool {
         $merkmal = $nachricht->token;
 
         return true;
@@ -215,7 +215,7 @@ it('legt den ersten Super-Admin auf der Konsole an', function (): void {
     expect($konto->betreiberRolle())->toBe(OperatorRole::SuperAdmin)
         ->and($konto->email_verified_at)->not->toBeNull();
 
-    Notification::assertSentTo($konto, ResetPassword::class);
+    Notification::assertSentTo($konto, PasswortZuruecksetzen::class);
 });
 
 it('macht auf der Konsole kein Praxiskonto zum Betreiber', function (): void {

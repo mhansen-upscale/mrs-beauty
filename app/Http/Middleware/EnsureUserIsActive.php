@@ -19,6 +19,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class EnsureUserIsActive
 {
+    /** Dieselbe Meldung bei der Anmeldung und beim Hinauswerfen (WP-35). */
+    public const MELDUNG = 'Dieser Zugang wurde deaktiviert.';
+
     public function handle(Request $request, Closure $next): Response
     {
         $benutzer = $request->user();
@@ -30,7 +33,7 @@ final class EnsureUserIsActive
             $request->session()->regenerateToken();
 
             return redirect()->route('login')->withErrors([
-                'email' => 'Dieser Zugang wurde deaktiviert.',
+                'email' => self::MELDUNG,
             ]);
         }
 

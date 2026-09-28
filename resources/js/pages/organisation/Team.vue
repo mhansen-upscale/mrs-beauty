@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type SharedData, type Spalte } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, CircleSlash, MailCheck, MailWarning, Send, ShieldAlert, Trash2, UserPlus } from 'lucide-vue-next';
+import { CheckCircle2, CircleSlash, MailCheck, MailWarning, Send, ShieldAlert, ShieldCheck, ShieldOff, Trash2, UserPlus } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 const page = usePage<SharedData>();
@@ -26,6 +26,7 @@ interface Member extends Record<string, unknown> {
     deactivated: boolean;
     verified: boolean;
     self: boolean;
+    zweiFaktor: 'authenticator' | 'email' | null;
 }
 
 interface Invitation extends Record<string, unknown> {
@@ -73,7 +74,10 @@ const mitgliedSpalten: Spalte<Member>[] = [
     { schluessel: 'role', titel: 'Rolle', ab: 'md' },
     { schluessel: 'verified', titel: 'Bestätigt', ab: 'lg' },
     { schluessel: 'deactivated', titel: 'Status' },
+    { schluessel: 'zweiFaktor', titel: 'Zweiter Faktor', ab: 'lg' },
 ];
+
+const verfahren: Record<string, string> = { authenticator: 'App', email: 'E-Mail' };
 
 const einladungSpalten: Spalte<Invitation>[] = [
     { schluessel: 'email', titel: 'E-Mail' },
@@ -117,6 +121,40 @@ const reaktivieren = (mitglied: Member) => router.put(route('team.reactivate', {
 const erneutSenden = (eintrag: Invitation) => router.post(route('invitations.resend', { invitation: eintrag.uuid }), {}, { preserveScroll: true });
 
 const zuruecknehmen = (eintrag: Invitation) => router.delete(route('invitations.destroy', { invitation: eintrag.uuid }), { preserveScroll: true });
+
+/* Zweiten Faktor zurücksetzen (WP-35) --------------------------------------- */
+
+/**
+ * Den Faktor einer Inhaberin setzt nur eine Inhaberin zurück, den eigenen
+ * niemand hier und der Support gar keinen. Der Server prüft dasselbe — hier
+ * geht es nur darum, keinen Knopf zu zeigen, der mit 403 endet.
+ */
+const darfZuruecksetzen = (mitglied: Member): boolean =>
+    mitglied.zweiFaktor !== null && !mitglied.self && !page.props.impersonation && (mitglied.role !== 'owner' || page.props.auth.role === 'owner');
+
+const faktorOffen = ref(false);
+const faktorFuer = ref<Member | null>(null);
+const faktor = useForm({ current_password: '' });
+const faktorFehler = computed(() => (faktor.errors as Record<string, string | undefined>).member);
+
+const faktorOeffnen = (mitglied: Member) => {
+    faktorFuer.value = mitglied;
+    faktor.clearErrors();
+    faktor.current_password = '';
+    faktorOffen.value = true;
+};
+
+const faktorZuruecksetzen = () => {
+    if (!faktorFuer.value) {
+        return;
+    }
+
+    faktor.delete(route('team.zwei-faktor', { member: faktorFuer.value.uuid }), {
+        preserveScroll: true,
+        onSuccess: () => (faktorOffen.value = false),
+        onFinish: () => faktor.reset('current_password'),
+    });
+};
 
 const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 </script>
@@ -192,6 +230,14 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                     </Badge>
                 </template>
 
+                <template #zelle-zweiFaktor="{ zeile }">
+                    <Badge v-if="zeile.zweiFaktor" variant="success">
+                        <ShieldCheck />
+                        {{ verfahren[zeile.zweiFaktor] }}
+                    </Badge>
+                    <span v-else class="text-sm text-muted-foreground">aus</span>
+                </template>
+
                 <template #aktionen="{ zeile }">
                     <AktionsButton
                         v-if="!zeile.deactivated"
@@ -201,6 +247,12 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                         @click="deaktivieren(zeile)"
                     />
                     <AktionsButton v-else :icon="CheckCircle2" beschriftung="Zugang reaktivieren" @click="reaktivieren(zeile)" />
+                    <AktionsButton
+                        v-if="darfZuruecksetzen(zeile)"
+                        :icon="ShieldOff"
+                        beschriftung="Zweiten Faktor zurücksetzen"
+                        @click="faktorOeffnen(zeile)"
+                    />
                 </template>
 
                 <template #leer>Noch niemand im Team.</template>
@@ -256,6 +308,21 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                     {{ roles.find((rolle) => rolle.value === einladung.role)?.description }}
                 </p>
                 <InputError :message="einladung.errors.role" />
+            </div>
+        </FormularDialog>
+
+        <FormularDialog
+            v-model:offen="faktorOffen"
+            :titel="`Zweiten Faktor von ${faktorFuer?.name ?? ''} zurücksetzen`"
+            beschreibung="Für ein verlorenes Telefon. Die Person meldet sich danach nur mit Passwort an und richtet den zweiten Faktor neu ein. Der Vorgang steht im Protokoll."
+            :laeuft="faktor.processing"
+            absende-text="Zurücksetzen"
+            @absenden="faktorZuruecksetzen"
+        >
+            <div class="grid gap-2">
+                <Label for="faktor-passwort">Ihr Passwort</Label>
+                <Input id="faktor-passwort" v-model="faktor.current_password" type="password" autocomplete="current-password" />
+                <InputError :message="faktor.errors.current_password ?? faktorFehler" />
             </div>
         </FormularDialog>
     </AppLayout>

@@ -21,6 +21,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('team/{member}', [MemberController::class, 'update'])->name('team.update');
         Route::delete('team/{member}', [MemberController::class, 'deactivate'])->name('team.deactivate');
         Route::put('team/{member}/reaktivieren', [MemberController::class, 'reactivate'])->name('team.reactivate');
+        Route::delete('team/{member}/zwei-faktor', [MemberController::class, 'zweiFaktorZuruecksetzen'])->name('team.zwei-faktor');
 
         Route::post('team/einladungen', [InvitationController::class, 'store'])->name('invitations.store');
         Route::post('team/einladungen/{invitation}/erneut', [InvitationController::class, 'resend'])->name('invitations.resend');

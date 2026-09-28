@@ -10,6 +10,7 @@ use App\Enums\AuditEvent;
 use App\Enums\OperatorRole;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\ZweiFaktor\ZweiterFaktor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -55,6 +56,7 @@ final class BetreiberController extends Controller
                     'rolleLabel' => $konto->betreiberRolle()?->label(),
                     'deaktiviert' => $konto->isDeactivated(),
                     'letzterSuperAdmin' => $konto->istLetzterSuperAdmin(),
+                    'zweiFaktor' => $konto->zweiFaktorVerfahren()?->value,
                 ])
                 ->values(),
             'rollen' => array_map(fn (OperatorRole $rolle): array => [
@@ -163,6 +165,30 @@ final class BetreiberController extends Controller
         );
 
         return back()->with('erfolg', 'Konto reaktiviert.');
+    }
+
+    /**
+     * Setzt den zweiten Faktor eines anderen Betreibers zurueck (WP-35). Den
+     * eigenen aendert jede Person unter Einstellungen; den des letzten
+     * Super-Admins, der nicht mehr hineinkommt, die Konsole.
+     */
+    public function zweiFaktorZuruecksetzen(Request $request, User $betreiber, ZweiterFaktor $zweiterFaktor): RedirectResponse
+    {
+        $this->nurBetreiber($betreiber);
+
+        $request->validate(BackofficeController::PASSWORT);
+
+        if ($betreiber->is($request->user())) {
+            throw ValidationException::withMessages([
+                'betreiber' => 'Den eigenen zweiten Faktor ändern Sie unter Einstellungen.',
+            ]);
+        }
+
+        if ($betreiber->hatZweiFaktor()) {
+            $zweiterFaktor->setzeZurueck($betreiber);
+        }
+
+        return back()->with('erfolg', 'Zweiter Faktor zurückgesetzt. Die Person meldet sich jetzt nur mit Passwort an.');
     }
 
     /** Diese Seite verwaltet Betreiberkonten -- das Team einer Praxis verwaltet die Praxis. */

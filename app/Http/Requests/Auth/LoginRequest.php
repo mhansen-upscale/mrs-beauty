@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests\Auth;
 
 use App\Http\Middleware\EnsurePraxisNichtGesperrt;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -38,11 +39,13 @@ class LoginRequest extends FormRequest
     }
 
     /**
-     * Attempt to authenticate the request's credentials.
+     * Prueft die Zugangsdaten und gibt die Person zurueck -- **ohne sie
+     * anzumelden**. Das tut AusstehendeAnmeldung, sofort oder nach dem
+     * zweiten Faktor (WP-35).
      *
      * @throws ValidationException
      */
-    public function authenticate(): void
+    public function authenticate(): User
     {
         $this->ensureIsNotRateLimited();
 
@@ -74,9 +77,19 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        Auth::login($benutzer, $this->boolean('remember'));
+        // **Eine deaktivierte Person kommt nicht bis zum Code** (WP-35).
+        // Bis hier meldete die Anmeldung sie an, und EnsureUserIsActive warf
+        // sie mit der naechsten Anfrage hinaus. Mit dem zweiten Faktor ginge
+        // ihr dazwischen eine Mail zu.
+        if ($benutzer->isDeactivated()) {
+            throw ValidationException::withMessages([
+                'email' => EnsureUserIsActive::MELDUNG,
+            ]);
+        }
 
         RateLimiter::clear($this->throttleKey());
+
+        return $benutzer;
     }
 
     /**

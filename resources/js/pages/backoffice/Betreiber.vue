@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type SharedData, type Spalte } from '@/types';
 import { Head, useForm, usePage } from '@inertiajs/vue3';
-import { CheckCircle2, CircleSlash, UserCog, UserPlus } from 'lucide-vue-next';
+import { CheckCircle2, CircleSlash, ShieldCheck, ShieldOff, UserCog, UserPlus } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -20,7 +20,7 @@ import { computed, ref } from 'vue';
  *
  * Das Passwort setzt jede Person selbst über den Link, den sie per Mail
  * bekommt. Jede wirksame Handlung verlangt das eigene Passwort — der
- * Ausgleich für den fehlenden zweiten Faktor (C14).
+ * Ausgleich dafür, dass der zweite Faktor freiwillig ist (C14, C16).
  */
 
 interface Konto extends Record<string, unknown> {
@@ -31,6 +31,7 @@ interface Konto extends Record<string, unknown> {
     rolleLabel: string;
     deaktiviert: boolean;
     letzterSuperAdmin: boolean;
+    zweiFaktor: 'authenticator' | 'email' | null;
 }
 
 interface Rolle {
@@ -57,7 +58,10 @@ const spalten: Spalte<Konto>[] = [
     { schluessel: 'email', titel: 'E-Mail', ab: 'md' },
     { schluessel: 'rolleLabel', titel: 'Rolle' },
     { schluessel: 'deaktiviert', titel: 'Zustand', ab: 'sm' },
+    { schluessel: 'zweiFaktor', titel: 'Zweiter Faktor', ab: 'lg' },
 ];
+
+const verfahren: Record<string, string> = { authenticator: 'App', email: 'E-Mail' };
 
 const beschreibung = (wert: string): string => props.rollen.find((rolle) => rolle.wert === wert)?.beschreibung ?? '';
 
@@ -138,6 +142,33 @@ const zustandSpeichern = () => {
         },
     );
 };
+
+/* Zweiten Faktor zurücksetzen (WP-35) --------------------------------------- */
+
+const faktorOffen = ref(false);
+const faktor = useForm({ current_password: '' });
+const faktorFehler = computed(() => (faktor.errors as Record<string, string | undefined>).betreiber);
+
+const faktorOeffnen = (konto: Konto) => {
+    gewaehlt.value = konto;
+    faktor.clearErrors();
+    faktor.current_password = '';
+    faktorOffen.value = true;
+};
+
+const faktorZuruecksetzen = () => {
+    if (!gewaehlt.value) {
+        return;
+    }
+
+    faktor.post(route('backoffice.betreiber.zwei-faktor', { betreiber: gewaehlt.value.uuid }), {
+        preserveScroll: true,
+        onSuccess: () => {
+            faktorOffen.value = false;
+        },
+        onFinish: () => faktor.reset('current_password'),
+    });
+};
 </script>
 
 <template>
@@ -175,6 +206,14 @@ const zustandSpeichern = () => {
                     </Badge>
                 </template>
 
+                <template #zelle-zweiFaktor="{ zeile }">
+                    <Badge v-if="zeile.zweiFaktor" variant="success">
+                        <ShieldCheck />
+                        {{ verfahren[zeile.zweiFaktor] }}
+                    </Badge>
+                    <span v-else class="text-sm text-muted-foreground">aus</span>
+                </template>
+
                 <template #aktionen="{ zeile }">
                     <AktionsButton
                         :icon="UserCog"
@@ -190,6 +229,12 @@ const zustandSpeichern = () => {
                         @click="zustandOeffnen(zeile)"
                     />
                     <AktionsButton v-else :icon="CheckCircle2" beschriftung="Konto reaktivieren" @click="zustandOeffnen(zeile)" />
+                    <AktionsButton
+                        v-if="zeile.zweiFaktor && zeile.email !== selbst"
+                        :icon="ShieldOff"
+                        beschriftung="Zweiten Faktor zurücksetzen"
+                        @click="faktorOeffnen(zeile)"
+                    />
                 </template>
 
                 <template #leer>Noch kein Betreiberkonto.</template>
@@ -197,7 +242,8 @@ const zustandSpeichern = () => {
 
             <p class="text-xs text-muted-foreground">
                 Den letzten aktiven Super-Admin kann niemand herabstufen oder deaktivieren, das eigene Konto auch nicht. Für den Notfall gibt es auf
-                der Konsole <code>php artisan mrs:betreiber</code>.
+                der Konsole <code>php artisan mrs:betreiber</code>. Einen verlorenen zweiten Faktor setzt ein anderes Konto hier zurück, den eigenen
+                niemand — dafür gibt es <code>php artisan mrs:zwei-faktor-zuruecksetzen</code>.
             </p>
         </div>
 
@@ -283,6 +329,21 @@ const zustandSpeichern = () => {
                 <Label for="zustand-passwort">Ihr Passwort</Label>
                 <Input id="zustand-passwort" v-model="zustand.current_password" type="password" autocomplete="current-password" />
                 <InputError :message="zustand.errors.current_password ?? zustandFehler" />
+            </div>
+        </FormularDialog>
+
+        <FormularDialog
+            v-model:offen="faktorOffen"
+            :titel="`Zweiten Faktor von ${gewaehlt?.name ?? ''} zurücksetzen`"
+            beschreibung="Für ein verlorenes Telefon. Die Person meldet sich danach nur mit Passwort an und richtet den zweiten Faktor neu ein. Der Vorgang steht im Protokoll."
+            :laeuft="faktor.processing"
+            absende-text="Zurücksetzen"
+            @absenden="faktorZuruecksetzen"
+        >
+            <div class="grid gap-2">
+                <Label for="faktor-passwort">Ihr Passwort</Label>
+                <Input id="faktor-passwort" v-model="faktor.current_password" type="password" autocomplete="current-password" />
+                <InputError :message="faktor.errors.current_password ?? faktorFehler" />
             </div>
         </FormularDialog>
     </AppLayout>

@@ -79,6 +79,7 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 | WP-34b | Freigabe per Einmal-PIN | offen: die Inhaberin gibt den Vollzugriff auch per PIN frei (C15); nach WP-34a |
 | WP-34c | Abo-Eingriffe & Testphase | steht: pausieren, kündigen, Rücknahme, Gratismonat als Auftrag bei Stripe (B17), **ohne Stripe-Schlüssel sofort lokal (Testbetrieb)**; Ende der Testphase durchgesetzt mit Gnadenfrist (B18); Webhook mit Dedupe und Reihenfolge; Agent und Buchungsseite ruhen bei Abo-Sperre |
 | WP-34d | Finanzübersicht | offen: Einnahmen, Kosten und Ergebnis als Hochrechnung, Monatsabschluss als Historie (B19); nach WP-34c und WP-31b |
+| WP-35 | Zweiter Faktor | steht: freiwillig für Praxen und Betreiber, per Authenticator-App oder E-Mail-Code, Hinweis statt Pflicht (C16); Zurücksetzen über Team, Betreiberverwaltung oder Konsole; nach WP-34a |
 
 ## Außerhalb des Repositories
 
@@ -98,7 +99,6 @@ Stand 26.09.2026 — alles, was sich im Repository nicht erledigen lässt:
 | **HWG** | juristische Durchsicht des Regelwerks — bewusst offen: die Ampel ist eine Hilfe und sagt es überall | WP-30 |
 | **Entscheidung** | `Schedule` und `Contact` an die Conversions API — ja oder nein (C8) | WP-32b, „Offen" |
 | **Entscheidung** | Rollenkatalog der Betreiber bestätigen; Agent und Buchungsseite bei Abo-Sperre (B17); Praxen in der Testphase wechseln immer auf die neue Paketfassung (B20) | WP-34a, WP-34c, WP-06b |
-| **Betreiber** | zweiter Faktor für Betreiberkonten — zurückgestellt (C14) | WP-34a, „Nicht in diesem Paket" |
 
 ## Fachlogik
 

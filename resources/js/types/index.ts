@@ -10,6 +10,20 @@ export interface Auth {
      * jedes Konto einer Praxis — der Betreiber gehört zu keiner.
      */
     betreiber: Betreiber | null;
+
+    /**
+     * Der zweite Faktor der angemeldeten Person (WP-35). Nur Verfahren und
+     * ob der Hinweis erscheint — Geheimnis und Codes bleiben auf dem Server.
+     */
+    zweiFaktor: ZweiFaktorStand | null;
+}
+
+export type ZweiFaktorVerfahren = 'authenticator' | 'email';
+
+export interface ZweiFaktorStand {
+    aktiv: boolean;
+    verfahren: ZweiFaktorVerfahren | null;
+    hinweis: boolean;
 }
 
 export interface Betreiber {
@@ -101,6 +115,7 @@ export interface SharedData extends PageProps {
     flash: {
         erfolg: string | null;
         fehler: string | null;
+        hinweise: string[];
     };
 
     ziggy: {

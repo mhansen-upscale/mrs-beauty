@@ -17,6 +17,7 @@
         "laravel/pulse": "^1.8",
         "laravel/tinker": "^2.10.1",
         "league/flysystem-aws-s3-v3": "^3.35",
+        "pragmarx/google2fa": "^8.0",
         "sentry/sentry-laravel": "^4.27",
         "tightenco/ziggy": "^2.4",
         "zbateson/mail-mime-parser": "^4.0"

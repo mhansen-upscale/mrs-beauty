@@ -10,9 +10,12 @@ use App\Enums\Ability;
 use App\Enums\OperatorAbility;
 use App\Enums\OperatorRole;
 use App\Enums\Role;
+use App\Enums\ZweiFaktorVerfahren;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasBinaryUuid;
 use App\Models\Concerns\MasksPersonalData;
+use App\Notifications\EmailBestaetigen;
+use App\Notifications\PasswortZuruecksetzen;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
@@ -52,6 +55,12 @@ use Illuminate\Notifications\Notifiable;
  * @property CarbonImmutable|null $deactivated_at
  * @property CarbonImmutable|null $einfuehrung_gesehen_at
  * @property CarbonImmutable|null $email_verified_at
+ * @property ZweiFaktorVerfahren|null $zwei_faktor_verfahren
+ * @property string|null $zwei_faktor_geheimnis
+ * @property list<string>|null $zwei_faktor_wiederherstellung
+ * @property CarbonImmutable|null $zwei_faktor_bestaetigt_at
+ * @property int|null $zwei_faktor_letzter_schritt
+ * @property CarbonImmutable|null $zwei_faktor_hinweis_ausgeblendet_at
  */
 class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
 {
@@ -87,6 +96,13 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
         // Rohbytes. users ist kein TenantModel, also greift die Regel aus
         // BelongsToTenant hier nicht -- siehe tests/Feature/Schema/RohbytesTest.php.
         'organization_id',
+
+        // **Der zweite Faktor bleibt auf dem Server** (WP-35). auth.user geht
+        // mit jeder Antwort an den Browser -- ohne diese Zeilen auch das
+        // Geheimnis der App.
+        'zwei_faktor_geheimnis',
+        'zwei_faktor_wiederherstellung',
+        'zwei_faktor_letzter_schritt',
     ];
 
     /**
@@ -103,6 +119,15 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
             'role' => Role::class,
             'operator_role' => OperatorRole::class,
             'password' => 'hashed',
+
+            // Mit dem App-Schluessel, nicht mit App\Casts\Encrypted: der haengt
+            // am Schluessel der Praxis, und Betreiber haben keine (WP-35).
+            'zwei_faktor_verfahren' => ZweiFaktorVerfahren::class,
+            'zwei_faktor_geheimnis' => 'encrypted',
+            'zwei_faktor_wiederherstellung' => 'array',
+            'zwei_faktor_bestaetigt_at' => 'immutable_datetime',
+            'zwei_faktor_letzter_schritt' => 'integer',
+            'zwei_faktor_hinweis_ausgeblendet_at' => 'immutable_datetime',
         ];
     }
 
@@ -180,7 +205,7 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
      */
     public function auditableValues(): array
     {
-        return ['role', 'deactivated_at', 'operator_role'];
+        return ['role', 'deactivated_at', 'operator_role', 'zwei_faktor_verfahren'];
     }
 
     /**
@@ -258,6 +283,78 @@ class User extends Authenticatable implements HasPersonalData, MustVerifyEmail
             ->whereNull('deactivated_at')
             ->whereKeyNot($this->getKey())
             ->exists();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mails der Anmeldestrecke
+    |--------------------------------------------------------------------------
+    |
+    | **Jede Mail geht ueber die Warteschlange** (28.09.2026). Die beiden
+    | Mails des Frameworks gingen sonst im Anfragezyklus hinaus; die
+    | Unterklassen reihen sie ein und behalten Text und Layout aus
+    | AppServiceProvider::configureMails().
+    |
+    */
+
+    /**
+     * @param  string  $token
+     */
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new PasswortZuruecksetzen($token));
+    }
+
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new EmailBestaetigen);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Zweiter Faktor (WP-35, Entscheidung C16)
+    |--------------------------------------------------------------------------
+    |
+    | Gelesen ueber getAttributes(), wie betreiberRolle(): ein frisch
+    | angelegtes Modell ohne die Spalten scheitert sonst an
+    | Model::shouldBeStrict.
+    |
+    */
+
+    /** Das bestaetigte Verfahren -- ein nicht bestaetigtes zaehlt nicht. */
+    public function zweiFaktorVerfahren(): ?ZweiFaktorVerfahren
+    {
+        $spalten = $this->getAttributes();
+
+        if (($spalten['zwei_faktor_bestaetigt_at'] ?? null) === null || ($spalten['zwei_faktor_verfahren'] ?? null) === null) {
+            return null;
+        }
+
+        return $this->zwei_faktor_verfahren;
+    }
+
+    public function hatZweiFaktor(): bool
+    {
+        return $this->zweiFaktorVerfahren() instanceof ZweiFaktorVerfahren;
+    }
+
+    /**
+     * Soll der Hinweis erscheinen? Ohne zweiten Faktor -- es sei denn, die
+     * Person hat ihn vor weniger als `hinweis_pause_tage` ausgeblendet.
+     */
+    public function zweiFaktorHinweisFaellig(): bool
+    {
+        if ($this->hatZweiFaktor()) {
+            return false;
+        }
+
+        if (($this->getAttributes()['zwei_faktor_hinweis_ausgeblendet_at'] ?? null) === null) {
+            return true;
+        }
+
+        $pause = (int) config('mrs.zwei_faktor.hinweis_pause_tage');
+
+        return $this->zwei_faktor_hinweis_ausgeblendet_at?->addDays($pause)->isPast() ?? true;
     }
 
     /** Nicht `is()` -- den Namen belegt Eloquent fuer den Modellvergleich. */

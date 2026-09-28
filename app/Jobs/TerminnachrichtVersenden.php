@@ -87,8 +87,11 @@ final class TerminnachrichtVersenden implements ShouldQueue
                 return;
             }
 
+            // Der Versand selbst ist ein eigener Auftrag mit eigenen Versuchen;
+            // scheitert er endgueltig, steht die Zeile als fehlgeschlagen da
+            // (Terminnachricht::failed()).
             Notification::route('mail', [$kontakt->email => $kontakt->name()])
-                ->notify(new Terminnachricht($termin, $zeile->kind, $organisation->name, Mailmarke::fuer($organisation)));
+                ->notify(new Terminnachricht($termin, $zeile->kind, $organisation->name, Mailmarke::fuer($organisation), $zeile));
         });
     }
 

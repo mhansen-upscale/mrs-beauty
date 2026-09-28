@@ -25,9 +25,10 @@ use function Pest\Laravel\travelTo;
 | WP-34a, Abnahmekriterien 11 bis 15 -- die Anmeldung der Betreiber
 |--------------------------------------------------------------------------
 |
-| **Ein eigener Eingang, derselbe Guard** (Entscheidung C14). Ohne zweiten
-| Faktor, deshalb: strengere Drosselung, kein Angemeldet-Bleiben,
-| Leerlauf-Abmeldung und das eigene Passwort vor jeder wirksamen Handlung.
+| **Ein eigener Eingang, derselbe Guard** (Entscheidung C14). Der zweite
+| Faktor ist freiwillig (C16, WP-35), deshalb: strengere Drosselung, kein
+| Angemeldet-Bleiben, Leerlauf-Abmeldung und das eigene Passwort vor jeder
+| wirksamen Handlung.
 |
 */
 

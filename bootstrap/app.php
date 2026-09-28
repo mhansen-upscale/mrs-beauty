@@ -30,8 +30,8 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureUserIsActive::class,
 
             // Ein Betreiber, der eine halbe Stunde nichts getan hat, meldet
-            // sich neu an -- der Ausgleich fuer den fehlenden zweiten Faktor
-            // (WP-34a, C14).
+            // sich neu an -- der Ausgleich dafuer, dass der zweite Faktor
+            // freiwillig ist (WP-34a, C14, C16).
             BetreiberLeerlauf::class,
 
             // Muss vor HandleInertiaRequests laufen: das Teilen von
@@ -139,5 +139,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        // Ein Validierungsfehler legt die Eingabe in die Sitzung, damit das
+        // Formular sie wieder zeigt. Codes des zweiten Faktors gehoeren nicht
+        // dazu -- neben die Passwoerter, die Laravel hier schon auslaesst
+        // (WP-35).
+        $exceptions->dontFlash(['code']);
     })->create();
