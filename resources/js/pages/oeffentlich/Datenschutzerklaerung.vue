@@ -147,8 +147,8 @@ defineProps<{
                         Formular abgeschickt wurde; dafür setzen wir keinen Dienst Dritter ein.
                     </p>
                     <p>
-                        Wir löschen die Angaben nach {{ aufbewahrungMonate }} Monaten automatisch, früher, wenn Sie es verlangen — es sei denn, aus
-                        der Anfrage ist ein Vertrag entstanden, dann gelten die gesetzlichen Aufbewahrungspflichten.
+                        Nach {{ aufbewahrungMonate }} Monaten löschen wir die Angaben, früher, wenn Sie es verlangen — es sei denn, aus der Anfrage
+                        ist ein Vertrag entstanden, dann gelten die gesetzlichen Aufbewahrungspflichten.
                     </p>
                 </section>
 

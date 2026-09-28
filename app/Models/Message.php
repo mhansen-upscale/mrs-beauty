@@ -12,6 +12,7 @@ use App\Enums\MessageDirection;
 use App\Enums\MessageStatus;
 use App\Models\Concerns\MasksPersonalData;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
@@ -87,6 +88,45 @@ class Message extends TenantModel implements HasPersonalData
         // ist es nicht. Und eine Betreffzeile traegt bei diesem Produkt
         // regelmaessig ein Gesundheitsdatum.
         return ['body', 'subject', 'template_variables'];
+    }
+
+    /**
+     * Was hinausging -- kostenlos wie kostenpflichtig.
+     *
+     * @param  Builder<Message>  $query
+     * @return Builder<Message>
+     */
+    public function scopeAusgehend(Builder $query): Builder
+    {
+        return $query->where('direction', MessageDirection::Outbound->value);
+    }
+
+    /**
+     * Was gegen das Template-Kontingent zaehlt (B12): ausgehend, mit einer
+     * Kategorie des Anbieters, weder `none` noch Service-Fenster.
+     *
+     * **Eine Stelle fuer Abo-Seite und Finanzuebersicht** (WP-34d). Zaehlten
+     * beide verschieden, glaubte bald niemand mehr einer von beiden (WP-06).
+     *
+     * @param  Builder<Message>  $query
+     * @return Builder<Message>
+     */
+    public function scopeKostenpflichtig(Builder $query): Builder
+    {
+        return $query->ausgehend()
+            ->whereNotNull('cost_category')
+            ->whereNotIn('cost_category', [MessageCostCategory::None->value, MessageCostCategory::Service->value]);
+    }
+
+    /**
+     * Antworten im offenen Service-Fenster (B14).
+     *
+     * @param  Builder<Message>  $query
+     * @return Builder<Message>
+     */
+    public function scopeImServicefenster(Builder $query): Builder
+    {
+        return $query->ausgehend()->where('cost_category', MessageCostCategory::Service->value);
     }
 
     public function istEingehend(): bool

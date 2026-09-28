@@ -2,6 +2,7 @@
 import Einfuehrung from '@/components/Einfuehrung.vue';
 import ImpersonationBanner from '@/components/ImpersonationBanner.vue';
 import Rueckmeldung from '@/components/Rueckmeldung.vue';
+import SupportzugriffHinweis from '@/components/SupportzugriffHinweis.vue';
 import ZweiFaktorHinweis from '@/components/ZweiFaktorHinweis.vue';
 import AppLayout from '@/layouts/app/AppSidebarLayout.vue';
 import type { BreadcrumbItemType } from '@/types';
@@ -19,6 +20,9 @@ withDefaults(defineProps<Props>(), {
     <AppLayout :breadcrumbs="breadcrumbs">
         <!-- Solange eine Impersonation läuft, steht sie über allem. -->
         <ImpersonationBanner />
+
+        <!-- Die Gegenseite: Die Praxis sieht, solange der Support Vollzugriff hat. -->
+        <SupportzugriffHinweis />
 
         <!-- Freiwillig heißt nicht beiläufig (C16): ein Hinweis, keine Sperre. -->
         <ZweiFaktorHinweis />

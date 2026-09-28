@@ -17,6 +17,8 @@ import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     CheckCircle2,
     CircleSlash,
+    KeyRound,
+    LogOut,
     MailCheck,
     MailWarning,
     RotateCcw,
@@ -26,8 +28,9 @@ import {
     ShieldOff,
     Trash2,
     UserPlus,
+    XCircle,
 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const page = usePage<SharedData>();
 
@@ -62,11 +65,27 @@ interface SupportSession {
     expires_at: string;
 }
 
+interface Supportsitzung extends Record<string, unknown> {
+    uuid: string;
+    betreiber: string;
+    reason: string;
+    mode: string;
+    vollzugriff: boolean;
+    freigabeweg: string | null;
+    started_at: string;
+    ended_at: string | null;
+    expires_at: string;
+    laeuft: boolean;
+}
+
 const props = defineProps<{
     members: Member[];
     invitations: Invitation[];
     roles: RoleOption[];
     supportSession: SupportSession | null;
+    neuePin: { pin: string; expires_at: string } | null;
+    offenePin: { expires_at: string } | null;
+    supportSitzungen: Supportsitzung[];
 }>();
 
 const breadcrumbItems: BreadcrumbItem[] = [{ title: 'Team', href: '/team' }];
@@ -80,6 +99,46 @@ const freigeben = () => {
 
     router.post(route('impersonation.approve', { session: props.supportSession.uuid }), {}, { preserveScroll: true });
 };
+
+/* Support-Zugriff per Einmal-PIN (WP-34b, C15) ------------------------------ */
+
+/**
+ * Die PIN steht **genau einmal** im Klartext da: direkt nach dem Erzeugen.
+ * Beim Neuladen ist sie weg — sie reist nur mit dieser einen Antwort.
+ */
+const jetzt = ref(Date.now());
+let uhr: ReturnType<typeof setInterval> | undefined;
+
+onMounted(() => {
+    uhr = setInterval(() => (jetzt.value = Date.now()), 1000);
+});
+onBeforeUnmount(() => clearInterval(uhr));
+
+const restzeit = (iso: string): string => {
+    const sekunden = Math.max(0, Math.floor((new Date(iso).getTime() - jetzt.value) / 1000));
+
+    return `${Math.floor(sekunden / 60)}:${String(sekunden % 60).padStart(2, '0')}`;
+};
+
+const pinAbgelaufen = computed(() => (props.neuePin ? new Date(props.neuePin.expires_at).getTime() <= jetzt.value : true));
+
+const pinErzeugen = () => router.post(route('support-pin.store'), {}, { preserveScroll: true });
+
+const pinWiderrufen = () => router.delete(route('support-pin.destroy'), { preserveScroll: true });
+
+const zugriffBeenden = (sitzung: Supportsitzung) =>
+    router.post(route('impersonation.beenden', { session: sitzung.uuid }), {}, { preserveScroll: true });
+
+const sitzungSpalten: Spalte<Supportsitzung>[] = [
+    { schluessel: 'started_at', titel: 'Wann' },
+    { schluessel: 'betreiber', titel: 'Support', ab: 'sm' },
+    { schluessel: 'reason', titel: 'Begründung', ab: 'md' },
+    { schluessel: 'mode', titel: 'Zugriff' },
+    { schluessel: 'ended_at', titel: 'Ende', ab: 'lg' },
+];
+
+const zeitpunkt = (iso: string): string =>
+    new Date(iso).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /**
  * Auf dem Handy tragen Name und Status die Zeile. E-Mail und Rolle stehen
@@ -321,6 +380,72 @@ const frist = (iso: string): string => new Date(iso).toLocaleDateString('de-DE',
                     </template>
 
                     <template #leer>Keine offene Einladung.</template>
+                </DataTable>
+            </div>
+
+            <div v-if="darfFreigeben" class="space-y-3">
+                <HeadingSmall
+                    title="Support-Zugriff"
+                    description="Am Telefon braucht der Support manchmal mehr als den maskierten Blick. Nennen Sie ihm dafür eine Einmal-PIN: Sie gilt 15 Minuten, einmal und nur für Ihre Praxis. Der Vollzugriff danach ist befristet und steht im Protokoll."
+                />
+
+                <Alert v-if="neuePin && !pinAbgelaufen" variant="info">
+                    <KeyRound />
+                    <AlertTitle>Ihre Einmal-PIN — nennen Sie sie nur dem Support am Telefon</AlertTitle>
+                    <AlertDescription class="space-y-3">
+                        <p class="font-mono text-3xl font-semibold tracking-[0.3em] text-foreground" aria-live="polite">{{ neuePin.pin }}</p>
+                        <p>
+                            Gilt noch {{ restzeit(neuePin.expires_at) }} Minuten. Die PIN erscheint nur jetzt — nach dem Neuladen ist sie weg, und Sie
+                            erzeugen bei Bedarf eine neue.
+                        </p>
+                    </AlertDescription>
+                </Alert>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" @click="pinErzeugen">
+                        <KeyRound />
+                        {{ offenePin ? 'Neue Einmal-PIN erzeugen' : 'Einmal-PIN erzeugen' }}
+                    </Button>
+
+                    <template v-if="offenePin">
+                        <Button variant="ghost" @click="pinWiderrufen">
+                            <XCircle />
+                            PIN widerrufen
+                        </Button>
+                        <span class="text-sm text-muted-foreground">Eine PIN ist offen, noch {{ restzeit(offenePin.expires_at) }} Minuten.</span>
+                    </template>
+                </div>
+
+                <DataTable :spalten="sitzungSpalten" :zeilen="supportSitzungen" :pro-seite="10">
+                    <template #zelle-started_at="{ zeile }">
+                        {{ zeitpunkt(zeile.started_at) }}
+                        <!-- Auf dem Handy fehlen Support und Begründung als Spalten. -->
+                        <span class="block text-xs text-muted-foreground sm:hidden">{{ zeile.betreiber }}</span>
+                    </template>
+
+                    <template #zelle-reason="{ zeile }">
+                        <span class="break-words">{{ zeile.reason }}</span>
+                    </template>
+
+                    <template #zelle-mode="{ zeile }">
+                        <Badge v-if="zeile.laeuft && zeile.vollzugriff" variant="warning">
+                            <ShieldAlert />
+                            Vollzugriff läuft
+                        </Badge>
+                        <Badge v-else-if="zeile.laeuft" variant="secondary">Maskiert, läuft</Badge>
+                        <span v-else class="text-sm">{{ zeile.mode }}</span>
+                        <span v-if="zeile.freigabeweg" class="block text-xs text-muted-foreground">freigegeben {{ zeile.freigabeweg }}</span>
+                    </template>
+
+                    <template #zelle-ended_at="{ zeile }">
+                        {{ zeile.ended_at ? zeitpunkt(zeile.ended_at) : zeile.laeuft ? `läuft bis ${zeitpunkt(zeile.expires_at)}` : 'abgelaufen' }}
+                    </template>
+
+                    <template #aktionen="{ zeile }">
+                        <AktionsButton v-if="zeile.laeuft" :icon="LogOut" beschriftung="Zugriff beenden" @click="zugriffBeenden(zeile)" />
+                    </template>
+
+                    <template #leer>Der Support war noch nicht in Ihrer Praxis.</template>
                 </DataTable>
             </div>
         </div>

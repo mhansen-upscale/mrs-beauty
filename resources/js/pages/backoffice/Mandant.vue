@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AboKasten, { type Abo } from '@/components/AboKasten.vue';
+import Abschnitt from '@/components/Abschnitt.vue';
 import FormularDialog from '@/components/FormularDialog.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -12,9 +13,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import { AlertTriangle, Eye, Gift, Lock, LockOpen } from 'lucide-vue-next';
 import { ref } from 'vue';
+
+interface Wirtschaftsmonat {
+    monat: string;
+    daten: boolean;
+    einnahmenCent: number | null;
+    kostenCent: number | null;
+    rohertragCent: number | null;
+    unvollstaendig: boolean;
+}
 
 const props = defineProps<{
     mandant: {
@@ -36,6 +46,8 @@ const props = defineProps<{
         aboStand: Abo;
     };
     maxTestphaseTage: number;
+    /** Nur mit `finanzen.sehen` (WP-34d) — ohne fehlt die Eigenschaft, nicht nur der Kasten. */
+    wirtschaftlichkeit?: Wirtschaftsmonat[];
 }>();
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -64,7 +76,7 @@ const sperre = useForm({ grund: '', current_password: '' });
  * freigibt (Entscheidung C4). Die Begründung steht im Protokoll, das auch
  * die Praxis lesen kann.
  */
-const hineinsehen = useForm({ organization: props.mandant.uuid, reason: '' });
+const hineinsehen = useForm({ organization: props.mandant.uuid, reason: '', pin: '' });
 
 const hineinsehenStarten = () =>
     hineinsehen.post(route('impersonation.store'), {
@@ -95,6 +107,11 @@ const gutschreiben = () =>
     });
 
 const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString('de-DE', { dateStyle: 'long' }) : '');
+
+const euro = (cent: number): string =>
+    new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(cent / 100);
+const monatName = (monat: string): string =>
+    new Date(`${monat}-01T12:00:00Z`).toLocaleString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 </script>
 
 <template>
@@ -169,6 +186,44 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 Assistenzläufe diesen Monat: {{ mandant.verbrauch.agentenlaeufe }} · Wartelistenangebote: {{ mandant.verbrauch.angebote }}
             </p>
 
+            <!--
+                Wirtschaftlichkeit (WP-34d): die letzten Monate dieser Praxis,
+                der neueste zuerst. Nur mit finanzen.sehen — Customer Success
+                bekommt die Zahlen gar nicht erst.
+            -->
+            <Abschnitt
+                v-if="wirtschaftlichkeit"
+                titel="Wirtschaftlichkeit"
+                beschreibung="Hochrechnung aus Preisen und Nutzung — maßgeblich sind die Rechnungen bei Stripe."
+            >
+                <div class="grid gap-3 sm:grid-cols-3">
+                    <div v-for="eintrag in wirtschaftlichkeit" :key="eintrag.monat" class="rounded-md border p-3 text-sm">
+                        <p class="text-xs text-muted-foreground">{{ monatName(eintrag.monat) }}</p>
+                        <template v-if="eintrag.daten">
+                            <dl class="mt-1 grid grid-cols-[1fr_auto] gap-x-3 tabular-nums">
+                                <dt class="text-muted-foreground">Einnahmen</dt>
+                                <dd class="text-right">{{ euro(eintrag.einnahmenCent ?? 0) }}</dd>
+                                <dt class="text-muted-foreground">Kosten</dt>
+                                <dd class="text-right">{{ euro(eintrag.kostenCent ?? 0) }}{{ eintrag.unvollstaendig ? ' *' : '' }}</dd>
+                                <dt class="font-medium">Deckungsbeitrag</dt>
+                                <dd :class="['text-right font-medium', (eintrag.rohertragCent ?? 0) < 0 ? 'text-destructive' : '']">
+                                    <span v-if="(eintrag.rohertragCent ?? 0) < 0" class="sr-only">Negativ:</span>
+                                    {{ euro(eintrag.rohertragCent ?? 0) }}
+                                </dd>
+                            </dl>
+                            <p v-if="eintrag.unvollstaendig" class="mt-1 text-xs text-muted-foreground">* ein Kostensatz fehlt</p>
+                        </template>
+                        <p v-else class="mt-1 text-muted-foreground">keine Daten</p>
+                    </div>
+                </div>
+                <Link
+                    v-if="darf('finanzen.sehen')"
+                    :href="route('backoffice.finanzen')"
+                    class="mt-3 inline-block text-sm underline underline-offset-4"
+                    >Alle Praxen in der Finanzübersicht</Link
+                >
+            </Abschnitt>
+
             <!-- Das Abo und die Eingriffe darin (WP-34c). Sichtbar mit abo.sehen. -->
             <AboKasten
                 v-if="darf('abo.sehen')"
@@ -217,6 +272,27 @@ const datum = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateS
                 <Label for="begruendung">Begründung</Label>
                 <Input id="begruendung" v-model="hineinsehen.reason" placeholder="Rückfrage der Praxis zur Warteliste, Ticket 4711" />
                 <InputError :message="hineinsehen.errors.reason ?? hineinsehen.errors.organization" />
+            </div>
+
+            <!--
+                Hat die Inhaberin am Telefon schon eine Einmal-PIN genannt,
+                beginnt die Sitzung gleich mit Vollzugriff (WP-34b). Ohne PIN
+                wie immer maskiert.
+            -->
+            <div class="grid gap-2">
+                <Label for="praxis-pin">PIN der Praxis <span class="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input
+                    id="praxis-pin"
+                    v-model="hineinsehen.pin"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    maxlength="6"
+                    aria-describedby="praxis-pin-hinweis"
+                />
+                <p id="praxis-pin-hinweis" class="text-xs text-muted-foreground">
+                    Die Inhaberin erzeugt sie unter Team. Sie gilt 15 Minuten und einmal.
+                </p>
+                <InputError :message="hineinsehen.errors.pin" />
             </div>
         </FormularDialog>
 

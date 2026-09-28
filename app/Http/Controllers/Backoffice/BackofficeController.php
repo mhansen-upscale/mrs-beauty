@@ -7,8 +7,10 @@ namespace App\Http\Controllers\Backoffice;
 use App\Abrechnung\Aboeingriffe;
 use App\Abrechnung\Kontingente;
 use App\Audit\AuditLogger;
+use App\Backoffice\Finanzuebersicht;
 use App\Backoffice\Mandantenuebersicht;
 use App\Enums\AuditEvent;
+use App\Enums\OperatorAbility;
 use App\Enums\SubscriptionChangeAction;
 use App\Enums\SubscriptionChangeStatus;
 use App\Http\Controllers\Controller;
@@ -65,13 +67,21 @@ final class BackofficeController extends Controller
         ]);
     }
 
-    public function show(string $organisation): Response
+    public function show(Request $request, string $organisation, Finanzuebersicht $finanzen): Response
     {
         $praxis = $this->praxis($organisation);
+        $betreiber = $request->user();
 
         return Inertia::render('backoffice/Mandant', [
             'mandant' => $this->uebersicht->blatt($praxis),
             'maxTestphaseTage' => (int) config('mrs.billing.trial_verlaengerung_max_tage'),
+
+            // Der Kasten "Wirtschaftlichkeit" (WP-34d): nur mit
+            // `finanzen.sehen`. Customer Success bekommt die Zahlen gar nicht
+            // erst -- ausgeblendet waere nicht geschuetzt.
+            ...($betreiber instanceof User && $betreiber->betreiberDarf(OperatorAbility::FinanzenSehen)
+                ? ['wirtschaftlichkeit' => $finanzen->fuerPraxis($praxis)]
+                : []),
         ]);
     }
 

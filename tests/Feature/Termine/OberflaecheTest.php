@@ -102,6 +102,34 @@ it('liefert die Kontaktsuche ueber denselben Weg', function (): void {
         ->and($antwort->json('props.contacts.0.name'))->toBe('Annika Mueller');
 });
 
+it('gibt einer Behandlerin weder Kontakte noch Vorschlaege heraus', function (): void {
+    // Beides dient dem Anlegen, und das darf sie nicht. Die Kontaktsuche gab
+    // sonst Name, E-Mail und Telefon an eine Rolle ohne contacts.manage.
+    $organisation = alsMandant();
+    $szenario = new Szenario;
+
+    Contact::create(['first_name' => 'Annika', 'last_name' => 'Mueller', 'email' => 'annika@example.test']);
+
+    $benutzer = User::factory()->fuer($organisation, Role::Practitioner)->create();
+    $szenario->aufbau->behandler->user_id = $benutzer->getKey();
+    $szenario->aufbau->behandler->save();
+
+    $kontakte = teilAbruf($benutzer, 'contacts', [
+        'date' => Szenario::TAG,
+        'location' => $szenario->aufbau->standort->uuid,
+        'search' => 'mueller',
+    ])->assertOk();
+
+    $vorschlaege = teilAbruf($benutzer, 'proposals', [
+        'date' => Szenario::TAG,
+        'location' => $szenario->aufbau->standort->uuid,
+        'type' => (string) $szenario->aufbau->art->uuid,
+    ])->assertOk();
+
+    expect($kontakte->json('props.contacts'))->toBe([])
+        ->and($vorschlaege->json('props.proposals'))->toBe([]);
+});
+
 it('liefert ohne Terminart keine Vorschlaege', function (): void {
     $organisation = alsMandant();
     $szenario = new Szenario;

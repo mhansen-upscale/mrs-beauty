@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\Mailart;
 use App\Enums\Versandweg;
 use App\Http\Controllers\Audit\ImpersonationController;
+use App\Http\Controllers\Audit\SupportPinController;
 use App\Http\Controllers\Settings\AgentController;
 use App\Http\Controllers\Settings\EinfuehrungController;
 use App\Http\Controllers\Settings\MailvorlagenController;
@@ -121,8 +122,20 @@ Route::middleware('auth')->group(function () {
     Route::middleware('betreiber:support.zugriff')->group(function () {
         Route::post('impersonation', [ImpersonationController::class, 'store'])->name('impersonation.store');
         Route::delete('impersonation', [ImpersonationController::class, 'destroy'])->name('impersonation.destroy');
+
+        // Die PIN der Praxis in der maskierten Sitzung (WP-34b). Gedrosselt
+        // wird je Betreiber ueber alle Praxen, in Supportfreigabe.
+        Route::post('impersonation/{session}/pin', [ImpersonationController::class, 'pin'])->name('impersonation.pin');
     });
     Route::post('impersonation/{session}/freigeben', [ImpersonationController::class, 'approve'])
         ->middleware('can:impersonation.approve')
         ->name('impersonation.approve');
+
+    // Die Seite der Praxis (WP-34b, C15): Einmal-PIN erzeugen und widerrufen,
+    // den Zugriff des Supports beenden. Dieselbe Faehigkeit wie der Klick.
+    Route::middleware('can:impersonation.approve')->group(function () {
+        Route::post('support-pin', [SupportPinController::class, 'store'])->name('support-pin.store');
+        Route::delete('support-pin', [SupportPinController::class, 'destroy'])->name('support-pin.destroy');
+        Route::post('impersonation/{session}/beenden', [ImpersonationController::class, 'beenden'])->name('impersonation.beenden');
+    });
 });

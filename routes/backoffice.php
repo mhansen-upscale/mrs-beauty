@@ -10,6 +10,7 @@ use App\Http\Controllers\Backoffice\BetreiberAnmeldungController;
 use App\Http\Controllers\Backoffice\BetreiberController;
 use App\Http\Controllers\Backoffice\BetreiberprotokollController;
 use App\Http\Controllers\Backoffice\DemoanfragenController;
+use App\Http\Controllers\Backoffice\FinanzenController;
 use App\Http\Controllers\Backoffice\PaketController;
 use App\Http\Controllers\Backoffice\PlattformmailController;
 use App\Http\Controllers\Backoffice\VersandController;
@@ -111,6 +112,12 @@ Route::middleware(['auth', 'verified', 'betreiber'])->prefix('backoffice')->grou
     Route::get('protokoll', [BetreiberprotokollController::class, 'index'])
         ->middleware('betreiber:protokoll.sehen')
         ->name('backoffice.protokoll');
+
+    // Einnahmen, Kosten und Ergebnis als Hochrechnung (WP-34d, B19). Nicht
+    // fuer Customer Success: wer Praxen betreut, braucht keine Umsaetze.
+    Route::get('finanzen', [FinanzenController::class, 'index'])
+        ->middleware('betreiber:finanzen.sehen')
+        ->name('backoffice.finanzen');
 
     // Die Demo-Anfragen der Startseite (WP-38). Keine Praxis, kein
     // Querzugriff -- aber Namen und Adressen, deshalb nicht fuer Finanzen.

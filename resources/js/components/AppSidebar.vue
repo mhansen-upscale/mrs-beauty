@@ -31,8 +31,9 @@ import {
     TrendingUp,
     UserCog,
     Users,
+    Wallet,
 } from 'lucide-vue-next';
-import { computed, watch } from 'vue';
+import { computed, watchEffect } from 'vue';
 import AppLogo from './AppLogo.vue';
 
 const page = usePage<SharedData>();
@@ -137,6 +138,8 @@ const gruppen = computed<NavGroup[]>(() =>
                       items: [
                           ...(betreiberDarf('mandanten.sehen') ? [{ title: 'Backoffice', href: '/backoffice', icon: Building2 }] : []),
                           ...(betreiberDarf('paket.verwalten') ? [{ title: 'Paket', href: '/backoffice/paket', icon: Package }] : []),
+                          // Einnahmen und Kosten als Hochrechnung (WP-34d).
+                          ...(betreiberDarf('finanzen.sehen') ? [{ title: 'Finanzen', href: '/backoffice/finanzen', icon: Wallet }] : []),
                           // Server und Produktmails (WP-37): wer den Versand
                           // ändert, entscheidet, ob Anmeldecodes ankommen.
                           ...(betreiberDarf('versand.verwalten')
@@ -173,9 +176,16 @@ const gruppen = computed<NavGroup[]>(() =>
 /**
  * Die Führung läuft über dieselben Punkte, die hier stehen — nicht über eine
  * eigene Liste. Sonst zeigt sie beim Empfang auf dreizehn Bereiche, die es
- * dort nicht gibt.
+ * dort nicht gibt. Die Sicht entscheidet, welcher Satz zu einem Punkt passt:
+ * „Termine" heißt für die Behandlerin etwas anderes als für den Empfang.
  */
-watch(gruppen, (aktuelle) => einfuehrung.merkeMenue(aktuelle), { immediate: true });
+watchEffect(() =>
+    einfuehrung.merkeMenue(gruppen.value, {
+        darf,
+        betreiberDarf,
+        praxis: page.props.organization != null,
+    }),
+);
 </script>
 
 <template>

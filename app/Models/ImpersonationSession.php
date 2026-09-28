@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\Freigabeweg;
 use App\Enums\ImpersonationMode;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable $started_at
  * @property CarbonImmutable $expires_at
  * @property CarbonImmutable|null $approved_at
+ * @property string|null $approved_by_user_id
+ * @property Freigabeweg|null $approval_method
  * @property CarbonImmutable|null $ended_at
  * @property string $reason
  */
@@ -38,6 +41,7 @@ class ImpersonationSession extends TenantModel
     {
         return [
             'mode' => ImpersonationMode::class,
+            'approval_method' => Freigabeweg::class,
             'started_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
             'approved_at' => 'immutable_datetime',

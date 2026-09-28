@@ -107,12 +107,41 @@ it('zeigt einer Behandlerin nur ihren eigenen Kalender', function (): void {
         ->assertOk()
         ->assertInertia(fn ($seite) => $seite
             ->where('canManage', false)
+            ->where('ohneEigenenBehandler', false)
             ->has('practitioners', 1)
             ->has('appointments', 1)
             ->where('appointments.0.uuid', $eigener->uuid)
         );
 
     expect($fremder->practitioner_id)->toBe($zweite->getKey());
+});
+
+it('zeigt einer Behandlerin ohne verknuepften Behandler keinen Kalender', function (): void {
+    // Hing am Konto kein Behandler, fiel der Filter weg -- und die
+    // Behandlerin sah jede Spalte und jeden Termin samt Kontakt. Ohne eigenen
+    // Behandler gibt es keinen eigenen Kalender, also nichts.
+    $organisation = alsMandant();
+    $szenario = new Szenario;
+
+    app(Terminplaner::class)->buche($szenario->vorschlag(), $szenario->kontakt, jetzt: $szenario->jetzt());
+
+    $benutzer = User::factory()->fuer($organisation, Role::Practitioner)->create();
+
+    foreach (['tag', 'woche'] as $ansicht) {
+        actingAs($benutzer)
+            ->get(route('appointments.index', [
+                'date' => Szenario::TAG,
+                'location' => $szenario->aufbau->standort->uuid,
+                'ansicht' => $ansicht,
+            ]))
+            ->assertOk()
+            ->assertInertia(fn ($seite) => $seite
+                ->where('canManage', false)
+                ->where('ohneEigenenBehandler', true)
+                ->has('practitioners', 0)
+                ->has('appointments', 0)
+            );
+    }
 });
 
 it('zeigt dem Empfang alle Behandler des Standorts', function (): void {
@@ -131,6 +160,7 @@ it('zeigt dem Empfang alle Behandler des Standorts', function (): void {
         ->assertOk()
         ->assertInertia(fn ($seite) => $seite
             ->where('canManage', true)
+            ->where('ohneEigenenBehandler', false)
             ->has('appointments', 1)
         );
 });

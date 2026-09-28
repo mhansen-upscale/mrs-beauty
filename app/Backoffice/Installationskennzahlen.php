@@ -89,7 +89,7 @@ final class Installationskennzahlen
 
         $abos = Subscription::query()
             // Was Subscription::zugang() liest -- und nicht mehr.
-            ->get(['organization_id', 'plan_version_id', 'status', 'stripe_subscription_id', 'trial_ends_at', 'paused_at'])
+            ->get(['organization_id', 'plan_version_id', 'status', 'stripe_subscription_id', 'trial_ends_at', 'paused_at', 'discount_ends_at'])
             ->keyBy(fn (Subscription $abo): string => (string) $abo->getAttribute('organization_id'));
 
         // Wenige Zeilen -- einmal geladen statt je Abo.
@@ -141,7 +141,9 @@ final class Installationskennzahlen
             }
 
             // Offen ist nur ein Abo mit Zeile -- ohne Zeile ist es die Testphase.
-            if ($lage === SubscriptionAccess::Open) {
+            // **Dieselbe Regel wie die Finanzuebersicht** (WP-34d): Ein
+            // Gratismonat bringt keinen Umsatz.
+            if ($lage === SubscriptionAccess::Open && $abo->rechnetGrundpreisAb($jetzt)) {
                 $mrrCent += ($fassungen->get((string) ($abo->getAttributes()['plan_version_id'] ?? '')) ?? $aktuell)->base_cents;
             }
         }

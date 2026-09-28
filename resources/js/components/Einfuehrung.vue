@@ -5,8 +5,8 @@ import { useSidebar } from '@/components/ui/sidebar';
 import { useEinfuehrung } from '@/composables/useEinfuehrung';
 import type { SharedData } from '@/types';
 import { usePage } from '@inertiajs/vue3';
-import { Compass, X } from 'lucide-vue-next';
-import { onMounted, ref, watch } from 'vue';
+import { Compass, SkipForward } from 'lucide-vue-next';
+import { computed, onMounted, ref, watch } from 'vue';
 
 /**
  * Der Auslöser der Führung.
@@ -16,23 +16,31 @@ import { onMounted, ref, watch } from 'vue';
  *
  * **Die Begrüßung ist ein eigener Schritt.** Eine Führung, die unangekündigt
  * aufpoppt, wird weggeklickt, bevor jemand versteht, was sie ist.
+ *
+ * **Dieses Bauteil wird mit jeder Seite neu gemountet** — das Layout steht in
+ * jeder Seite, nicht darüber. Was eine Seite überdauern muss (ob die
+ * Begrüßung schon zu sehen war, wie die Seitenleiste vorher stand), liegt
+ * deshalb in `useEinfuehrung`.
  */
 const page = usePage<SharedData>();
 const einfuehrung = useEinfuehrung();
 const seitenleiste = useSidebar();
 
-const begruessungOffen = ref(false);
+const produkt = import.meta.env.VITE_APP_NAME || 'Mrs. Beauty';
+
+const darf = (ability: string): boolean => page.props.abilities?.includes(ability) ?? false;
 
 /**
- * Der Zustand der Seitenleiste vor der Führung — danach steht sie wieder so
- * da, wie jemand sie hinterlassen hat.
+ * Wer die Praxis einrichtet, braucht die Reihenfolge: ohne Standort keine
+ * Arbeitszeit, ohne Arbeitszeit kein Slot, ohne Terminart nichts auf der
+ * Buchungsseite (`docs/produkt.md`, Onboarding einer neuen Praxis).
  */
-const warOffen = ref(true);
-const warMobilOffen = ref(false);
+const ersteSchritte = computed<boolean>(() => page.props.organization != null && darf('masterdata.manage'));
+
+const begruessungOffen = ref(false);
 
 const oeffneSeitenleiste = () => {
-    warOffen.value = seitenleiste.open.value;
-    warMobilOffen.value = seitenleiste.openMobile.value;
+    einfuehrung.merkeSeitenleiste(seitenleiste.open.value, seitenleiste.openMobile.value);
 
     // Eingeklappt gibt es keinen Text zum Anankern, und auf dem Handy ist die
     // Leiste gar nicht offen.
@@ -44,10 +52,12 @@ const oeffneSeitenleiste = () => {
 };
 
 const stelleSeitenleisteWiederHer = () => {
-    seitenleiste.setOpen(warOffen.value);
+    const vorher = einfuehrung.seitenleisteVorher();
+
+    seitenleiste.setOpen(vorher.offen);
 
     if (seitenleiste.isMobile.value) {
-        seitenleiste.setOpenMobile(warMobilOffen.value);
+        seitenleiste.setOpenMobile(vorher.mobilOffen);
     }
 };
 
@@ -62,7 +72,18 @@ const spaeter = () => {
     einfuehrung.abschliessen();
 };
 
-// Endet die Führung — durch Fertig, Überspringen oder Zurücksetzen —, geht die
+/**
+ * Das X, Esc und ein Klick daneben sind dasselbe wie „Überspringen". Vorher
+ * schloss das nur den Dialog — gespeichert war nichts, und die Begrüßung kam
+ * auf der nächsten Seite wieder.
+ */
+const umschalten = (offen: boolean) => {
+    if (!offen) {
+        spaeter();
+    }
+};
+
+// Endet die Führung — durch Fertig, Beenden oder Zurücksetzen —, geht die
 // Leiste in den Zustand zurück, in dem sie vorher war.
 watch(einfuehrung.laeuft, (laeuft, vorher) => {
     if (!laeuft && vorher) {
@@ -79,26 +100,46 @@ watch(einfuehrung.angefordert, (gewuenscht) => {
 });
 
 onMounted(() => {
-    if (page.props.einfuehrung_faellig) {
+    // Mitten in der Führung einem Menüpunkt gefolgt: Auf dem Handy ist die
+    // Schublade der neuen Seite zu, und die Blase hätte nichts zum Anhängen.
+    if (einfuehrung.laeuft.value) {
+        if (seitenleiste.isMobile.value) {
+            seitenleiste.setOpenMobile(true);
+        }
+
+        return;
+    }
+
+    if (page.props.einfuehrung_faellig && !einfuehrung.begruessungGezeigt.value) {
+        einfuehrung.begruessungVermerken();
         begruessungOffen.value = true;
     }
 });
 </script>
 
 <template>
-    <Dialog v-model:open="begruessungOffen">
+    <Dialog :open="begruessungOffen" @update:open="umschalten">
         <DialogContent class="max-w-md">
             <DialogHeader>
-                <DialogTitle>Willkommen</DialogTitle>
+                <DialogTitle>Willkommen bei {{ produkt }}</DialogTitle>
                 <DialogDescription>
-                    Eine kurze Runde durch das Menü — ein Satz je Bereich, damit Sie wissen, wo was passiert. Sie können jederzeit abbrechen.
+                    Eine kurze Runde durch Ihr Menü: {{ einfuehrung.anzahl.value }} Stationen, je ein, zwei Sätze. Sie können jederzeit abbrechen und
+                    finden die Führung später unten links unter Ihrem Namen.
                 </DialogDescription>
             </DialogHeader>
 
+            <div v-if="ersteSchritte" class="space-y-1 text-sm">
+                <p class="font-medium">Erste Schritte</p>
+                <p class="text-muted-foreground">
+                    Zum Einrichten in dieser Reihenfolge: Standorte, Behandler mit Arbeitszeiten, Behandlungen und Terminarten, dann der Kalender.
+                    Vorher ist online nichts buchbar.
+                </p>
+            </div>
+
             <DialogFooter>
                 <Button type="button" variant="ghost" @click="spaeter">
-                    <X />
-                    Nicht jetzt
+                    <SkipForward />
+                    Überspringen
                 </Button>
                 <Button type="button" @click="starte">
                     <Compass />

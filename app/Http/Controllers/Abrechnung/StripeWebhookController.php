@@ -14,6 +14,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Models\PlanVersion;
 use App\Models\Subscription;
+use App\Models\TopUp;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -115,7 +116,7 @@ final class StripeWebhookController extends Controller
                     // danach. Ohne es bekam, wer per Lastschrift aufstockte,
                     // nichts -- gutgeschrieben wird nur bei `paid`, also nie
                     // zweimal fuer dieselbe Kasse.
-                    'checkout.session.async_payment_succeeded' => $this->nachKasse($gegenstand),
+                    'checkout.session.async_payment_succeeded' => $this->nachKasse($gegenstand, $zeitpunkt),
                     'customer.subscription.created',
                     'customer.subscription.updated' => $this->zustand($gegenstand, $zeitpunkt),
                     'customer.subscription.deleted' => $this->beendet($zeitpunkt),
@@ -135,9 +136,15 @@ final class StripeWebhookController extends Controller
      * meldet es `checkout.session.completed`, bei SEPA erst
      * `checkout.session.async_payment_succeeded`.
      *
+     * **Die Kasse ist der Schluessel** (WP-34d). Ein Ereignis zweimal faengt
+     * `stripe_events` ab; dieselbe Kasse unter zwei Ereignissen nicht. Die
+     * Zeile in `top_ups` haelt Zahlungszeitpunkt und Nettobetrag fuer die
+     * Finanzuebersicht fest -- und wer sie schon hat, stockt nicht noch
+     * einmal auf.
+     *
      * @param  array<string, mixed>  $gegenstand
      */
-    private function nachKasse(array $gegenstand): void
+    private function nachKasse(array $gegenstand, CarbonImmutable $zeitpunkt): void
     {
         if (data_get($gegenstand, 'mode') !== 'payment') {
             return;
@@ -145,6 +152,25 @@ final class StripeWebhookController extends Controller
 
         if (data_get($gegenstand, 'payment_status') !== 'paid') {
             return;
+        }
+
+        $kasse = data_get($gegenstand, 'id');
+
+        if (is_string($kasse) && $kasse !== '') {
+            if (TopUp::query()->where('stripe_checkout_id', $kasse)->exists()) {
+                return;
+            }
+
+            // Netto: Die Kasse rechnet die Steuer obendrauf (Stripe Tax,
+            // `tax_behavior` exklusiv). Der Betrag kommt aus der Kasse, nicht
+            // aus Menge mal Konfiguration -- gezahlt ist, was Stripe meldet.
+            TopUp::query()->create([
+                'article' => mb_substr((string) (data_get($gegenstand, 'metadata.artikel') ?? 'altbestand'), 0, 32),
+                'quantity' => max(1, (int) (data_get($gegenstand, 'metadata.menge') ?? 1)),
+                'amount_cents' => max(0, (int) data_get($gegenstand, 'amount_total', 0) - (int) data_get($gegenstand, 'total_details.amount_tax', 0)),
+                'paid_at' => $zeitpunkt,
+                'stripe_checkout_id' => $kasse,
+            ]);
         }
 
         // **Was gekauft wurde, steht in den Metadaten.**

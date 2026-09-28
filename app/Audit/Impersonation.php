@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Audit;
 
 use App\Enums\AuditEvent;
+use App\Enums\Freigabeweg;
 use App\Enums\ImpersonationMode;
 use App\Enums\OperatorAbility;
 use App\Enums\Role;
@@ -70,9 +71,16 @@ final class Impersonation
      *
      * Nicht durch den Super-Admin selbst, nicht durch irgendeine Rolle, nicht
      * unbefristet. Das ist der Kern von Entscheidung C4.
+     *
+     * **Zwei Wege, eine Freigabe** (WP-34b): der Klick in der eigenen Sitzung
+     * oder die Einmal-PIN, die die Inhaberin erzeugt hat. Danach ist alles
+     * dasselbe, nur der Weg steht dabei.
      */
-    public function approve(ImpersonationSession $sitzung, User $freigebende): ImpersonationSession
-    {
+    public function approve(
+        ImpersonationSession $sitzung,
+        User $freigebende,
+        Freigabeweg $weg = Freigabeweg::Klick,
+    ): ImpersonationSession {
         if (! $freigebende->hasRole(Role::Owner)) {
             throw new RuntimeException('Nur eine Inhaberin gibt den Vollzugriff frei.');
         }
@@ -88,6 +96,7 @@ final class Impersonation
         $sitzung->mode = ImpersonationMode::Full;
         $sitzung->approved_at = now();
         $sitzung->approved_by_user_id = $freigebende->getKey();
+        $sitzung->approval_method = $weg;
         $sitzung->expires_at = now()->addMinutes(
             (int) config('mrs.impersonation.full_ttl_minutes', 30)
         );
@@ -96,7 +105,7 @@ final class Impersonation
         $this->protokoll->record(
             ereignis: AuditEvent::ImpersonationApproved,
             gegenstand: $sitzung,
-            kontext: ['mode' => ImpersonationMode::Full->value],
+            kontext: ['mode' => ImpersonationMode::Full->value, 'via' => $weg->value],
             begruendung: $sitzung->reason,
             organizationId: $sitzung->organization_id,
         );
@@ -115,9 +124,12 @@ final class Impersonation
         $sitzung->save();
 
         $this->protokoll->record(
-            ereignis: $grund === 'expired'
-                ? AuditEvent::ImpersonationExpired
-                : AuditEvent::ImpersonationEnded,
+            ereignis: match ($grund) {
+                'expired' => AuditEvent::ImpersonationExpired,
+                // Die Praxis hat beendet, nicht der Betreiber (WP-34b).
+                'ended_by_tenant' => AuditEvent::ImpersonationEndedByTenant,
+                default => AuditEvent::ImpersonationEnded,
+            },
             gegenstand: $sitzung,
             kontext: ['ended_reason' => $grund],
             organizationId: $sitzung->organization_id,

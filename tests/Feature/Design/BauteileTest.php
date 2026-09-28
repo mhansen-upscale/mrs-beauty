@@ -669,6 +669,20 @@ it('erklaert jeden Menuepunkt in der Einfuehrung', function (): void {
     );
 });
 
+it('fuehrt die Einstellungen aus derselben Liste wie ihre Navigation', function (): void {
+    // Der letzte Schritt der Fuehrung zaehlt die Einstellungen auf, die
+    // jemand sieht. Stuende die Liste zweimal, sagte die Fuehrung irgendwann
+    // etwas anderes als das Menue.
+    $layout = (string) file_get_contents(resource_path('js/layouts/settings/Layout.vue'));
+    $liste = (string) file_get_contents(resource_path('js/lib/einstellungsmenue.ts'));
+    $fuehrung = (string) file_get_contents(resource_path('js/composables/useEinfuehrung.ts'));
+
+    expect(preg_match_all("/href: '\\/settings\\//", $layout))->toBe(0)
+        ->and(preg_match_all("/href: '\\/settings\\//", $liste))->toBeGreaterThanOrEqual(10)
+        ->and($layout)->toContain('einstellungsmenue(')
+        ->and($fuehrung)->toContain('einstellungsmenue(');
+});
+
 it('findet ueberhaupt Menuepunkte', function (): void {
     // Ohne diese Zusicherung koennte die Pruefung oben leer durchlaufen.
     $menue = (string) file_get_contents(resource_path('js/components/AppSidebar.vue'));

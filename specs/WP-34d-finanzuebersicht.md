@@ -98,8 +98,9 @@ Fixkosten. Die Fixkosten sind ein Wert aus der Umgebung, nicht je Praxis.
    `article`, `quantity`, `amount_cents`, `paid_at` (aus `event.created`)
    und der Stripe-Kennung der Kasse, UNIQUE.
    - Aus `extra_*` lässt sich kein Monat rechnen: Diese Spalten werden an
-     der Grenze der Stripe-Periode zurückgesetzt, nicht am Monatsende, und
-     `extra_images` gar nicht.
+     der Grenze der Stripe-Periode zurückgesetzt, nicht am Monatsende.
+     *(`extra_images` setzt `Kontingente::neuePeriode()` seit dem 27.09.2026
+     ebenfalls zurück.)*
    - `amount_cents` kommt aus `amount_total` der Kasse, nicht aus Menge ×
      Konfiguration.
 4. **`App\Backoffice\Finanzuebersicht`:**
@@ -154,8 +155,10 @@ Fixkosten. Die Fixkosten sind ein Wert aus der Umgebung, nicht je Praxis.
 
 **Einnahmen**
 
-1. Eine aktive Praxis bringt im Monat den Grundpreis aus
-   `mrs.billing.prices.base_cents`.
+1. Eine aktive Praxis bringt im Monat den Grundpreis **ihrer Fassung**
+   (`Paket::fuer()`, B20). *Bis 28.09.2026 stand hier
+   `mrs.billing.prices.base_cents`. Das widersprach B20 und dem Fallstrick
+   unten, und `PaketverwaltungTest` verbietet den Schlüssel unter `app/`.*
 2. Eine pausierte Praxis, eine im Gratismonat, eine in der Testphase und
    eine nach Periodenende gekündigte bringen keinen Grundpreis.
 3. Eine Praxis mit offener Zahlung zählt mit, denn sie ist noch nicht
@@ -238,3 +241,76 @@ Fixkosten. Die Fixkosten sind ein Wert aus der Umgebung, nicht je Praxis.
   was sie ist.
 - **Eine Zahl kann verraten** (WP-34). Hier nur je Praxis und im Monat, nie
   je Tag und nie je Person.
+
+## Stand
+
+Stand 28.09.2026: Die 20 Abnahmekriterien laufen in
+`tests/Feature/Backoffice/FinanzuebersichtTest.php` (**27 Tests**, AK 9 als
+Datensatz mit lesbarer und unlesbarer Antwort). `BetreiberrollenTest` kennt
+`backoffice.finanzen`. Gesamtstand **1722 Tests**, PHPStan Stufe 8 ohne
+Befund.
+
+Neu:
+- **Migration** `2026_09_28_130000_finanzuebersicht`:
+  - Tabellen `top_ups`, `model_calls` und `monthly_closings`.
+  - Index `messages (organization_id, created_at)`.
+  - Nachtrag von `activated_at`.
+- **Modelle** `TopUp`, `ModelCall` und `MonthlyClosing`, dazu das Enum
+  `Modellzweck`.
+- **Dienst** `App\Backoffice\Finanzuebersicht` mit `bericht()`, `monat()`,
+  `fuerPraxis()` und `rechne()`. Die Wertobjekte heißen `Praxisergebnis` und
+  `Finanzmonat`.
+- **Befehl** `mrs:monatsabschluss`, am Monatsersten um 04:00.
+- **Seite** `backoffice/Finanzen.vue` mit dem Diagramm
+  `components/backoffice/FinanzVerlauf.vue` (Inline-SVG, zwei Felder, Tooltip,
+  Tabellenansicht). Dazu der Kasten „Wirtschaftlichkeit“ im Mandantenblatt
+  und der Menüpunkt „Finanzen“.
+- **Scopes** `Message::ausgehend()`, `kostenpflichtig()` und
+  `imServicefenster()`. `Nutzungsuebersicht` benutzt sie jetzt auch.
+- **`Subscription::rechnetGrundpreisAb()`**, die eine Regel für MRR in
+  Finanzübersicht und Kennzahlen der Installation.
+
+## Was das Bauen zutage gefördert hat
+
+**Die Kennzahlen der Installation rechneten den Gratismonat als Umsatz.**
+`Installationskennzahlen` zählte jedes offene Abo zur MRR, auch eines mit
+laufendem Gutschein. Beide Seiten fragen jetzt
+`Subscription::rechnetGrundpreisAb()`.
+
+**Kostensätze ohne Fundstelle sind leer, nicht null.** Im Repository steht nur
+der Marketing-Satz für WhatsApp (`meta.md`, „über 0,12 USD“) und der
+kie.ai-Preis je Auflösung (`config/services.php`). Dollarkurs, Utility,
+Authentifizierung, Service-Fenster, Stripe-Gebühren und Fixkosten kommen aus
+der Umgebung (`BETRIEB_*`). Fehlt einer, bei dem es im Monat eine Menge gab,
+nennt die Seite ihn. Die Summe zählt dann nur, was bekannt ist, und ist als
+unvollständig markiert. Die Kostenspalten des Abschlusses sind deshalb
+Beträge, und `fehlende_saetze` sagt, was fehlte.
+
+**Bildkosten gelten je Format, nicht als ein Satz.** 4:5 läuft in 4K und
+kostet acht statt fünf Cent (`mrs.backoffice.kosten.bild_format_zehntel_us_cent`).
+
+**Aufstockungen zählen netto.** Die Kasse rechnet mit exklusiver Steuer.
+`amount_total` ist also brutto, gespeichert wird
+`amount_total − total_details.amount_tax`. **Die Kasse ist der Schlüssel**: Wer
+sie schon in `top_ups` hat, stockt nicht noch einmal auf, auch wenn Stripe sie
+unter einem zweiten Ereignis meldet.
+
+**`activated_at` brauchte einen Nachtrag.** Ein Abo aus der Zeit vor WP-34c
+hätte die Spalte beim nächsten Webhook bekommen, und die Einrichtung hätte in
+diesem Monat gezählt. Die Migration setzt sie auf `created_at`.
+
+**Das Ende der Testphase kommt aus den geladenen Zeilen.**
+`Subscription::zugang()` nimmt es jetzt optional entgegen. Sonst fragte jedes
+Abo in der Testphase einzeln nach seiner Praxis, und AK 20 wäre gerissen.
+
+**Der Gratismonat ist `discount_ends_at`**, gleich welcher Gutschein. Das
+Produkt legt nur den einen an (`mrs_gratismonat`). Ein Rabatt, den jemand im
+Stripe-Dashboard vergibt, erschiene hier als Gratismonat.
+
+## Offen
+
+- **Die Sätze mit Stand eintragen**: `BETRIEB_USD_EUR`, WhatsApp Utility,
+  Authentifizierung und Service-Fenster (ab 01.10.2026 berechnet Meta auch
+  Service), Stripe-Gebühren und Fixkosten. Bis dahin zeigt die Seite
+  „nicht hinterlegt“.
+

@@ -19,6 +19,7 @@ use App\Models\DemoRequest;
 use App\Models\Lead;
 use App\Models\Message;
 use App\Models\RetentionPolicy;
+use App\Models\SupportPin;
 use App\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
@@ -266,6 +267,23 @@ final class Aufbewahrung
                 $vorschau,
             ),
         );
+    }
+
+    /**
+     * Die Einmal-PINs einer Praxis (WP-34b).
+     *
+     * Eine PIN wirkt 15 Minuten; danach sagt die Zeile nur noch, wer wann
+     * eine erzeugt hat -- und das steht im Protokoll. Die Frist steht in der
+     * Konfiguration, nicht in retention_policies: Eine Praxis gewinnt nichts
+     * daran, sie zu aendern. Laeuft im Mandanten.
+     */
+    public function supportPins(bool $vorschau, ?CarbonImmutable $jetzt = null): int
+    {
+        $stichtag = ($jetzt ?? CarbonImmutable::now())->subDays((int) config('mrs.support_pin.aufbewahrung_tage'));
+
+        $abfrage = SupportPin::query()->where('expires_at', '<=', $stichtag);
+
+        return $vorschau ? $abfrage->count() : (int) $abfrage->delete();
     }
 
     /**

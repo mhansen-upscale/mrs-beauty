@@ -100,7 +100,7 @@ const vertrauen: Punkt[] = [
     {
         icon: Timer,
         titel: 'Fristen setzt das System',
-        text: 'Was nicht mehr gebraucht wird, löscht es nach festen Fristen von selbst — nicht auf Zuruf. Aus einem fremden Kalender übernimmt es nur die Zeit, nie den Titel.',
+        text: 'Für jede Datenart gilt eine feste Frist. Täglich zeigt das System, was fällig ist — gelöscht wird mit einem Klick, bewusst und nicht aus Versehen. Aus einem fremden Kalender übernimmt es nur die Zeit, nie den Titel.',
     },
 ];
 

@@ -34,6 +34,15 @@ enum AuditEvent: string
     case ImpersonationApproved = 'impersonation.approved';
     case ImpersonationEnded = 'impersonation.ended';
     case ImpersonationExpired = 'impersonation.expired';
+    case ImpersonationEndedByTenant = 'impersonation.ended_by_tenant';
+
+    /* Freigabe per Einmal-PIN (WP-34b, C15). **Nie mit der PIN** -- weder
+       der erzeugten noch der eingetippten (C5). */
+    case SupportPinCreated = 'support_pin.created';
+    case SupportPinRevoked = 'support_pin.revoked';
+    case SupportPinFailed = 'support_pin.failed';
+    case SupportPinBurned = 'support_pin.burned';
+    case SupportPinRedeemed = 'support_pin.redeemed';
 
     // Schluessel (WP-03)
     /* Backoffice des Betreibers (WP-34) -- jede Handlung ueber die
@@ -131,6 +140,12 @@ enum AuditEvent: string
             self::ImpersonationApproved => 'Vollzugriff freigegeben',
             self::ImpersonationEnded => 'Impersonation beendet',
             self::ImpersonationExpired => 'Impersonation abgelaufen',
+            self::ImpersonationEndedByTenant => 'Support-Zugriff von der Praxis beendet',
+            self::SupportPinCreated => 'Einmal-PIN für den Support erzeugt',
+            self::SupportPinRevoked => 'Einmal-PIN widerrufen',
+            self::SupportPinFailed => 'Einmal-PIN falsch eingegeben',
+            self::SupportPinBurned => 'Einmal-PIN nach Fehlversuchen gesperrt',
+            self::SupportPinRedeemed => 'Einmal-PIN eingelöst',
             self::TenantSuspended => 'Mandant gesperrt',
             self::TenantUnsuspended => 'Mandant entsperrt',
             self::TenantCredited => 'Kontingent gutgeschrieben',

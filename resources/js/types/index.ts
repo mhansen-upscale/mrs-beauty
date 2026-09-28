@@ -126,6 +126,10 @@ export interface SharedData extends PageProps {
     // Solange eine Impersonation läuft, ist sie in jeder Antwort erkennbar.
     impersonation: ImpersonationState | null;
 
+    // Die Gegenseite (WP-34b): Hat der Support gerade Vollzugriff, sieht es
+    // jede Person der Praxis. Für den Betreiber selbst immer null.
+    supportzugriff: { uuid: string; bis: string } | null;
+
     // Eine unterbrochene Kalenderverbindung bedeutet Termine über belegten
     // Zeiten. Sie steht deshalb in jeder Antwort, nicht nur auf ihrer Seite.
     calendar_alert: boolean;

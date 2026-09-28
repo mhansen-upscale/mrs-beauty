@@ -14,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route as Routen;
+use Illuminate\Support\Str;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\travelTo;
@@ -68,6 +69,9 @@ function betreiberrouten(Organization $praxis, User $anderer): array
         'backoffice.betreiber.loeschen' => ['methode' => 'delete', 'parameter' => $konto, 'faehigkeit' => OperatorAbility::BetreiberVerwalten],
         'backoffice.protokoll' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::ProtokollSehen],
 
+        // Die Finanzuebersicht (WP-34d AK 17).
+        'backoffice.finanzen' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::FinanzenSehen],
+
         // Der Versand der Plattform und die Produktmails (WP-37 AK 1).
         'backoffice.versand' => ['methode' => 'get', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
         'backoffice.versand.update' => ['methode' => 'put', 'parameter' => [], 'faehigkeit' => OperatorAbility::VersandVerwalten],
@@ -87,6 +91,10 @@ function betreiberrouten(Organization $praxis, User $anderer): array
         'backoffice.demoanfragen.loeschen' => ['methode' => 'delete', 'parameter' => $anfrage, 'faehigkeit' => OperatorAbility::DemoanfragenVerwalten],
         'impersonation.store' => ['methode' => 'post', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],
         'impersonation.destroy' => ['methode' => 'delete', 'parameter' => [], 'faehigkeit' => OperatorAbility::SupportZugriff],
+
+        // Die PIN der Praxis (WP-34b AK 11). Ohne laufende Sitzung endet die
+        // erlaubte Anfrage mit 404 -- abgewiesen an der Tuer wird nur Finanzen.
+        'impersonation.pin' => ['methode' => 'post', 'parameter' => ['session' => (string) Str::uuid()], 'faehigkeit' => OperatorAbility::SupportZugriff],
     ];
 }
 

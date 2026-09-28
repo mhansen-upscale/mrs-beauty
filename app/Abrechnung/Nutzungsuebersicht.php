@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace App\Abrechnung;
 
-use App\Enums\MessageCostCategory;
-use App\Enums\MessageDirection;
 use App\Models\AdSuggestionImage;
 use App\Models\AgentRun;
 use App\Models\Message;
@@ -54,7 +52,7 @@ final class Nutzungsuebersicht
     public function nachrichten(CarbonImmutable $von, CarbonImmutable $bis): int
     {
         return Message::query()
-            ->where('direction', MessageDirection::Outbound->value)
+            ->ausgehend()
             ->whereBetween('created_at', [$von, $bis])
             ->count();
     }
@@ -75,9 +73,7 @@ final class Nutzungsuebersicht
     public function kostenpflichtige(CarbonImmutable $von, CarbonImmutable $bis): int
     {
         return Message::query()
-            ->where('direction', MessageDirection::Outbound->value)
-            ->whereNotNull('cost_category')
-            ->whereNotIn('cost_category', [MessageCostCategory::None->value, MessageCostCategory::Service->value])
+            ->kostenpflichtig()
             ->whereBetween('created_at', [$von, $bis])
             ->count();
     }
@@ -106,8 +102,7 @@ final class Nutzungsuebersicht
     private function antwortenImFenster(CarbonImmutable $von, CarbonImmutable $bis): Builder
     {
         return Message::query()
-            ->where('direction', MessageDirection::Outbound->value)
-            ->where('cost_category', MessageCostCategory::Service->value)
+            ->imServicefenster()
             ->whereBetween('created_at', [$von, $bis]);
     }
 

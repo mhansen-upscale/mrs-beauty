@@ -21,6 +21,8 @@ const props = defineProps<{
     days: string[];
     hours: { from: number; to: number };
     canManage: boolean;
+    /** Nur den eigenen Kalender sehen dürfen, aber keinem Behandler zugeordnet sein. */
+    ohneEigenenBehandler: boolean;
     location: { uuid: string; name: string; timezone: string } | null;
     locations: { uuid: string; name: string }[];
     practitioners: Behandler[];
@@ -130,6 +132,18 @@ const rahmen = (termin: Termin): string => (termin.status === 'pending' ? 'borde
                 <Info />
                 <AlertDescription>
                     Noch kein aktiver Standort. Termine brauchen einen Ort und Arbeitszeiten — beides steht unter Praxis.
+                </AlertDescription>
+            </Alert>
+
+            <!--
+                Ohne eigenen Behandler gibt es keinen eigenen Kalender. Vorher
+                sah eine solche Behandlerin stattdessen alle Spalten.
+            -->
+            <Alert v-else-if="ohneEigenenBehandler">
+                <Info />
+                <AlertDescription>
+                    Ihr Konto ist noch keinem Behandler zugeordnet, deshalb stehen hier keine Termine. Inhaberin oder Verwaltung verbinden es unter
+                    Praxis → Behandler.
                 </AlertDescription>
             </Alert>
 

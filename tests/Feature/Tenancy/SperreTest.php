@@ -130,7 +130,7 @@ it('gibt den Zugang nach dem Entsperren sofort frei', function (): void {
 });
 
 it('setzt die Aufbewahrung auch bei einer gesperrten Praxis durch', function (): void {
-    // Regel 3: Fristen werden automatisch durchgesetzt, nicht auf Zuruf. Eine
+    // Regel 3: Fristen gelten je Datenart, nicht je Vertragsstand. Eine
     // gesperrte Praxis behielte ihre Daten sonst ueber jede Frist hinaus.
     $jetzt = CarbonImmutable::now();
     $praxis = alsMandant(organisation('Gesperrt'));

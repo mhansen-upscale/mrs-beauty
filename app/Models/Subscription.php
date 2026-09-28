@@ -107,8 +107,12 @@ class Subscription extends TenantModel
      *   sie regulaer endet: `trial_days` nach dem Anlegen der Praxis (B18).
      *   Eine Testphase bei Stripe (mit Abo-Kennung) entscheidet Stripe.
      * - **Zahlung offen** sperrt nicht. Stripe mahnt mehrfach (WP-06).
+     *
+     * Wer viele Abos auf einmal liest (Kennzahlen, Finanzuebersicht), reicht
+     * das Ende der Testphase aus vorgeladenen Zeilen herein -- sonst fragte
+     * jedes Abo einzeln nach seiner Praxis.
      */
-    public function zugang(?CarbonImmutable $jetzt = null): SubscriptionAccess
+    public function zugang(?CarbonImmutable $jetzt = null, ?CarbonImmutable $testphasenende = null): SubscriptionAccess
     {
         $jetzt ??= CarbonImmutable::now();
 
@@ -123,8 +127,27 @@ class Subscription extends TenantModel
             SubscriptionStatus::Paused => SubscriptionAccess::Paused,
             SubscriptionStatus::Trialing => is_string($this->stripe_subscription_id) && $this->stripe_subscription_id !== ''
                 ? SubscriptionAccess::Trial
-                : ($this->testphasenende()->greaterThan($jetzt) ? SubscriptionAccess::Trial : SubscriptionAccess::TrialExpired),
+                : (($testphasenende ?? $this->testphasenende())->greaterThan($jetzt) ? SubscriptionAccess::Trial : SubscriptionAccess::TrialExpired),
         };
+    }
+
+    /**
+     * Bringt das Abo gerade seinen Grundpreis? (WP-34d)
+     *
+     * Offen -- aktiv oder mit offener Zahlung, denn Stripe mahnt noch -- und
+     * **kein laufender Gratismonat**: Der Gutschein erlaesst die Rechnung der
+     * Periode, der Zugang bleibt offen (B17). Pause, Testphase und Kuendigung
+     * bringen nichts.
+     *
+     * **Die eine Stelle** fuer die Kennzahlen der Installation und die
+     * Finanzuebersicht. Zwei Regeln fuer denselben Umsatz liefen auseinander.
+     */
+    public function rechnetGrundpreisAb(?CarbonImmutable $jetzt = null): bool
+    {
+        $jetzt ??= CarbonImmutable::now();
+
+        return $this->zugang($jetzt) === SubscriptionAccess::Open
+            && ! ($this->discount_ends_at instanceof CarbonImmutable && $this->discount_ends_at->greaterThan($jetzt));
     }
 
     /** Wann die Testphase endet -- oder regulaer enden wuerde (B18). */

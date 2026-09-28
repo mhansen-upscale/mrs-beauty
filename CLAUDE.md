@@ -95,7 +95,8 @@ Kampagnen- und Anzeigenstruktur (`tests/Feature/Werbung/KampagnenverwaltungTest.
 *Status: abgeleitet aus WP-03 und `docs/integrationen/kalender.md`, R2 — fachlich zu bestätigen.
 Im Code durchgesetzt: `Encrypted`-Cast mit Schlüssel je Organisation
 (`tests/Feature/Tenancy/VerschluesselungTest.php`), Anhänge verschlüsselt
-außerhalb der Datenbank, Fristen über `mrs:aufbewahrung`, neutrale
+außerhalb der Datenbank, Fristen über `mrs:aufbewahrung` — von Hand
+ausgelöst (C19, `tests/Feature/Datenschutz/VonHandTest.php`), neutrale
 Kalendertitel (`tests/Feature/Kalender`).*
 
 Namen, Kontaktwege, Nachrichteninhalte, Notizen und Anhänge liegen
@@ -104,8 +105,12 @@ externen Kalender wird ausschließlich der Zeitraum übernommen, niemals der
 Originaltitel. Ausgehende Kalendereinträge tragen einen neutralen Titel ohne
 Kontaktnamen und ohne Behandlung.
 
-Aufbewahrungsfristen sind je Datenart festgelegt und werden automatisch
-durchgesetzt, nicht auf Zuruf (WP-18).
+Aufbewahrungsfristen sind je Datenart festgelegt (WP-18). Ein täglicher Lauf
+zeigt, was fällig ist; **gelöscht wird von Hand** — in der Praxis per „Jetzt
+durchsetzen", ohne Praxis (Demo-Anfragen, Betreiberprotokoll) per
+`mrs:aufbewahrung --scharf` (Entscheidung C19, 28.09.2026). Ein Lauf, der zu
+viel löscht, ist nicht rückholbar. Kein Text darf deshalb ein Löschen „von
+selbst" oder „automatisch" versprechen.
 
 ---
 

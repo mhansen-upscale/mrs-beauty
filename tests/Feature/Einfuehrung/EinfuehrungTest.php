@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Audit\Impersonation;
 use App\Enums\Role;
 use App\Models\Organization;
 use App\Models\User;
@@ -95,6 +96,19 @@ it('gilt fuer jede Rolle, nicht nur fuer die Inhaberin', function (): void {
             ->get(route('dashboard'))
             ->assertInertia(fn ($seite) => $seite->where('einfuehrung_faellig', true));
     }
+});
+
+it('ist in einer Impersonation nicht faellig', function (): void {
+    // Der Support sieht die Praxis, nicht sein eigenes Konto -- wer die
+    // Fuehrung dort abschloesse, setzte das Merkmal des Betreibers.
+    $praxis = alsMandant(organisation('Demo-Praxis'));
+    $betreiber = User::factory()->superAdmin()->create(['einfuehrung_gesehen_at' => null]);
+    $sitzung = app(Impersonation::class)->start($betreiber, $praxis, 'Ticket 4711, Termin fehlt');
+    ohneMandant();
+
+    actingAs($betreiber)->withSession(impersonationSitzung($sitzung))
+        ->get(route('dashboard'))
+        ->assertInertia(fn ($seite) => $seite->where('einfuehrung_faellig', false));
 });
 
 it('haelt die oeffentliche Buchungsseite ohne Anmeldung erreichbar', function (): void {

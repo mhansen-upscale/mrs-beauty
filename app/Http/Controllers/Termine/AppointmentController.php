@@ -82,6 +82,7 @@ final class AppointmentController extends Controller
                 'hours' => ['from' => 8, 'to' => 18],
                 'location' => null,
                 'canManage' => $darfAendern,
+                'ohneEigenenBehandler' => false,
             ]);
         }
 
@@ -114,14 +115,22 @@ final class AppointmentController extends Controller
             ? array_map(fn (int $versatz): string => $montag->addDays($versatz)->toDateString(), range(0, 6))
             : [$datum];
 
+        // **Wer nur den eigenen Kalender sehen darf, sieht ohne eigenen
+        // Behandler nichts** -- nicht alles. Vorher fiel der Filter weg, wenn
+        // am Konto kein Behandler hing, und jede Spalte samt Kontakten war zu
+        // sehen. Das Dashboard rechnet denselben Fall schon als leer
+        // (Praxiskennzahlen).
         $eigener = $darfAendern ? null : $this->eigenerBehandler($request);
+        $ohneEigenenBehandler = ! $darfAendern && ! $eigener instanceof Practitioner;
 
-        $behandler = Practitioner::query()
-            ->where('is_active', true)
-            ->whereHas('locations', fn ($abfrage) => $abfrage->whereKey($standort->getKey()))
-            ->when($eigener instanceof Practitioner, fn ($abfrage) => $abfrage->whereKey($eigener?->getKey()))
-            ->orderBy('last_name')
-            ->get();
+        $behandler = $ohneEigenenBehandler
+            ? new EloquentCollection
+            : Practitioner::query()
+                ->where('is_active', true)
+                ->whereHas('locations', fn ($abfrage) => $abfrage->whereKey($standort->getKey()))
+                ->when($eigener instanceof Practitioner, fn ($abfrage) => $abfrage->whereKey($eigener?->getKey()))
+                ->orderBy('last_name')
+                ->get();
 
         /** @var array<string, int> $farben */
         $farben = [];
@@ -148,6 +157,7 @@ final class AppointmentController extends Controller
             // spaetesten, und so weit darueber hinaus, wie ein Termin reicht.
             'hours' => $this->raster($standort, $behandler, $termine),
             'canManage' => $darfAendern,
+            'ohneEigenenBehandler' => $ohneEigenenBehandler,
 
             'location' => [
                 'uuid' => $standort->uuid,
@@ -218,8 +228,12 @@ final class AppointmentController extends Controller
 
             // Erst auf Anforderung berechnet -- ein Teilnachladevorgang von
             // Inertia, keine eigene API-Route (Entscheidung S2).
-            'proposals' => Inertia::optional(fn (): array => $this->vorschlaege($request, $standort, $tagVon, $tagBis)),
-            'contacts' => Inertia::optional(fn (): array => $this->kontakte($request)),
+            //
+            // Beides dient dem Anlegen und nur dem: wer nicht anlegen darf,
+            // bekommt nichts. Die Kontaktsuche gab sonst Name, E-Mail und
+            // Telefon an eine Rolle ohne contacts.manage.
+            'proposals' => Inertia::optional(fn (): array => $darfAendern ? $this->vorschlaege($request, $standort, $tagVon, $tagBis) : []),
+            'contacts' => Inertia::optional(fn (): array => $darfAendern ? $this->kontakte($request) : []),
         ]);
     }
 

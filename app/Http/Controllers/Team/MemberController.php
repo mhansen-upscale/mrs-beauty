@@ -7,10 +7,12 @@ namespace App\Http\Controllers\Team;
 use App\Audit\ImpersonationContext;
 use App\Enums\Ability;
 use App\Enums\Role;
+use App\Http\Controllers\Audit\SupportPinController;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Team\UpdateMemberRequest;
 use App\Models\ImpersonationSession;
 use App\Models\Invitation;
+use App\Models\SupportPin;
 use App\Models\User;
 use App\ZweiFaktor\ZweiterFaktor;
 use Illuminate\Http\RedirectResponse;
@@ -59,6 +61,13 @@ final class MemberController extends Controller
             // wartet. Die Inhaberin entscheidet, niemand sonst (Entscheidung C4).
             'supportSession' => $this->offeneSupportanfrage(),
 
+            // Die Einmal-PIN (WP-34b): **im Klartext genau einmal**, direkt
+            // nach dem Erzeugen, aus der Weiterleitung. Danach nur noch, dass
+            // eine offen ist und bis wann.
+            'neuePin' => $request->session()->get(SupportPinController::NEUE_PIN),
+            'offenePin' => $this->offenePin(),
+            'supportSitzungen' => $this->supportSitzungen(),
+
             'roles' => collect(Role::assignable())
                 ->map(fn (Role $rolle): array => [
                     'value' => $rolle->value,
@@ -86,6 +95,51 @@ final class MemberController extends Controller
             'started_at' => $sitzung->started_at->toIso8601String(),
             'expires_at' => $sitzung->expires_at->toIso8601String(),
         ];
+    }
+
+    /**
+     * @return array{expires_at: string}|null
+     */
+    private function offenePin(): ?array
+    {
+        $pin = SupportPin::query()->offen()->where('expires_at', '>', now())->first();
+
+        return $pin instanceof SupportPin ? ['expires_at' => $pin->expires_at->toIso8601String()] : null;
+    }
+
+    /**
+     * Die juengsten Sitzungen des Supports in dieser Praxis: wann, wer,
+     * warum, wie weit und wie freigegeben. „Sichtbar fuer beide Seiten"
+     * (WP-34) heisst, die Praxis sieht, wer drin war.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function supportSitzungen(): array
+    {
+        $sitzungen = ImpersonationSession::query()
+            ->latest('started_at')
+            ->limit((int) config('mrs.impersonation.verlauf_eintraege'))
+            ->get();
+
+        // Ein geloeschtes Betreiberkonto hinterlaesst seine Sitzungen.
+        $namen = User::query()
+            ->whereIn('id', $sitzungen->map(fn (ImpersonationSession $sitzung): mixed => $sitzung->getAttribute('impersonator_user_id'))->unique()->all())
+            ->pluck('name', 'id');
+
+        return array_values($sitzungen
+            ->map(fn (ImpersonationSession $sitzung): array => [
+                'uuid' => $sitzung->uuid,
+                'betreiber' => (string) ($namen->get((string) $sitzung->getAttribute('impersonator_user_id')) ?? 'Gelöschtes Betreiberkonto'),
+                'reason' => $sitzung->reason,
+                'mode' => $sitzung->mode->label(),
+                'vollzugriff' => $sitzung->hatVollzugriff(),
+                'freigabeweg' => $sitzung->approval_method?->label(),
+                'started_at' => $sitzung->started_at->toIso8601String(),
+                'ended_at' => $sitzung->ended_at?->toIso8601String(),
+                'expires_at' => $sitzung->expires_at->toIso8601String(),
+                'laeuft' => $sitzung->laeuft(),
+            ])
+            ->all());
     }
 
     public function update(UpdateMemberRequest $request, User $member): RedirectResponse

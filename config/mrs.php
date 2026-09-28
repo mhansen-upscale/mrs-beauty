@@ -82,6 +82,36 @@ return [
 
         // Vollzugriff laeuft kuerzer und nur nach Freigabe (Entscheidung C4).
         'full_ttl_minutes' => 30,
+
+        // So viele Support-Sitzungen sieht die Inhaberin unter Team, die
+        // neueste zuerst (WP-34b). Die vollstaendige Geschichte steht im
+        // Protokoll.
+        'verlauf_eintraege' => 10,
+    ],
+
+    // Die Freigabe per Einmal-PIN (WP-34b). Sechs Stellen sind schwach, und
+    // das ist in Ordnung, solange drei Grenzen gelten: kurze Laufzeit,
+    // Verbrennen nach Fehlversuchen, Drosselung je Betreiber ueber alle
+    // Praxen. Wer eine davon lockert, macht die PIN ratbar (C15).
+    'support_pin' => [
+        // Stellen der PIN (C15).
+        'laenge' => 6,
+
+        // So lange gilt sie nach dem Erzeugen (C15).
+        'gueltig_minuten' => 15,
+
+        // Beim so vielten Fehlversuch verbrennt sie, auch die richtige wirkt
+        // danach nicht mehr (C15).
+        'max_versuche' => 5,
+
+        // Fehlversuche je Betreiber und Stunde, **ueber alle Praxen** (C15).
+        // Die Grenze je PIN hilft nicht gegen hundert Praxen mit je vier
+        // Versuchen.
+        'versuche_je_betreiber_stunde' => 10,
+
+        // Danach loescht mrs:aufbewahrung die Zeile (Regel 3). Die PIN wirkt
+        // laengst nicht mehr, was geschah, steht im Protokoll.
+        'aufbewahrung_tage' => 30,
     ],
 
     /*
@@ -171,6 +201,60 @@ return [
         // Der Zeitraum fuer "neue Praxen" in der Uebersicht, in Tagen --
         // derselbe wie fuer die Termine im Mandantenblatt (`termine30`).
         'neue_praxen_tage' => 30,
+
+        // Die Finanzuebersicht (WP-34d) zeigt so viele Monate, der laufende
+        // eingeschlossen; der Kasten "Wirtschaftlichkeit" im Mandantenblatt
+        // so viele.
+        'finanzen_monate' => 12,
+        'wirtschaftlichkeit_monate' => 3,
+
+        // **Was uns eine Praxis kostet** (WP-34d, B19): Menge mal Satz. Jeder
+        // Satz kommt aus der Umgebung oder hat eine Fundstelle. **Leer heisst
+        // "nicht hinterlegt"**, nie Null: Die Seite nennt, was fehlt, statt
+        // eine Marge zu zeigen, die es nicht gibt.
+        'kosten' => [
+            // Fester Kurs fuer alles, was in US-Dollar abgerechnet wird: das
+            // Sprachmodell (`mrs.agent.model_pricing` rechnet in
+            // Zehntel-US-Cent), kie.ai und Metas Saetze. Fundstelle: keine im
+            // Repository -- der Betreiber traegt ihn mit Stand ein.
+            'usd_eur' => is_numeric(env('BETRIEB_USD_EUR')) ? (float) env('BETRIEB_USD_EUR') : null,
+
+            // **Metas Kosten fuer uns**, nicht der Preis an die Praxis
+            // (`messages.charge_tenth_cents`), je Kategorie in
+            // Zehntel-US-Cent. Marketing nach docs/integrationen/meta.md,
+            // WhatsApp / Kostenmodell: "ueber 0,12 USD" je Template nach
+            // Deutschland (Stand 26.09.2026). Fuer die anderen Kategorien
+            // steht kein Satz im Repository. `none` kostet nichts.
+            'whatsapp_zehntel_us_cent' => [
+                'marketing' => is_numeric(env('BETRIEB_WHATSAPP_MARKETING')) ? (int) env('BETRIEB_WHATSAPP_MARKETING') : 120,
+                'utility' => is_numeric(env('BETRIEB_WHATSAPP_UTILITY')) ? (int) env('BETRIEB_WHATSAPP_UTILITY') : null,
+                'authentication' => is_numeric(env('BETRIEB_WHATSAPP_AUTHENTICATION')) ? (int) env('BETRIEB_WHATSAPP_AUTHENTICATION') : null,
+                'service' => is_numeric(env('BETRIEB_WHATSAPP_SERVICE')) ? (int) env('BETRIEB_WHATSAPP_SERVICE') : null,
+            ],
+
+            // **kie.ai rechnet je Datei ab**, also je Format, nicht je Satz
+            // (B13 zaehlt fuer die Praxis den Satz). Zehntel-US-Cent je Datei:
+            // 2K fuenf Cent, 4K acht -- und 4:5 laeuft in 4K. Fundstelle:
+            // config/services.php, `kie.input` und `kie.formate` (Stand
+            // 27.09.2026). Wer die Aufloesung aendert, aendert auch das hier.
+            'bild_format_zehntel_us_cent' => [
+                '1x1' => 50,
+                '4x5' => 80,
+                '9x16' => 50,
+            ],
+
+            // Stripe je Rechnung: ein Anteil in Prozent vom Betrag und ein
+            // fester Betrag in Euro-Cent. Fundstelle: keine im Repository --
+            // es gilt der Vertrag des Betreibers.
+            'stripe_prozent' => is_numeric(env('BETRIEB_STRIPE_PROZENT')) ? (float) env('BETRIEB_STRIPE_PROZENT') : null,
+            'stripe_fix_cent' => is_numeric(env('BETRIEB_STRIPE_FIX_CENT')) ? (int) env('BETRIEB_STRIPE_FIX_CENT') : null,
+
+            // Fixkosten des Betriebs je Monat in Euro-Cent, nicht je Praxis.
+            // **Vorerst ein Wert aus der Umgebung** (B19). Leer oder 0 heisst
+            // "nicht hinterlegt": ohne ihn gibt es kein Ergebnis, nur einen
+            // Rohertrag.
+            'fixkosten_cent_monat' => ((int) env('BETRIEB_FIXKOSTEN_CENT', 0)) > 0 ? (int) env('BETRIEB_FIXKOSTEN_CENT') : null,
+        ],
     ],
 
     'dashboard' => [

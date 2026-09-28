@@ -14,9 +14,9 @@ use function Pest\Laravel\travelTo;
 | WP-38, Abnahmekriterium 24 -- die Frist der Demo-Anfragen
 |--------------------------------------------------------------------------
 |
-| Regel 3: Fristen werden automatisch durchgesetzt, nicht auf Zuruf. Die
+| Regel 3 und C19: Fristen je Datenart, geloescht wird von Hand. Die
 | Anfragen gehoeren keiner Praxis und laufen deshalb neben dem Protokoll ohne
-| Mandanten -- mit derselben Vorschau als Vorgabe.
+| Mandanten -- mit derselben Vorschau als Vorgabe; scharf nur mit --scharf.
 |
 */
 

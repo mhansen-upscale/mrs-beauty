@@ -79,6 +79,14 @@ Schedule::command('mrs:servicefenster-abrechnen')
     ->onOneServer()
     ->withoutOverlapping();
 
+// Monatsabschluss der Finanzuebersicht (WP-34d). **Nach** der Abrechnung des
+// Service-Fensters, damit der Sammelposten feststeht, und vor der
+// Aufbewahrung um 04:15, die Nachrichten anonymisiert.
+Schedule::command('mrs:monatsabschluss')
+    ->monthlyOn(1, '04:00')
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // Wartelistenangebote (WP-25). Alle fuenf Minuten: ein Angebot gilt 30
 // Minuten, und der naechste Kandidat soll nicht eine Stunde auf seine Runde
 // warten. Der Lauf gibt abgelaufene Holds frei -- ohne ihn bliebe ein Slot

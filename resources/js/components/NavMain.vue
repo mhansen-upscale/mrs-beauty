@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import EinfuehrungSprechblase from '@/components/EinfuehrungSprechblase.vue';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import EinfuehrungAnker from '@/components/EinfuehrungAnker.vue';
 import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/components/ui/sidebar';
 import { useEinfuehrung } from '@/composables/useEinfuehrung';
 import { type NavGroup, type SharedData } from '@/types';
@@ -27,10 +26,7 @@ const aktiv = (href: string): boolean =>
         gruppe.items.some((anderer) => anderer.href !== href && anderer.href.startsWith(`${href}/`) && trifft(anderer.href)),
     );
 
-/**
- * Die Sprechblase hängt am Menüpunkt, ohne ihn zum Auslöser zu machen —
- * dafür gibt es `PopoverAnchor`. Der Punkt bleibt ein Link.
- */
+/** Die Sprechblase der Führung hängt über `EinfuehrungAnker` am Menüpunkt. */
 const einfuehrung = useEinfuehrung();
 
 const { isMobile } = useSidebar();
@@ -41,40 +37,21 @@ const { isMobile } = useSidebar();
         <SidebarGroupLabel>{{ gruppe.title }}</SidebarGroupLabel>
         <SidebarMenu>
             <SidebarMenuItem v-for="item in gruppe.items" :key="item.title">
-                <Popover :open="einfuehrung.zeigtAuf(item.href)">
-                    <PopoverAnchor as-child>
-                        <SidebarMenuButton
-                            as-child
-                            :is-active="aktiv(item.href)"
-                            :tooltip="item.title"
-                            :class="einfuehrung.zeigtAuf(item.href) ? 'ring-2 ring-ring ring-offset-2 ring-offset-sidebar' : ''"
-                        >
-                            <Link :href="item.href">
-                                <component :is="item.icon" />
-                                <span>{{ item.title }}</span>
-                                <!-- R4: ein stiller Ausfall wird hier laut. -->
-                                <TriangleAlert v-if="item.warnung" class="ml-auto size-4 text-warning" aria-label="Es gibt ein Problem" />
-                            </Link>
-                        </SidebarMenuButton>
-                    </PopoverAnchor>
-
-                    <!--
-                        Auf dem Handy liegt der Punkt in der Schublade, rechts
-                        daneben ist kein Platz: dort öffnet die Sprechblase
-                        nach unten und bleibt schmaler als der Schirm.
-                    -->
-                    <PopoverContent
-                        v-if="einfuehrung.zeigtAuf(item.href)"
-                        :side="isMobile ? 'bottom' : 'right'"
-                        align="start"
-                        :side-offset="12"
-                        :collision-padding="16"
-                        class="w-[min(20rem,calc(100vw-2rem))]"
-                        @open-auto-focus="(ereignis: Event) => ereignis.preventDefault()"
+                <EinfuehrungAnker :ziel="item.href" :seite="isMobile ? 'bottom' : 'right'">
+                    <SidebarMenuButton
+                        as-child
+                        :is-active="aktiv(item.href)"
+                        :tooltip="item.title"
+                        :class="einfuehrung.zeigtAuf(item.href) ? 'ring-2 ring-ring ring-offset-2 ring-offset-sidebar' : ''"
                     >
-                        <EinfuehrungSprechblase />
-                    </PopoverContent>
-                </Popover>
+                        <Link :href="item.href">
+                            <component :is="item.icon" />
+                            <span>{{ item.title }}</span>
+                            <!-- R4: ein stiller Ausfall wird hier laut. -->
+                            <TriangleAlert v-if="item.warnung" class="ml-auto size-4 text-warning" aria-label="Es gibt ein Problem" />
+                        </Link>
+                    </SidebarMenuButton>
+                </EinfuehrungAnker>
             </SidebarMenuItem>
         </SidebarMenu>
     </SidebarGroup>

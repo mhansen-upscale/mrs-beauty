@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Anzeigen;
 
 use App\Agent\Anfrage;
+use App\Agent\Antwort;
 use App\Agent\ModellNichtErreichbar;
 use App\Agent\Sprachmodell;
+use App\Agent\Verbrauch;
+use App\Enums\Modellzweck;
 use App\Marke\Markenprofil;
+use App\Models\ModelCall;
 
 /**
  * Erzeugt Anzeigentexte aus dem Brand Guide.
@@ -72,7 +76,33 @@ final class Textentwurf
             hoechstenTokens: 1500,
         ));
 
+        $this->halteKostenFest($antwort);
+
         return $this->ausAntwort($antwort->inhalt);
+    }
+
+    /**
+     * Was der Aufruf gekostet hat (WP-34d) -- **bevor** die Antwort gelesen
+     * wird: auch eine, aus der kein Vorschlag wird, hat gekostet. Eine Zeile
+     * je Aufruf, nicht je Vorschlag.
+     *
+     * Bepreist mit dem Modell der Konfiguration, wie im Assistenzlauf: Der
+     * Name, den die API zurueckmeldet, traegt ein Datum und steht so in
+     * keiner Preistabelle.
+     */
+    private function halteKostenFest(Antwort $antwort): void
+    {
+        $modell = (string) config('mrs.agent.model');
+        $verbrauch = new Verbrauch;
+        $verbrauch->zaehle($antwort);
+
+        ModelCall::query()->create([
+            'purpose' => Modellzweck::Anzeigentexte,
+            'model' => $modell,
+            'input_tokens' => $verbrauch->eingabe,
+            'output_tokens' => $verbrauch->ausgabe,
+            'cost_tenth_cents' => $verbrauch->kostenZehntelCent($modell),
+        ]);
     }
 
     /**

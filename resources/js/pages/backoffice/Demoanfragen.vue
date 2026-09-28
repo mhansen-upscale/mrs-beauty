@@ -127,8 +127,8 @@ const aktionen = (anfrage: Anfrage): Zeilenaktion[] => [
 
             <p class="flex items-center gap-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
                 <Lock class="size-4 shrink-0" />
-                Die Angaben liegen verschlüsselt und werden nach der Frist aus der Datenschutzerklärung von selbst gelöscht. Die Mail an den Vertrieb
-                nennt keine davon.
+                Die Angaben liegen verschlüsselt. Nach der Frist aus der Datenschutzerklärung sind sie zur Löschung fällig — gelöscht werden sie mit
+                <code>mrs:aufbewahrung --scharf</code> oder hier einzeln (C19). Die Mail an den Vertrieb nennt keine davon.
             </p>
 
             <DataTable :spalten="spalten" :zeilen="anfragen" sortier-nach="eingegangen" sortier-richtung="ab" :pro-seite="25">

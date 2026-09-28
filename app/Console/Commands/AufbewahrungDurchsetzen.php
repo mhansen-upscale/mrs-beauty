@@ -41,7 +41,11 @@ final class AufbewahrungDurchsetzen extends Command
 
                 $ergebnis = $aufbewahrung->lauf($vorschau, $jetzt);
 
-                if ($ergebnis->gesamt() === 0) {
+                // Die Einmal-PINs (WP-34b) mit fester Frist, neben den
+                // Fristen der Praxis.
+                $pins = $aufbewahrung->supportPins($vorschau, $jetzt);
+
+                if ($ergebnis->gesamt() + $pins === 0) {
                     return;
                 }
 
@@ -57,7 +61,11 @@ final class AufbewahrungDurchsetzen extends Command
                     }
                 }
 
-                $gesamt += $ergebnis->gesamt();
+                if ($pins > 0) {
+                    $this->line(sprintf('  %-36s %5d', 'Einmal-PINs des Supports', $pins));
+                }
+
+                $gesamt += $ergebnis->gesamt() + $pins;
             });
         }
 
@@ -100,8 +108,8 @@ final class AufbewahrungDurchsetzen extends Command
             'Aufbewahrungsfristen werden fuer alle Mandanten durchgesetzt',
             function (): iterable {
                 // **Auch fuer gesperrte Praxen** (WP-34a). Regel 3: Fristen
-                // werden automatisch durchgesetzt, nicht auf Zuruf -- eine
-                // Sperre hielte die Daten sonst ueber jede Frist hinaus.
+                // gelten je Datenart, nicht je Vertragsstand -- eine Sperre
+                // hielte die Daten sonst ueber jede Frist hinaus.
                 $abfrage = Organization::query();
 
                 if (is_string($this->option('organisation'))) {

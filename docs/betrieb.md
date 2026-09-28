@@ -124,11 +124,32 @@ php artisan queue:failed        # oder ist er gelaufen und gescheitert?
 | 05:45 | `mrs:werbung-zahlen` | Metas Kennzahlen über das nachlaufende Fenster |
 | Mo 06:15 | `mrs:anzeigen-vorschlagen` | Anzeigenentwürfe der Woche |
 | 1. des Monats 03:45 | `mrs:servicefenster-abrechnen` | Antworten im WhatsApp-Service-Fenster des Vormonats als Sammelposten zu Stripe (B14) — bei 0 € geht nichts hinaus |
+| 1. des Monats 04:00 | `mrs:monatsabschluss` | Einnahmen und Kosten des Vormonats je Praxis einfrieren (WP-34d, B19), auch für gesperrte Praxen — ein zweiter Lauf ändert nichts |
 
 Der Abrechnungsauftrag (`ServicefensterAbrechnen`, Warteschlange
 `maintenance`) versucht es **fünfmal** statt einmal: er trägt Stripes
 Idempotenzschlüssel, und der abgerechnete Monat steht am Abo. Eine
 Wiederholung legt keinen zweiten Posten an.
+
+**Der Monatsabschluss ist die Historie der Finanzübersicht.** Das Abo kennt
+nur seinen Jetzt-Zustand; was im Vormonat galt, steht danach nur noch in
+`monthly_closings`. Ist ein Lauf ausgefallen, holt ihn
+`php artisan mrs:monatsabschluss --monat=2026-10` nach. Er friert dann den
+Abo-Zustand **dieses** Moments ein, und der Monat ist hinterher eine
+Schätzung mehr. Monate vor dem ersten Abschluss zeigt die Seite als „keine
+Daten“. Einen laufenden Monat schließt der Befehl nicht ab.
+
+**Gelöscht wird nur von Hand (C19).** Der Lauf um 04:15 zählt, was fällig
+ist, und löscht nichts. Eine Praxis löst das Löschen selbst aus, unter
+Organisation → Datenschutz („Jetzt durchsetzen“). Was keiner Praxis gehört —
+die Demo-Anfragen der Startseite und das Betreiberprotokoll —, löscht nur
+`php artisan mrs:aufbewahrung --scharf` auf der Konsole. Die
+Datenschutzerklärung sagt Interessenten zu, ihre Anfrage nach der Frist
+(`mrs.oeffentlich.demoanfragen.aufbewahrung_monate`) zu löschen: Eingehalten
+ist das nur, wenn jemand diesen Befehl regelmäßig ausführt, vorher ohne
+`--scharf` die Zahlen ansieht. **Ohne `--organisation` setzt `--scharf`
+zugleich die Fristen aller Praxen durch**, nach deren eigenen Einstellungen;
+einen Schalter nur für die Daten ohne Praxis gibt es noch nicht.
 
 ## Stripe im Testbetrieb
 
@@ -216,7 +237,8 @@ an, auf einer erreichbaren Umgebung ein offener Zugang.
 
 Querzugriffe, Anmeldungen und Handlungen an Betreiberkonten stehen im
 **Betreiberprotokoll** (`/backoffice/protokoll`, nur Super-Admin). Sie gehören
-keiner Praxis, und `mrs:aufbewahrung` löscht sie nach 36 Monaten (C7).
+keiner Praxis, und `mrs:aufbewahrung --scharf` löscht sie nach 36 Monaten
+(C7) — von Hand, siehe oben (C19).
 
 ## Die Virenprüfung
 
@@ -342,6 +364,9 @@ MAIL_MAILER=smtp             MAIL_HOST=…              MAIL_PORT=…
 MAIL_USERNAME=…              MAIL_PASSWORD=…
 MAIL_FROM_ADDRESS=…          MAIL_FROM_NAME=…         (Rückfall des Plattformversands, B23)
 VERTRIEB_ADRESSE=…                                    (Demo-Anfragen der Startseite, WP-38)
+BETRIEB_USD_EUR=…            BETRIEB_FIXKOSTEN_CENT=…  (Finanzübersicht, WP-34d)
+BETRIEB_STRIPE_PROZENT=…     BETRIEB_STRIPE_FIX_CENT=…
+BETRIEB_WHATSAPP_UTILITY=…   BETRIEB_WHATSAPP_AUTHENTICATION=…   BETRIEB_WHATSAPP_SERVICE=…
 CLAMAV_HOST=…
 ATTACHMENTS_DISK=s3            AWS_BUCKET=…
 AWS_ACCESS_KEY_ID=…            AWS_SECRET_ACCESS_KEY=…
@@ -390,6 +415,16 @@ dem 22.09.2026 wirft er stattdessen, mit dem Pfad im Text.
 Service-Fenster, in Cent, Nachkommastelle erlaubt (B14). `0` heißt gezählt,
 nicht berechnet. Ein neuer Wert gilt für Antworten ab dann — der Preis wird an
 jeder Nachricht festgehalten, nicht bei der Rechnung ausgerechnet.
+
+**`BETRIEB_*`** sind die Kostensätze der Finanzübersicht (WP-34d, B19), mit
+Stand einzutragen. **Leer heißt „nicht hinterlegt“**: Die Seite nennt den
+fehlenden Satz und rechnet ihn nicht als Null. Der Dollarkurs gilt für alles,
+was in US-Dollar abgerechnet wird: Sprachmodell, kie.ai und Metas Sätze.
+WhatsApp-Sätze stehen in Zehntel-US-Cent je Nachricht (120 = 0,12 USD).
+Marketing ist ohne Angabe 120, laut `docs/integrationen/meta.md`. Die
+Bildsätze je Format stehen in `mrs.backoffice.kosten`, weil sie an der
+Auflösung in `services.kie` hängen. Ohne `BETRIEB_FIXKOSTEN_CENT` gibt es kein
+Ergebnis, nur einen Rohertrag.
 
 **`QUEUE_CONNECTION=cloud`** setzt Laravel Cloud selbst, sobald die verwaltete
 Warteschlange angehängt ist (siehe oben). Bis zum 26.09.2026 stand hier noch

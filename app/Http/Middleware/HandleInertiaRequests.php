@@ -7,6 +7,7 @@ namespace App\Http\Middleware;
 use App\Audit\ImpersonationContext;
 use App\Enums\Ability;
 use App\Enums\CalendarConnectionStatus;
+use App\Enums\ImpersonationMode;
 use App\Enums\OperatorAbility;
 use App\Models\CalendarConnection;
 use App\Models\ImpersonationSession;
@@ -70,6 +71,35 @@ class HandleInertiaRequests extends Middleware
         return CalendarConnection::query()
             ->where('status', CalendarConnectionStatus::Expired->value)
             ->exists();
+    }
+
+    /**
+     * Hat der Support gerade Vollzugriff auf diese Praxis? (WP-34b)
+     *
+     * Fuer **alle** Benutzer der Praxis, nicht nur die Inhaberin: „Sichtbar
+     * fuer beide Seiten" (WP-34). Nicht fuer den Betreiber selbst -- er hat
+     * sein eigenes Banner.
+     *
+     * **Im Mandanten gerechnet, nicht ueber acrossTenants():** das schriebe
+     * bei jeder Anfrage jedes Praxisbenutzers einen Querzugriff.
+     *
+     * @return array{uuid: string, bis: string}|null
+     */
+    private function supportzugriff(mixed $benutzer, ?Organization $organisation): ?array
+    {
+        if (! $benutzer instanceof User || ! $organisation instanceof Organization || $benutzer->istBetreiber()) {
+            return null;
+        }
+
+        $sitzung = ImpersonationSession::query()
+            ->laufend()
+            ->where('mode', ImpersonationMode::Full->value)
+            ->whereNotNull('approved_at')
+            ->first();
+
+        return $sitzung instanceof ImpersonationSession
+            ? ['uuid' => (string) $sitzung->uuid, 'bis' => $sitzung->expires_at->toIso8601String()]
+            : null;
     }
 
     /**
@@ -156,7 +186,13 @@ class HandleInertiaRequests extends Middleware
             //
             // Der instanceof-Waechter ist Pflicht -- share() laeuft auch auf
             // der oeffentlichen Buchungsseite, die keinen Benutzer hat.
-            'einfuehrung_faellig' => $benutzer instanceof User && $benutzer->einfuehrungStehtAus(),
+            //
+            // Nicht in einer Impersonation, wie der Hinweis zum zweiten
+            // Faktor: der Support sieht die Praxis, nicht sein eigenes Konto.
+            // Wer die Fuehrung dort abschloesse, setzte sein eigenes Merkmal.
+            'einfuehrung_faellig' => $benutzer instanceof User
+                && $benutzer->einfuehrungStehtAus()
+                && ! app(ImpersonationContext::class)->isActive(),
 
             'organization' => $organisation === null ? null : [
                 'uuid' => $organisation->uuid,
@@ -166,6 +202,10 @@ class HandleInertiaRequests extends Middleware
             // Solange eine Impersonation laeuft, ist sie in **jeder** Antwort
             // erkennbar (WP-05, Abnahmekriterium 18).
             'impersonation' => $this->impersonation(),
+
+            // Die Gegenseite: Die Praxis sieht, solange der Support
+            // Vollzugriff hat, und die Inhaberin kann ihn beenden (WP-34b).
+            'supportzugriff' => $this->supportzugriff($benutzer, $organisation),
 
             // R4 aus docs/integrationen/kalender.md: ein Ausfall erzeugt einen
             // Hinweis **im Produkt**, nicht nur im Log. Eine unterbrochene

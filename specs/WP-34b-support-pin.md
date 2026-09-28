@@ -184,3 +184,60 @@ durchprobieren. Fehlt eines davon, ist sie ratbar.
 - **Der Hinweis in der Praxis über `acrossTenants()`** würde bei jeder
   Anfrage jedes Praxisbenutzers einen Querzugriff schreiben, dieselbe Flut,
   die WP-34a gerade abgestellt hat.
+
+## Stand
+
+Stand 28.09.2026: Die 17 Abnahmekriterien laufen in
+`tests/Feature/Audit/SupportPinTest.php` (**25 Tests**). Die Tests aus
+`ImpersonationTest.php` bleiben unverändert grün (AK 17). `BetreiberrollenTest`
+kennt die neue Route `impersonation.pin`. Gesamtstand **1695 Tests**, PHPStan
+Stufe 8 ohne Befund.
+
+Neu:
+- **Migration** `2026_09_28_120000_support_pin`: Tabelle `support_pins` mit
+  `open_guard` (VIRTUAL, UNIQUE), Spalte
+  `impersonation_sessions.approval_method`. Bestehende Freigaben sind auf
+  `klick` nachgetragen.
+- **Dienst** `App\Audit\Supportfreigabe` mit `erzeuge()`, `widerrufe()` und
+  `loese()`, dazu die Ablehnung `SupportPinAbgelehnt` mit **einer** Meldung für
+  jeden Grund.
+- **Enum** `Freigabeweg` (`klick`, `pin`). `Impersonation::approve()` nimmt ihn
+  an und schreibt `via` in den Kontext.
+- **Modell** `SupportPin`, gespeichert ist nur `Hash::make`.
+- **Konfiguration** `mrs.support_pin`, dazu `mrs.impersonation.verlauf_eintraege`.
+- **Routen**:
+  - `support-pin.store` und `support-pin.destroy`,
+  - `impersonation.beenden` für die Inhaberin,
+  - `impersonation.pin` für den Betreiber,
+  - `impersonation.store` nimmt optional `pin`.
+- **Oberfläche**:
+  - Abschnitt „Support-Zugriff" unter *Team*.
+  - `SupportzugriffHinweis.vue` im `AppLayout`.
+  - Das Feld „PIN der Praxis" im Mandantenblatt und „PIN eingeben" im
+    `ImpersonationBanner`.
+
+## Was das Bauen zutage gefördert hat
+
+**Der Zähler muss vor der Ablehnung festgeschrieben sein.** Würfe die
+Transaktion bei einem Fehlversuch, rollte `failed_attempts` mit ihr zurück,
+und die PIN verbrennte nie. Die Transaktion liefert deshalb nur das
+Ergebnis, geworfen wird danach.
+
+**Route-Model-Binding läuft vor der Betreiberprüfung.**
+`impersonation/{session}/pin` hätte die Sitzung ohne Mandanten aufgelöst.
+Finanzen hätte dann statt eines 403 einen Fehler bekommen. Die Route nimmt
+deshalb die Kennung als Zeichenkette, und die Sitzung kommt aus dem
+`ImpersonationContext`, den `ApplyImpersonation` gesetzt hat.
+
+**Auch „keine PIN" rechnet einen Hash.** Gegen einen zwischengespeicherten
+Attrappen-Hash, damit die Antwort nicht schneller kommt als auf eine falsche
+PIN.
+
+**Die Einmal-PIN kommt in die Aufbewahrung** (Regel 3): `mrs:aufbewahrung`
+löscht Zeilen, deren Ablauf länger als `mrs.support_pin.aufbewahrung_tage`
+zurückliegt. Was geschah, steht weiter im Protokoll.
+
+**Die PIN reist wie die Wiederherstellungscodes** einmal mit der
+Weiterleitung in der Sitzung. Die ist verschlüsselt (`SESSION_ENCRYPT`).
+Beim Neuladen ist sie weg.
+
