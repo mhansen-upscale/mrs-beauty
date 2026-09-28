@@ -55,6 +55,7 @@ enum AuditEvent: string
     case OperatorRoleChanged = 'operator.role_changed';
     case OperatorDeactivated = 'operator.deactivated';
     case OperatorReactivated = 'operator.reactivated';
+    case OperatorPasswordSet = 'operator.password_set';
 
     /* Der zweite Faktor (WP-35, C16). Bei Praxispersonen im Protokoll der
        Praxis, bei Betreibern ohne Organisation. Im Kontext hoechstens das
@@ -120,6 +121,7 @@ enum AuditEvent: string
             self::OperatorRoleChanged => 'Betreiberrolle geändert',
             self::OperatorDeactivated => 'Betreiberkonto deaktiviert',
             self::OperatorReactivated => 'Betreiberkonto reaktiviert',
+            self::OperatorPasswordSet => 'Betreiberpasswort auf der Konsole gesetzt',
             self::TwoFactorEnabled => 'Zweiter Faktor eingeschaltet',
             self::TwoFactorDisabled => 'Zweiter Faktor abgeschaltet',
             self::TwoFactorReset => 'Zweiter Faktor zurückgesetzt',

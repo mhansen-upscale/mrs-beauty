@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\PasswortZuruecksetzen;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 
 use function Pest\Laravel\actingAs;
@@ -218,6 +219,64 @@ it('legt den ersten Super-Admin auf der Konsole an', function (): void {
     Notification::assertSentTo($konto, PasswortZuruecksetzen::class);
 });
 
+/**
+ * Das Passwort aus der Ausgabe von `mrs:betreiber --passwort-ausgeben`.
+ */
+function ausgegebenesPasswort(): string
+{
+    preg_match('/Passwort: (\S+)/', Artisan::output(), $treffer);
+
+    return $treffer[1] ?? '';
+}
+
+it('setzt auf der Konsole ein Passwort und gibt es einmal aus -- fuer Umgebungen ohne Mail', function (): void {
+    expect(Artisan::call('mrs:betreiber', ['email' => 'staging@mrs-beauty.test', '--name' => 'Staging', '--passwort-ausgeben' => true]))->toBe(0);
+
+    $passwort = ausgegebenesPasswort();
+    $konto = User::query()->where('email', 'staging@mrs-beauty.test')->firstOrFail();
+
+    expect(strlen($passwort))->toBe(24)
+        ->and(Hash::check($passwort, (string) $konto->password))->toBeTrue()
+        ->and($konto->betreiberRolle())->toBe(OperatorRole::SuperAdmin)
+        ->and($konto->email_verified_at)->not->toBeNull();
+
+    // Keine Mail -- es gibt keine, die ankaeme.
+    Notification::assertNothingSent();
+
+    // Das Passwort steht in der Ausgabe und nirgends sonst (C5).
+    $eintrag = AuditLog::query()->withoutGlobalScopes()->where('event', AuditEvent::OperatorPasswordSet->value)->first();
+
+    expect($eintrag?->subject_id)->toBe($konto->getKey())
+        ->and($eintrag?->organization_id)->toBeNull()
+        ->and($eintrag?->context)->toBe(['weg' => 'konsole'])
+        ->and(AuditLog::query()->withoutGlobalScopes()->get()->toJson())->not->toContain($passwort);
+
+    post(route('backoffice.anmelden.senden'), ['email' => 'staging@mrs-beauty.test', 'password' => $passwort])
+        ->assertRedirect(route('dashboard'));
+});
+
+it('setzt einem vorhandenen Betreiber auf der Konsole ein neues Passwort', function (): void {
+    $konto = User::factory()->customerSuccess()->create(['email' => 'vergessen@mrs-beauty.test']);
+
+    expect(Artisan::call('mrs:betreiber', ['email' => 'vergessen@mrs-beauty.test', '--rolle' => 'customer_success', '--passwort-ausgeben' => true]))->toBe(0);
+
+    $konto->refresh();
+
+    expect(Hash::check(ausgegebenesPasswort(), (string) $konto->password))->toBeTrue()
+        ->and(Hash::check('password', (string) $konto->password))->toBeFalse()
+        ->and($konto->betreiberRolle())->toBe(OperatorRole::CustomerSuccess);
+
+    Notification::assertNothingSent();
+});
+
+it('sagt auf der Konsole, wenn das Konto deaktiviert ist -- und laesst es so', function (): void {
+    $konto = User::factory()->finanzen()->create(['email' => 'ruht@mrs-beauty.test', 'deactivated_at' => CarbonImmutable::now()]);
+
+    expect(Artisan::call('mrs:betreiber', ['email' => 'ruht@mrs-beauty.test', '--rolle' => 'finanzen', '--passwort-ausgeben' => true]))->toBe(0)
+        ->and(Artisan::output())->toContain('deaktiviert')
+        ->and($konto->refresh()->deactivated_at)->not->toBeNull();
+});
+
 it('macht auf der Konsole kein Praxiskonto zum Betreiber', function (): void {
     $praxis = alsMandant(organisation('Demo-Praxis'));
     User::factory()->fuer($praxis, Role::Owner)->create(['email' => 'inhaberin@praxis.test']);
@@ -225,4 +284,8 @@ it('macht auf der Konsole kein Praxiskonto zum Betreiber', function (): void {
 
     expect(Artisan::call('mrs:betreiber', ['email' => 'inhaberin@praxis.test', '--rolle' => 'finanzen']))->toBe(1)
         ->and(Artisan::output())->toContain('gehört zu einer Praxis');
+
+    // Auch nicht mit Passwort: die Inhaberin behaelt ihres.
+    expect(Artisan::call('mrs:betreiber', ['email' => 'inhaberin@praxis.test', '--passwort-ausgeben' => true]))->toBe(1)
+        ->and(Artisan::output())->not->toContain('Passwort:');
 });

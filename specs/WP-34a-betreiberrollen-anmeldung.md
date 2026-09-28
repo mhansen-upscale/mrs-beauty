@@ -389,6 +389,19 @@ nur noch die Liste der Praxen. Umsatz und Modellkosten fehlen dort für jede
 Rolle ohne `finanzen.sehen`, in der Antwort selbst und nicht nur in der
 Anzeige.
 
+**Nachtrag 28.09.2026: Staging hat keine Mail.** Der Passwortlink aus
+`mrs:betreiber` kam dort nie an, und niemand kam hinein.
+- Neu ist `--passwort-ausgeben`. Der Befehl erzeugt ein Passwort mit 24
+  Zeichen, setzt es und zeigt es einmal. Mit der Option geht keine Mail
+  hinaus.
+- Das Passwort wird bewusst nicht übergeben: Auf der Befehlszeile stünde es
+  in der Historie von Shell oder Laravel Cloud.
+- Das Protokoll vermerkt `operator.password_set`, ohne das Passwort.
+- Dasselbe gilt für den Notfall „letzter Super-Admin hat sein Passwort
+  verloren".
+- Weiterhin gilt: kein `db:seed` außerhalb der Entwicklung (Seeder-Konten
+  mit bekanntem Passwort). Siehe `docs/betrieb.md`.
+
 ## Offen
 
 - ~~**Zweiter Faktor** (C14, zurückgestellt).~~ Freiwillig, mit WP-35 (C16).

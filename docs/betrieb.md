@@ -191,6 +191,29 @@ letzte sein Passwort verloren hat, erledigt die Konsole:
 php artisan mrs:betreiber name@mrs-beauty.de --rolle=super_admin --name="Vorname Nachname"
 ```
 
+**Ohne Mailversand** (Staging, oder ein verlorenes Passwort ohne Zugang zum
+Postfach) kommt der Link nie an. Dann setzt die Konsole selbst ein Passwort
+und zeigt es **einmal**:
+
+```bash
+php artisan mrs:betreiber name@mrs-beauty.de --name="Vorname Nachname" --passwort-ausgeben
+```
+
+- Das Passwort wird erzeugt, nicht übergeben. So steht es nicht in der
+  Befehlshistorie.
+- Auf Laravel Cloud läuft der Befehl unter *Environment → Commands*, ohne
+  Rückfrage.
+- Nach der Anmeldung unter `/backoffice/anmelden` ändert man es unter
+  *Einstellungen → Passwort*.
+- Das Betreiberprotokoll vermerkt `operator.password_set`, das Passwort
+  selbst nicht.
+- Ein vorhandenes Betreiberkonto bekommt ein neues Passwort, ein
+  deaktiviertes bleibt deaktiviert.
+
+**Nicht `db:seed` auf Staging oder in Produktion.** Der Seeder legt eine
+Demo-Praxis und drei Betreiberkonten mit dem bekannten Passwort `passwort`
+an, auf einer erreichbaren Umgebung ein offener Zugang.
+
 Querzugriffe, Anmeldungen und Handlungen an Betreiberkonten stehen im
 **Betreiberprotokoll** (`/backoffice/protokoll`, nur Super-Admin). Sie gehören
 keiner Praxis, und `mrs:aufbewahrung` löscht sie nach 36 Monaten (C7).

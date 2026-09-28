@@ -23,6 +23,10 @@ use RuntimeException;
  * zufaelligen, das niemand je sieht; das eigentliche setzt die Person ueber
  * den Link, den sie per Mail bekommt. Der Link beweist zugleich die Adresse,
  * deshalb ist sie gleich bestaetigt -- die Routen verlangen `verified`.
+ *
+ * **Ohne Mail** (Staging, oder der letzte Super-Admin hat sein Passwort
+ * verloren) setzt allein die Konsole ein Passwort: `neuesPasswort()`. Es
+ * steht einmal in deren Ausgabe und sonst nirgends.
  */
 final class Betreiberkonten
 {
@@ -31,7 +35,7 @@ final class Betreiberkonten
     /**
      * @throws RuntimeException Wenn die Adresse einem Praxiskonto gehoert
      */
-    public function lege(string $email, string $name, OperatorRole $rolle): User
+    public function lege(string $email, string $name, OperatorRole $rolle, bool $linkSenden = true): User
     {
         $konto = User::query()->where('email', $email)->first();
 
@@ -63,10 +67,37 @@ final class Betreiberkonten
             ohneOrganisation: true,
         );
 
-        if ($neu) {
+        if ($neu && $linkSenden) {
             Password::sendResetLink(['email' => $email]);
         }
 
         return $konto;
+    }
+
+    /**
+     * Setzt ein erzeugtes Passwort und gibt es zurueck -- **nur fuer die
+     * Konsole**.
+     *
+     * Erzeugt, nicht uebergeben: ein Passwort auf der Befehlszeile stuende in
+     * der Befehlshistorie der Shell oder von Laravel Cloud. Vierundzwanzig
+     * Zeichen genuegen auch den Regeln fuer Produktion
+     * (AppServiceProvider::configurePasswords). Ins Protokoll kommt, **dass**
+     * es gesetzt wurde, nie das Passwort (C5).
+     */
+    public function neuesPasswort(User $konto): string
+    {
+        $passwort = Str::password(24);
+
+        $konto->password = $passwort;
+        $konto->save();
+
+        $this->protokoll->record(
+            ereignis: AuditEvent::OperatorPasswordSet,
+            gegenstand: $konto,
+            kontext: ['weg' => 'konsole'],
+            ohneOrganisation: true,
+        );
+
+        return $passwort;
     }
 }
