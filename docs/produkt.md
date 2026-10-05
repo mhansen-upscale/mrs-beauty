@@ -17,6 +17,12 @@ Anzeige → Klick → Besucher → Lead → Termin → erschienen → Behandlung
 ```
 
 **Das ist die Zahl, die das Abo rechtfertigt** (`docs/fachlogik/attribution.md`).
+Seit P14 kann der Umsatz am Ende der Kette aus der Rechnung kommen statt aus
+der Schätzung im Katalog (D14).
+
+Seit P16 gibt es einen zweiten Weg: **Personal**. Eine Praxis wirbt mit
+demselben Assistenten um Mitarbeitende, und die Bewerbung landet bei ihr statt
+bei einer Agentur.
 
 ## Das Differenzierungsmerkmal
 
@@ -138,7 +144,23 @@ Produkt führt beim ersten Anmelden mit einer kurzen Einführung durch das Menü
 - **Zielkunde und Marktabgrenzung.** Gesetzt ist bisher nur: Praxen für
   ästhetische Behandlungen in Deutschland, hochpreisig positioniert (B15).
   Offen: Größe (Einzelpraxis bis Kette), Arztpraxis oder Institut, Region.
-- **Abgrenzung gegenüber bestehenden Praxisverwaltungssystemen.** Das Produkt
-  führt keine Patientenakte, keine Abrechnung nach GOÄ und keine Dokumentation
-  von Behandlungen — es endet am Termin. Wie es neben einem PVS steht (Export,
-  Schnittstelle, doppelte Terminführung), ist nicht entschieden.
+  *Aus Feedbackschleife 1 (05.10.2026, `docs/feedback/`):* Beide Pilotpraxen
+  sind ärztlich geführt, eine mit einem Standort und zwei Behandelnden, eine
+  mit fünf Standorten und 30–40 Mitarbeitenden. Beide buchen heute über
+  Doctolib. Die Praxisart (ärztlich, Heilpraktiker, Institut) wird damit zur
+  Einstellung der Praxis: Von ihr hängen Akte (§ 630f) und Rechnung (GOÄ) ab,
+  siehe WP-47 und WP-48.
+- **Abgrenzung gegenüber bestehenden Praxisverwaltungssystemen.** *Bis zum
+  05.10.2026* endete das Produkt am Termin. Seit P13 und P14 führt es eine
+  Patientenakte mit Behandlungsdokumentation und stellt Rechnungen nach GOÄ
+  mit DATEV-Export. Es tritt damit gegen schlanke Systeme für die Ästhetik an
+  (Kliniko, Doctolib). **Weiter nicht:**
+  - Kassenabrechnung und KV-Anbindung
+  - Kassenfunktion
+  - Labor und eRezept
+  - Angebote und Finanzierung (P4)
+  - Anzahlungen (P2)
+
+  **Offen:** der Umzug aus einem bestehenden PVS, also der Import von Akten,
+  Kontakten und offenen Terminen. Ohne ihn wechselt keine Praxis mit
+  Bestand.

@@ -85,10 +85,48 @@ WP-05 bis WP-07 können nach WP-11 nachgezogen werden, falls früh etwas Vorzeig
 | WP-38 | Öffentliche Startseite, Impressum, Datenschutzerklärung | steht: Startseite unter `/` mit Preisen aus der geltenden Paketfassung und Demo-Anfrage (gespeichert, verschlüsselt, ohne Freitext; Plattformmail an `VERTRIEB_ADRESSE` ohne Angaben), Impressum und Datenschutzerklärung (`/datenschutzerklaerung`), kein Tracking; Demo-Anfragen im Backoffice, Frist über `mrs:aufbewahrung`; nach WP-06b, WP-34a, WP-37 |
 | WP-39 | Erste Schritte im Dashboard | **offen, Spezifikation zur Durchsicht** (29.09.2026): Kasten mit zwölf Einrichtungsschritten, aus den Daten abgeleitet statt abgehakt, je Fähigkeit sichtbar, nötig und empfohlen; ehrlicher Buchungslink; eine Stelle für „buchbar“; nach WP-07 bis WP-34c |
 
+## M4 · Feedbackschleife 1
+
+Aus dem Video-Feedback vom 05.10.2026 (`../docs/feedback/2026-10-05-feedbackschleife-1.md`).
+Entscheidungen P13–P17 und D16, abgeleitet und zu bestätigen C20 und C21.
+Alle Pakete sind **offen, Spezifikation zur Durchsicht**.
+
+| | Paket | Hinweis |
+|---|---|---|
+| WP-40 | Sprache für die Praxis | **zuerst**: Wortliste in `konventionen.md`, Verbotsliste mit Test; Erklärsätze für Posteingang, Warteliste und Anzeigen |
+| WP-41 | Kampagnenstrecke reparieren, HWG nachschärfen | Gruppe und Anzeige werden nie aktiv, Laufzeit geht nicht an Meta, Links ohne Zuordnung; § 10 HWG fehlt („Botox"); Bildbestätigung statt Freitext |
+| WP-42 | Kampagnen-Assistent | fünf Schritte, Monatsbetrag statt Tagesbudget, keine Meta-Fachwörter; Pfad „Neue Mitarbeitende" vorbereitet; nach WP-41 |
+| WP-43 | Behandler zuerst | P15, intern und Buchungsseite mit „Keine Vorliebe"; Rückwärtssuche aus `freigegebeneBehandler()`; Link je Behandler; Assistent unverändert |
+| WP-44 | Kontakte und Anfragen vereinfachen | neue Buchungen sichtbar, Kontaktseite, ein Menüpunkt, Kontakt und Termin aus dem Posteingang |
+| WP-45 | Behandlungsräume | D16: zuordnen, nicht sperren; Engine unberührt |
+| WP-46 | Dashboard und Auslastung | je Standort, Behandler und Raum, Minuten statt Quoten; Zeitzonenfehler „heute"; WP-39 gehört hierher; nach WP-44, Räume nach WP-45 |
+| WP-47 | Patientenakte | P13, **drei Sitzungen** (47a Akte und Zugriff, 47b Oberfläche und Gesichtsschema, 47c KI-Diktat nach C21); freischalten erst nach medizinrechtlicher Prüfung |
+| WP-48 | Rechnungen nach GOÄ, mit DATEV-Export | P14, **zwei Sitzungen** (48a Rechnung und GOÄ, 48b Versand und DATEV); keine Kasse; freischalten erst nach steuerlicher Prüfung |
+| WP-49 | Recruiting: Stellenanzeigen und Bewerbungen | P16; Bewerbungen sind keine Kontakte; Stellenanzeigen ohne Alter und Geschlecht; nach WP-42 |
+| WP-50 | Anzeigen aus eigenem Bildmaterial | P17; das Foto bleibt echt, Text setzt das Produkt; Video später; nach WP-42 |
+
+**Reihenfolge:**
+1. WP-40
+2. WP-44 und WP-43: was eine Pilotpraxis täglich sieht, vor der nächsten Feedbackrunde
+3. WP-41, dann WP-42, dann WP-50 und WP-49
+4. WP-45, dann WP-46
+5. WP-47 und WP-48
+
+Akte und Rechnungen sind im Video die möglichen Showstopper gegen Kliniko und
+Doctolib. Gebaut werden können sie nach WP-44; die Prüfungen unten brauchen
+Vorlauf und gehören deshalb **jetzt** angestoßen.
+
 ## Außerhalb des Repositories
 
 - **WP-00 Meta App Review & Business-Verifizierung** — **erledigt** (Stand 28.09.2026): App Review, Business-Verifizierung und Login-Konfiguration samt Asset-Typ Datensatz.
 - **WP-01 Datenschutz-Dokumentation** — AV-Vertrag, TOM, Verzeichnis, Löschkonzept, Prüfung durch einen Medizinrechtler. Voraussetzung für den ersten zahlenden Kunden. **Offen seit WP-22/23:** Anthropic ist Unterauftragsverarbeiter für Nachrichteninhalte mit Gesundheitsbezug — AV-Vertrag, **Zero Data Retention** und Datenregion gehören in die Unterlagen (Entscheidung G10). *Stand 28.09.2026: in Arbeit beim Betreiber.* Aus dem Code dazu gehören: die Anonymisierung lässt die Kanalidentität stehen (WP-19), das Öffnen von Chat-Anhängen wird protokolliert (C12), Stripe und Microsoft sind weitere Empfänger; Mails an Patientinnen gehen über das Postfach der Praxis (B22), Produktmails über den Mailserver, den der Betreiber hinterlegt (B23).
+- **WP-01 Nachtrag Akte, Diktat und Bewerbungen** (seit 05.10.2026). Die Akte (P13) macht aus dem Produkt eine Behandlungsdokumentation nach § 630f BGB, und der Betreiber wird mitwirkende Person im Sinne von § 203 StGB. Nötig sind:
+  - AV-Vertrag mit Verschwiegenheitsklausel nach § 203 Abs. 4
+  - TOM und Verzeichnis für Akte, Diktat (Sprachdienst als weiterer Unterauftragsverarbeiter, Zero Data Retention, Datenregion EU; C21) und Bewerbungen (P16)
+  - Löschkonzept mit den Fristen 10 Jahre (Akte), 8 Jahre (Rechnungen), 6 Monate (Bewerbungen)
+- **Medizinrechtliche Prüfung** von WP-47: Fassungen, Einsicht und Kopie, Zugriff, Diktat mit Einwilligung, Abgrenzung zum Medizinprodukt. **Vor der Freischaltung.**
+- **Steuerliche Prüfung** von WP-48: GOÄ-Abbildung und Vorlagen, Umsatzsteuer je Position, GoBD, Konten und BU-Schlüssel, Sammeldebitor (C20), Abgrenzung zur KassenSichV. **Vor der Freischaltung.**
+- **Juristische Durchsicht HWG-Fassung 2** (WP-41): § 10 HWG für verschreibungspflichtige Wirkstoffe, Abgrenzung zu Fillern (C18).
 
 ## Was außerhalb des Codes noch aussteht
 
@@ -101,6 +139,9 @@ Stand 28.09.2026 — alles, was sich im Repository nicht erledigen lässt:
 | **Entscheidung** | `Schedule` und `Contact` an die Conversions API — ja oder nein (C8) | WP-32b, „Offen" |
 | **Entscheidung** | Rollenkatalog der Betreiber bestätigen; Agent und Buchungsseite bei Abo-Sperre (B17); Praxen in der Testphase wechseln immer auf die neue Paketfassung (B20) | WP-34a, WP-34c, WP-06b |
 | **Mailversand** | **Vor dem Ausrollen von WP-36 jede Praxis ohne eigenes Postfach informieren** — ab dann gehen ihre Terminmails, Posteingang-Antworten und Wartelisten-Angebote nicht mehr über die Plattform (B22); die Zahl steht im Betreiber-Dashboard. Im Backoffice unter *Versand* den Plattformserver hinterlegen und mit der Probemail prüfen (B23) | WP-36, WP-37, `docs/betrieb.md` |
+| **Entscheidung** | Apple-Kalender (iCloud über CalDAV) — im Video erwähnt, P6 nennt nur Google und Microsoft | `docs/feedback/2026-10-05-feedbackschleife-1.md`, Aussage 6 |
+| **Entscheidung** | Bestätigung von C20 (Buchhaltung ohne Behandlungen) und C21 (Bedingungen des Diktats); Sprachdienst und Preis der Diktatminuten | WP-47, WP-48 |
+| **Handbuch** | Glossar (Kapitel 15) nach der Wortliste aus WP-40 nachziehen; die Quelle des PDF liegt nicht im Repository | WP-40 |
 | **Startseite** | `VERTRIEB_ADRESSE` je Umgebung setzen (ohne Wert: info@mrs-beauty.ai); Impressum und Datenschutzerklärung juristisch prüfen lassen, dabei Hosting, Mailversand und Fehlerüberwachung namentlich ergänzen; im Backoffice unter *Versand* die Impressum- und Datenschutz-Adresse der Produktmails auf `/impressum` und `/datenschutzerklaerung` setzen; Frist (12 Monate) und Customer Success als Leser bestätigen | WP-38, `docs/betrieb.md` |
 
 ## Fachlogik
@@ -113,5 +154,9 @@ Vier Pakete haben eine eigene, verbindliche Spezifikation. Sie sind vor dem jewe
 | `../docs/fachlogik/agent.md` | WP-22, WP-23, WP-24 |
 | `../docs/fachlogik/warteliste.md` | WP-25 |
 | `../docs/fachlogik/attribution.md` | WP-32 |
+
+Für Akte (WP-47) und Rechnungen (WP-48) stehen die Regeln vorerst in den
+Paketen selbst. Eine eigene Fachlogik unter `../docs/fachlogik/` entsteht,
+sobald die medizinrechtliche und die steuerliche Prüfung zurück sind.
 
 Dazu drei Integrationsleitfäden: `../docs/integrationen/meta.md`, `../docs/integrationen/kalender.md` und `../docs/integrationen/email.md`.
