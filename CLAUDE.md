@@ -188,3 +188,9 @@ Person.**
   den ein Paket veröffentlicht hat und den wir nicht schreiben.
 - **Zeit:** gespeichert wird UTC, ausgewertet wird in der Ortszeit des
   Standorts. `CarbonImmutable` ist gesetzt.
+
+<!-- thorin:start -->
+Die Regeln für dieses Projekt stehen in AGENTS.md. Lies sie vor jeder Änderung und halte dich daran.
+
+@AGENTS.md
+<!-- thorin:end -->
